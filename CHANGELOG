@@ -1,44 +1,41 @@
 Version 0.3.5
-- [SECURITY] Plus de sécuriter et revérification du factor si il ne dépasse pas la limite fixé.
-- [SECURITY] Utilisation de SHA-256 au lieux de SHA-1
+    [SECURITY] Improved security and re-checking of the factor if it exceeds the defined limit.
+    [SECURITY] Use of SHA-256 instead of SHA-1.
 
 Version 0.3.4
-- [REFACTO] changer la méthode utils en security
-- [ADD] Plus de sécurité sur le hash.
+    [REFACTO] Moved the utils method into security.
+    [ADD] Enhanced hash security.
 
 Version 0.3.3
-- [FIX] Bug sur le ratelimit si un utilisateur est anonyme et qui fait des requêtes 
-        sur des routes non sécuriser. (docs, ect..)
-- [ADD] Meilleur logs / gestions des erreurs lorsque le cryptage des tokens n'est pas 
-        correcte cela souleve un warning logs message avec l'ip source
+    [FIX] Bug with rate limiting when an anonymous user makes requests to unsecured routes (docs, etc.).
+    [ADD] Better logging / error handling when token encryption fails — triggers a warning log message with the source IP.
 
 Version 0.3.2
-- [ADD] Meilleur message de logs
-- [ADD] Appliquer le rate limit uniquement sur les routes du proxy et non sur le /refresh_token
-- [ADD] ulimit dans la configuration de docker pour de meilleur performance.
+    [ADD] Improved log messages.
+    [ADD] Applied rate limiting only on proxy routes and not on /refresh_token.
+    [ADD] ulimit setting in Docker configuration for better performance.
 
 Version 0.3.1
-- [ADD] delay_block dans le fichier config
+    [ADD] delay_block setting in the config file.
 
 Version 0.3.0
-- [ADD] Ratelimit par requete et par utilisateur.
+    [ADD] Rate limiting per request and per user.
 
-version 0.2.1
-- [FIX] Bug sur la date
-- [ADD] Ajout des logs via tracing
+Version 0.2.1
+    [FIX] Bug related to date handling.
+    [ADD] Added logging via tracing.
 
 Version 0.2.0
-- Amélioration sur le check utilisateur 
-  l'utilisateur est checker via un index
-- [BUG] check date toujours présent.
-- Amélioration de l'algorithme de la route /check_token 
-- Ajout des fichiers de dockerfile + docker-compose.yml build à partir d'un rust:alpine
+    Improved user check — users are now checked via an index.
+    [BUG] Date checking issue still present.
+    Improved the /auth route algorithm.
+    Added Dockerfile and docker-compose.yml, built from rust:alpine.
 
 Version 0.1.0
-- Mise en place de l'algorithme CHACHA20/SHA1/ROTATE pour le token
-- Mise en place des routes forward requetes
-- Mise en place des fichiers de configurations routes.yml + config.json
-- [BUG] sur le check dates à corrigée.
-- Mise en place du nombre de worker executer.
-- [TODO] Amélioration sur le check de l'utilisateur (ID dans le chacha20) 
-  (Améliorations des performances plus besoin d'itere sur tous les utilisateurs)
+    Implemented CHACHA20/SHA1/ROTATE algorithm for token handling.
+    Implemented request forwarding routes.
+    Added configuration files: routes.yml and config.json.
+    [BUG] Date checking issue to be fixed.
+    Added worker execution count handling.
+    [TODO] Improve user checking (ID inside chacha20)
+    (Performance improvement: no need to iterate through all users).
