@@ -1,0 +1,16 @@
+routes:
+  - prefix: "/etcd"
+    target: "http://etcd:2379/health"
+    secure: false
+
+  - prefix: "/secure_etcd"
+    target: "http://etcd:2379/health"
+    username: ["admin"] # necessary define if secure is not false.
+
+  - prefix: "/ngrams"
+    target: "http://127.0.0.1:8000/redoc"
+    username: ["admin"]
+
+  - prefix: "/api_test/openapi.json"
+    target: "http://127.0.0.1:8000/api_test/openapi.json"
+    secure: false

@@ -1,0 +1,44 @@
+Version 0.3.5
+- [SECURITY] Plus de sécuriter et revérification du factor si il ne dépasse pas la limite fixé.
+- [SECURITY] Utilisation de SHA-256 au lieux de SHA-1
+
+Version 0.3.4
+- [REFACTO] changer la méthode utils en security
+- [ADD] Plus de sécurité sur le hash.
+
+Version 0.3.3
+- [FIX] Bug sur le ratelimit si un utilisateur est anonyme et qui fait des requêtes 
+        sur des routes non sécuriser. (docs, ect..)
+- [ADD] Meilleur logs / gestions des erreurs lorsque le cryptage des tokens n'est pas 
+        correcte cela souleve un warning logs message avec l'ip source
+
+Version 0.3.2
+- [ADD] Meilleur message de logs
+- [ADD] Appliquer le rate limit uniquement sur les routes du proxy et non sur le /refresh_token
+- [ADD] ulimit dans la configuration de docker pour de meilleur performance.
+
+Version 0.3.1
+- [ADD] delay_block dans le fichier config
+
+Version 0.3.0
+- [ADD] Ratelimit par requete et par utilisateur.
+
+version 0.2.1
+- [FIX] Bug sur la date
+- [ADD] Ajout des logs via tracing
+
+Version 0.2.0
+- Amélioration sur le check utilisateur 
+  l'utilisateur est checker via un index
+- [BUG] check date toujours présent.
+- Amélioration de l'algorithme de la route /check_token 
+- Ajout des fichiers de dockerfile + docker-compose.yml build à partir d'un rust:alpine
+
+Version 0.1.0
+- Mise en place de l'algorithme CHACHA20/SHA1/ROTATE pour le token
+- Mise en place des routes forward requetes
+- Mise en place des fichiers de configurations routes.yml + config.json
+- [BUG] sur le check dates à corrigée.
+- Mise en place du nombre de worker executer.
+- [TODO] Amélioration sur le check de l'utilisateur (ID dans le chacha20) 
+  (Améliorations des performances plus besoin d'itere sur tous les utilisateurs)
