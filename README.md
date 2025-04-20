@@ -96,15 +96,14 @@ You can then copy the binary anywhere; it will work on any Linux architecture co
 - Protect passwords using BCRYPT. [bcrypt is slow in Rust, looking for other alternatives]
 - Add Loki integration with tracing [needs further exploration]
 
-<h1 style="color: green">ProxyAuth Advantages</h1>
+# ProxyAuth Advantages
 - Centralized access point
 - Secure tokens using CHACHA20 (SHA-256 + ROTATE)
-  (enables distribution across multiple ProxyAuth instances without ETCD)
-  just define the same secret across all instances to have the same token calculations.
+  just define the same secret across all instances to have the same token calculations (if use the same images).
 - ~Semi-static tokens (refresh_token is only recalculated at intervals defined in the config)~
 - Tokens can be recalculated using a random exponential factor, allowing for further complexity.
 
-<h1 style="color: red">Potential Disadvantages</h1>
+# Potential Disadvantages
 - If someone can reverse-engineer the hash, they could potentially access services.
   This is why you must define a secure secret (over 64 characters!) in the config.
   This method is used in Django for password hashing via PBKDF2:
