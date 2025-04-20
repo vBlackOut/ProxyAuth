@@ -1,0 +1,13 @@
+services:
+    proxyauth:
+        container_name: proxyauth
+        build: .
+        ports:
+            - "8080:8080"
+        ulimits:
+            nofile:
+                soft: 65536
+                hard: 65536
+        volumes:
+            - ./config/config.json:/etc/proxyauth/config/config.json
+            - ./config/routes.yml:/etc/proxyauth/config/routes.yml
