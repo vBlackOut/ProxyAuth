@@ -1,0 +1,12 @@
+routes:
+  - prefix: "/redoc"
+    target: "http://127.0.0.1:8000/redoc"
+    secure: false
+
+  - prefix: "/api_test/openapi.json"
+    target: "http://localhost:8000/api_test/openapi.json"
+    secure: false
+
+  - prefix: "/api_test"
+    target: "http://localhost:8000/api_test"
+    username: ["admin", "alice1", "alice15", "alice30"]

@@ -1,0 +1,23 @@
+{
+  "token_expiry_seconds": 3600,
+  "secret": "supersecretvalue",
+  "host": "0.0.0.0",
+  "port": 8080,
+  "worker": 4,
+  "ratelimit": {
+    "requests_per_second": 10,
+    "burst": 100,
+    "block_delay": 500,
+    "auth": 5
+  },
+  "users": [
+    {
+      "username": "admin",
+      "password": "admin123"
+    },
+    {
+      "username": "alice",
+      "password": "alicepass"
+    }
+  ]
+}

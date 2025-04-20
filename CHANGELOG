@@ -1,0 +1,45 @@
+Version 0.4.0
+    [ADD] ratelimit over routes /auth.
+
+Version 0.3.5
+    [SECURITY] Improved security and re-checking of the factor if it exceeds the defined limit.
+    [SECURITY] Use of SHA-256 instead of SHA-1.
+    [SECURITY] Add HMAC SHA-256 over CHACHA20 AED
+
+Version 0.3.4
+    [REFACTO] Moved the utils method into security.
+    [ADD] Enhanced hash security.
+
+Version 0.3.3
+    [FIX] Bug with rate limiting when an anonymous user makes requests to unsecured routes (docs, etc.).
+    [ADD] Better logging / error handling when token encryption fails — triggers a warning log message with the source IP.
+
+Version 0.3.2
+    [ADD] Improved log messages.
+    [ADD] Applied rate limiting only on proxy routes and not on /refresh_token.
+    [ADD] ulimit setting in Docker configuration for better performance.
+
+Version 0.3.1
+    [ADD] delay_block setting in the config file.
+
+Version 0.3.0
+    [ADD] Rate limiting per request and per user.
+
+Version 0.2.1
+    [FIX] Bug related to date handling.
+    [ADD] Added logging via tracing.
+
+Version 0.2.0
+    Improved user check — users are now checked via an index.
+    [BUG] Date checking issue still present.
+    Improved the /auth route algorithm.
+    Added Dockerfile and docker-compose.yml, built from rust:alpine.
+
+Version 0.1.0
+    Implemented CHACHA20/SHA1/ROTATE algorithm for token handling.
+    Implemented request forwarding routes.
+    Added configuration files: routes.yml and config.json.
+    [BUG] Date checking issue to be fixed.
+    Added worker execution count handling.
+    [TODO] Improve user checking (ID inside chacha20)
+    (Performance improvement: no need to iterate through all users).
