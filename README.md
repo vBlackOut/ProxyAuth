@@ -91,6 +91,33 @@ You can then copy the binary anywhere; it will work on any Linux architecture co
 
 </details>
 
+<details>
+  <summary>Use on docker</summary>
+  
+  ```
+  docker compose build
+  docker compose up -d
+  ```
+</details>
+
+<details>
+  <summary>Use this services easy on docker</summary>
+  
+  <br>Change configuration on docker-compose.yml overwrite configuration
+
+  ```
+  volumes:
+    - ./config/config.json:/config/config.json
+    - ./config/routes.yml:/config/routes.yml
+  ```
+
+restart container 
+```
+docker compose restart
+```
+
+</details>
+
 ## TODO
 - Log to stdout using `tracing` (Rust log lib) [still being deployed]
 - Protect passwords using BCRYPT. [bcrypt is slow in Rust, looking for other alternatives]
