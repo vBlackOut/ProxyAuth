@@ -52,7 +52,7 @@ async fn main() -> std::io::Result<()> {
         .requests_per_second(requests_per_second_config)
         .burst_size(burst_config)
         .key_extractor(UserToken)
-        .period(std::time::Duration::from_secs(delay_block_config as u64))
+        .period(std::time::Duration::from_millis(delay_block_config as u64))
         .finish()
         .unwrap();
 
