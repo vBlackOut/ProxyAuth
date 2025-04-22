@@ -8,7 +8,7 @@ use chrono::{Duration, Utc};
 use chrono_tz::Europe::Paris;
 use tracing::{info, warn};
 
-pub async fn refresh_token(
+pub async fn auth(
     req: HttpRequest,
     auth: web::Json<AuthRequest>,
     data: web::Data<AppState>,

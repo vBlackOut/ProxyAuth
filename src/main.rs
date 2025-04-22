@@ -2,7 +2,7 @@ mod config;
 mod crypto;
 mod proxy;
 mod ratelimit;
-mod refresh_token;
+mod auth;
 mod security;
 
 use actix_governor::{Governor, GovernorConfigBuilder};
@@ -10,7 +10,7 @@ use actix_web::{web, App, HttpServer};
 use config::{AppConfig, AppState, AuthRequest, RouteConfig};
 use proxy::proxy;
 use ratelimit::UserToken;
-use refresh_token::refresh_token;
+use auth::auth;
 use reqwest::Client;
 use std::{fs, sync::Arc};
 use tracing::info;
@@ -61,7 +61,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(move || {
         App::new()
             .app_data(state.clone())
-            .service(web::resource("/auth").route(web::post().to(refresh_token)))
+            .service(web::resource("/auth").route(web::post().to(auth)))
             .default_service(web::to(proxy).wrap(Governor::new(&governor_conf)))
     })
     .workers((config.worker as u8).into())
