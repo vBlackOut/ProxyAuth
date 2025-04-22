@@ -3,7 +3,7 @@
   "secret": "supersecretvalue",
   "host": "0.0.0.0",
   "port": 8080,
-  "ratelimit": {"per_second": 100, "burst": 100, "block_delay": 1000},
+  "ratelimit": {"requests_per_second": 100, "burst": 100, "block_delay": 1000},
   "worker": 4,
   "users": [
     { "username": "admin", "password": "admin123" },

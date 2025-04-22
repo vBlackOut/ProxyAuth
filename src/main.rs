@@ -30,9 +30,9 @@ async fn main() -> std::io::Result<()> {
         client: Client::new(),
     });
 
-    let per_second_config = config
+    let requests_per_second_config = config
         .ratelimit
-        .get("per_second")
+        .get("requests_per_second")
         .copied()
         .expect("Error value per_second");
     let burst_config = config
@@ -49,14 +49,14 @@ async fn main() -> std::io::Result<()> {
         .expect("Error value block_delay");
 
     let governor_conf = GovernorConfigBuilder::default()
-        .seconds_per_request(per_second_config)
+        .requests_per_second(requests_per_second_config)
         .burst_size(burst_config)
         .key_extractor(UserToken)
         .period(std::time::Duration::from_secs(delay_block_config as u64))
         .finish()
         .unwrap();
 
-    info!("\nlaunch ProxyAuth v0.3.5 \nratelimit On, ({} requests per seconds, {} requests burst, blocked delay: {} seconds)", per_second_config, burst_config, delay_block_config);
+    info!("\nlaunch ProxyAuth v0.3.5 \nratelimit On, ({} requests per seconds, {} requests burst, blocked delay: {} seconds)", requests_per_second_config, burst_config, delay_block_config);
 
     HttpServer::new(move || {
         App::new()

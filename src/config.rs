@@ -80,7 +80,7 @@ fn default_worker() -> u8 {
 
 fn default_ratelimit() -> HashMap<String, u64> {
     let mut ratelimit = HashMap::new();
-    ratelimit.insert("per_second".to_string(), 100);
+    ratelimit.insert("requests_per_second".to_string(), 100);
     ratelimit.insert("burst".to_string(), 10);
     ratelimit.insert("block_delay".to_string(), 10);
     ratelimit
