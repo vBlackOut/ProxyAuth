@@ -49,8 +49,9 @@ impl KeyExtractor for UserToken {
         if let Some(auth_header) = req.headers().get("Authorization") {
             if let Ok(auth_str) = auth_header.to_str() {
                 if let Some(stripped) = auth_str.strip_prefix("Bearer ") {
-                    let token = extract_token_user(stripped, &app_data.config, ip);
-                    return Ok(token.trim().to_owned());
+                    let user = extract_token_user(stripped, &app_data.config, ip)
+                    .map_err(|_| SimpleKeyExtractionError::new("invalid token"))?;
+                    return Ok(user);
                 }
             }
         }

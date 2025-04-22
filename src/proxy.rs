@@ -101,14 +101,14 @@ pub async fn proxy(
                         ip, rule.prefix, target_url
                     );
                 }
-                Ok(client_resp.body(bytes))
+                return Ok(client_resp.body(bytes))
             }
             Err(_) => {
                 warn!(
                     "[{}] user {} forward request {} proxy response url unreachable for {}",
                     ip, username_check, rule.prefix, target_url
                 );
-                Ok(HttpResponse::BadGateway().body("Target unreachable"))
+                return Ok(HttpResponse::BadGateway().body("Target unreachable"))
             }
         }
     } else {
@@ -116,6 +116,6 @@ pub async fn proxy(
             "[{}] try to access route {} proxy response no route",
             ip, path
         );
-        Ok(HttpResponse::NotFound().body("404 Not Found"))
+        return Ok(HttpResponse::NotFound().body("404 Not Found"))
     }
 }

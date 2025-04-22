@@ -131,21 +131,36 @@ pub fn validate_token(token: &str, config: &AppConfig, ip: &str) -> Result<Strin
     }
 }
 
-pub fn extract_token_user(token: &str, config: &AppConfig, ip: String) -> String {
+pub fn extract_token_user(token: &str, config: &AppConfig, ip: String) -> Result<String, String> {
     let key = derive_key_from_secret(&config.secret);
 
     let decrypt_token = match decrypt(token, &key) {
         Ok(val) => val,
         Err(_) => {
-            warn!("[{}] no possible decrypt token bad format", ip);
-            return "Invalid token format".to_string();
+            warn!("[{}] Failed to decrypt token (invalid format)", ip);
+            return Err("Invalid token format".into());
         }
     };
 
     let data: Vec<&str> = decrypt_token.split('|').collect();
 
-    let index_user: usize = data[2].parse().map_err(|_| "Index invalide").expect("");
-    let user = &config.users[index_user];
+    if data.len() < 3 {
+        warn!("[{}] Token structure is invalid (not enough segments)", ip);
+        return Err("Invalid token content".into());
+    }
 
-    user.username.clone()
+    let index_user: usize = match data[2].parse() {
+        Ok(i) => i,
+        Err(_) => {
+            warn!("[{}] Failed to parse user index from token", ip);
+            return Err("Invalid user index".into());
+        }
+    };
+
+    if let Some(user) = config.users.get(index_user) {
+        Ok(user.username.clone())
+    } else {
+        warn!("[{}] User index out of bounds: {}", ip, index_user);
+        Err("User not found".into())
+    }
 }

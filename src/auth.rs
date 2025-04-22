@@ -58,6 +58,6 @@ pub async fn auth(
         }))
     } else {
         warn!("Invalid credential for enter user {}.", auth.username);
-        HttpResponse::Unauthorized().body("Invalid credentials")
+        return HttpResponse::Unauthorized().body("Invalid credentials")
     }
 }
