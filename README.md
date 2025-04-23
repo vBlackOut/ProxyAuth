@@ -1,6 +1,6 @@
 
 <div align="center">
-<h1>ProxyAuth (Beta)</h1>
+<h1>ProxyAuth</h1>
 <br>
 <img src='images/logo.jpg' width="300px" height="250px"/>
 </div>
