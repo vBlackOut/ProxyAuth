@@ -1,4 +1,6 @@
 use base64::{engine::general_purpose, Engine as _};
+use crate::security::{get_build_rand};
+use hmac::{Hmac, Mac};
 use chacha20poly1305::aead::generic_array::typenum::Unsigned;
 use chacha20poly1305::aead::generic_array::GenericArray;
 use chacha20poly1305::{
@@ -9,14 +11,21 @@ use rand::Rng;
 use sha2::{Digest, Sha256};
 use std::error::Error;
 
-pub fn derive_key_from_secret(secret: &str) -> [u8; 32] {
-    let mut hasher = Sha256::new();
-    hasher.update(secret.as_bytes());
-    let result = hasher.finalize();
+type HmacSha256 = Hmac<Sha256>;
 
-    let mut key = [0u8; 32];
-    key.copy_from_slice(&result[..32]);
-    key
+pub fn derive_key_from_secret(secret: &str) -> [u8; 32] {
+    let key_u64 = get_build_rand();
+    let key = key_u64.to_be_bytes();
+
+    let mut mac = <HmacSha256 as hmac::digest::KeyInit>::new_from_slice(&key)
+        .expect("HMAC can take key of any size");
+
+    mac.update(secret.as_bytes());
+    let result = mac.finalize().into_bytes();
+
+    let mut derived_key = [0u8; 32];
+    derived_key.copy_from_slice(&result[..]);
+    derived_key
 }
 
 pub fn encrypt(cleartext: &str, key: &[u8]) -> String {

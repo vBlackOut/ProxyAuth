@@ -10,7 +10,7 @@ fn get_build_time() -> u64 {
     env!("BUILD_TIME").parse().expect("Invalid build time")
 }
 
-fn get_build_rand() -> u64 {
+pub fn get_build_rand() -> u64 {
     env!("BUILD_RAND").parse().expect("Invalid build random")
 }
 
