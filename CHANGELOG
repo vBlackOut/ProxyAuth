@@ -1,6 +1,7 @@
 Version 0.3.5
     [SECURITY] Improved security and re-checking of the factor if it exceeds the defined limit.
     [SECURITY] Use of SHA-256 instead of SHA-1.
+    [SECURITY] Add HMAC SHA-256 over CHACHA20 AED
 
 Version 0.3.4
     [REFACTO] Moved the utils method into security.

@@ -7,7 +7,7 @@
 <br>
 
 ProxyAuth is an application that secures backend APIs without requiring them to implement their own security mechanisms.
-It acts as a gateway that ensures the secure transmission of internal information to the outside, encrypted with CHACHA20 (SHA-256 + ROTATE).
+It acts as a gateway that ensures the secure transmission of internal information to the outside, encrypted with CHACHA20 (HMAC SHA-256 + ROTATE).
 This allows generating a secure token, defined by a secret specified in the ProxyAuth configuration.
 
 **Project based on a other personal project (evolution): <a href="https://github.com/vBlackOut/rust_actixweb_token">rust_actixweb_token</a>
@@ -93,7 +93,7 @@ You can then copy the binary anywhere; it will work on any Linux architecture co
 
 <details>
   <summary>Use on docker</summary>
-  
+
   ```
   docker compose build
   docker compose up -d
@@ -102,7 +102,7 @@ You can then copy the binary anywhere; it will work on any Linux architecture co
 
 <details>
   <summary>Use this services easy on docker</summary>
-  
+
   <br>Change configuration on docker-compose.yml overwrite configuration
 
   ```
@@ -111,7 +111,7 @@ You can then copy the binary anywhere; it will work on any Linux architecture co
     - ./config/routes.yml:/config/routes.yml
   ```
 
-restart container 
+restart container
 ```
 docker compose restart
 ```
@@ -125,7 +125,7 @@ docker compose restart
 
 # ProxyAuth Advantages
 - Centralized access point
-- Secure tokens using CHACHA20 (SHA-256 + ROTATE)
+- Secure tokens using CHACHA20 (HMAC SHA-256 + ROTATE)
   just define the same secret across all instances to have the same token calculations (if use the same images).
 - ~Semi-static tokens (refresh_token is only recalculated at intervals defined in the config)~
 - Tokens can be recalculated using a random exponential factor, allowing for further complexity.
