@@ -9,7 +9,7 @@ license = "Apache-2.0"
 description = "Proxy Authentication Token"
 build = "src/build.rs"
 keywords = ["authentification", "proxy", "security", "token", "gateway"]   # Optionnel mais utile
-categories = ["network-programming", "authentication", "gateway"]
+categories = ["network-programming", "authentication", "api-bindings", "security"]
 
 [build]
 jobs = 4 # number threads launch for build
