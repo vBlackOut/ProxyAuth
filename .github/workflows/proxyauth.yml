@@ -1,0 +1,36 @@
+name: Build and Test ProxyAuth
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Build the binary
+        run: cargo build --release
+
+      - name: Start ProxyAuth in background
+        run: |
+          ./target/release/proxyauth &
+          echo $! > proxyauth.pid
+          sleep 2  # attendre que le serveur démarre
+
+      - name: Test HTTP response
+        run: curl -I http://localhost:8080 || (cat proxyauth.pid | xargs kill && exit 1)
+
+      - name: Stop the server
+        run: |
+          cat proxyauth.pid | xargs kill || true
