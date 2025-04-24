@@ -1,3 +1,6 @@
+Version 0.4.1
+    [ADD] possible config proxy on file routes.yml
+
 Version 0.4.0
     [ADD] ratelimit over routes /auth.
     [ADD] use auto Argo2 for encrypt passsword in config.json
