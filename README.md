@@ -8,8 +8,12 @@
 
 ![Security Score](https://img.shields.io/badge/SECURITY%20SCORE-70%2F100-blue?style=for-the-badge&logo=rust)
 ![GitHub issues](https://img.shields.io/github/issues/vBlackOut/ProxyAuth?style=for-the-badge)
-![Crates.io](https://img.shields.io/crates/v/proxyauth?style=for-the-badge)
-![Downloads](https://img.shields.io/crates/d/proxyauth?style=for-the-badge)
+<a href="https://crates.io/crates/proxyauth">
+  <img src="https://img.shields.io/crates/v/proxyauth?style=for-the-badge">
+</a>
+<a href="https://crates.io/crates/proxyauth">
+  <img src="https://img.shields.io/crates/d/proxyauth?style=for-the-badge">
+</a>
 
 ProxyAuth is an application that secures backend APIs without requiring them to implement their own security mechanisms.
 It acts as a gateway that ensures the secure transmission of internal information to the outside, encrypted with CHACHA20 (HMAC SHA-256 + ROTATE).
