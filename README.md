@@ -14,11 +14,8 @@
 [![Crates.io downloads](https://img.shields.io/crates/d/proxyauth?style=for-the-badge)](https://crates.io/crates/proxyauth)
 ![Benchmark](https://img.shields.io/badge/benchmark-+150_000req/s-blue?style=for-the-badge&logo=rust "Benchmark proxyauth on laptop")
 
-ProxyAuth is an application designed to secure backend APIs without requiring them to handle authentication directly.  
-It acts as a gateway that protects the transmission of internal information to the outside world.   
-The authentication token is encrypted using ChaCha20, authenticated with HMAC (SHA-256), and wrapped in a secure structure  
-with a rotation mechanism. This token is generated using a secret defined in ProxyAuth's configuration, providing strong,  
-backend-independent authentication.
+ProxyAuth secures backend APIs by acting as an authentication gateway.
+It generates an encrypted token using ChaCha20 and HMAC-SHA-256, based on a secret from its config. This ensures secure, external access without exposing internal logic.
 
 **Project based on a other personal project (evolution): <a href="https://github.com/vBlackOut/rust_actixweb_token">rust_actixweb_token</a>
 
