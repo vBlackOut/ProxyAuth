@@ -6,7 +6,10 @@
 </div>
 <br>
 
-![Security Audit](https://img.shields.io/badge/Security%20Score-70%2F100-blue?style=for-the-badge&logo=rust)
+![Totals visitors](https://visitor-badge.laobi.icu/badge?page_id=vBlackOut.ProxyAuth&style=for-the-badge)  
+
+![Security Score](https://img.shields.io/badge/SECURITY%20SCORE-70%2F100-blue?style=for-the-badge&logo=rust)
+![GitHub issues](https://img.shields.io/github/issues/vBlackOut/ProxyAuth?style=for-the-badge)
 
 ProxyAuth is an application that secures backend APIs without requiring them to implement their own security mechanisms.
 It acts as a gateway that ensures the secure transmission of internal information to the outside, encrypted with CHACHA20 (HMAC SHA-256 + ROTATE).
