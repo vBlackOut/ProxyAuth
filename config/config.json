@@ -5,19 +5,19 @@
   "port": 8080,
   "worker": 4,
   "ratelimit": {
-    "requests_per_second": 10,
-    "burst": 100,
     "block_delay": 500,
-    "auth": 5
+    "auth": 5,
+    "burst": 100,
+    "requests_per_second": 10
   },
   "users": [
     {
       "username": "admin",
-      "password": "admin123"
+      "password": "$argon2id$v=19$m=19456,t=2,p=1$o5bmliGtGQpgEFF1kgbIdQ$JdhJMcIasERi0N8I+jyaisf0SzklmRWeCDwgZ1l6PNw"
     },
     {
       "username": "alice",
-      "password": "alicepass"
+      "password": "$argon2id$v=19$m=19456,t=2,p=1$r73ntuqsRREIylIXQZo+Tw$Vo75eHcuhtCKmycN9aO049HwXU/iW5jHNkCrOSL56zQ"
     }
   ]
 }
