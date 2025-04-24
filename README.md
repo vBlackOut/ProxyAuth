@@ -55,6 +55,8 @@ routes:
   - prefix: "/api_test"
     target: "http://localhost:8000/api_test"
     username: ["admin", "alice1", "alice15", "alice30"]
+    proxy: true/false # --> configure proxy
+    proxy_config: "http://myproxyurl:8888" # --> pass via proxy for call the target.
 ```
 </details>
 
