@@ -7,7 +7,6 @@
 <br>
 
 ![Security Score](https://img.shields.io/badge/SECURITY%20SCORE-70%2F100-blue?style=for-the-badge&logo=rust)
-![GitHub issues](https://img.shields.io/github/issues/vBlackOut/ProxyAuth?style=for-the-badge)
 <a href="https://crates.io/crates/proxyauth">
   <img src="https://img.shields.io/crates/v/proxyauth?style=for-the-badge">
 </a>
