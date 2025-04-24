@@ -15,7 +15,7 @@
 ![Benchmark](https://img.shields.io/badge/benchmark-+150_000req/s-blue?style=for-the-badge&logo=rust "Benchmark proxyauth on laptop")
 
 ProxyAuth secures backend APIs by acting as an authentication gateway.
-It generates encrypted tokens using ChaCha20 + HMAC-Blake3, with secrets defined in config.
+It generates encrypted tokens using ChaCha20 + HMAC-SHA-256, with secrets defined in config.
 Built-in rate limiting applies to both the proxy and auth route, and Argon2 is used with auto-generated salts for password hashing on service startup.
 
 **Project based on a other personal project (evolution): <a href="https://github.com/vBlackOut/rust_actixweb_token">rust_actixweb_token</a>
