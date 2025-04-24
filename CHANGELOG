@@ -1,5 +1,6 @@
 Version 0.4.0
     [ADD] ratelimit over routes /auth.
+    [ADD] use auto Argo2 for encrypt passsword in config.json
 
 Version 0.3.5
     [SECURITY] Improved security and re-checking of the factor if it exceeds the defined limit.
