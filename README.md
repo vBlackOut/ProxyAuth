@@ -14,9 +14,10 @@
 [![Crates.io downloads](https://img.shields.io/crates/d/proxyauth?style=for-the-badge)](https://crates.io/crates/proxyauth)
 ![Benchmark](https://img.shields.io/badge/benchmark-+150_000req/s-blue?style=for-the-badge&logo=rust "Benchmark proxyauth on laptop")
 
-ProxyAuth secures backend APIs by acting as an authentication gateway.
-It generates encrypted tokens using ChaCha20 + HMAC-SHA-256, with secrets defined in config.
-Built-in rate limiting applies to both the proxy and auth route, and Argon2 is used with auto-generated salts for password hashing on service startup.
+ProxyAuth secures backend APIs through a fast authentication gateway.
+It encrypts tokens using ChaCha20 + HMAC-SHA256, with config-defined secrets.
+It features built-in rate limiting (on proxy and auth routes) and uses Argon2 with auto-generated salts for secure password hashing.
+The service is extremely fast, handling 100,000+ requests per second under load.  
 
 **Project based on a other personal project (evolution): <a href="https://github.com/vBlackOut/rust_actixweb_token">rust_actixweb_token</a>
 
