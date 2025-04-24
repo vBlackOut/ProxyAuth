@@ -1,8 +1,10 @@
 use crate::security::validate_token;
 use crate::AppState;
-use actix_web::{web, Error, HttpRequest, HttpResponse};
+use actix_web::{web, Error, error, HttpRequest, HttpResponse, Result};
 use std::net::IpAddr;
 use tracing::{info, warn};
+use reqwest::Proxy;
+use reqwest::{Client, header};
 
 pub fn client_ip(req: &HttpRequest) -> Option<IpAddr> {
     if let Some(forwarded) = req.headers().get("x-forwarded-for") {
@@ -45,6 +47,22 @@ pub async fn proxy(
         let forward_path = path.strip_prefix(&rule.prefix).unwrap_or("");
         let target_url = format!("{}{}", rule.target.trim_end_matches('/'), forward_path);
 
+        let client = if rule.proxy {
+            let proxy = Proxy::all(&rule.proxy_config).map_err(|e| {
+                error::ErrorBadRequest(format!("Configuration du proxy invalide: {}", e))
+            })?;
+
+            Client::builder()
+                .proxy(proxy)
+                .danger_accept_invalid_certs(true)
+                .build()
+                .map_err(|e| {
+                    error::ErrorInternalServerError(format!("Erreur lors de la construction du client: {}", e))
+                })?
+        } else {
+            Client::new()
+        };
+
         if rule.secure {
 
             let token_header = match req
@@ -75,10 +93,13 @@ pub async fn proxy(
             }
         }
 
-        let mut forwarded_req = data.client.request(method, &target_url);
+        let mut forwarded_req = client.request(method, &target_url).header(header::USER_AGENT, "ProxyAuth");
         for (key, value) in req.headers() {
-            forwarded_req = forwarded_req.header(key, value);
+            if "Authorization" != key && "user-agent" != key {
+                forwarded_req = forwarded_req.header(key, value);
+            }
         }
+
 
         let res = forwarded_req.body(body.clone()).send().await;
 

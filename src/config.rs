@@ -1,5 +1,4 @@
 use std::fs;
-use reqwest::Client;
 use serde::{Serialize, Serializer, ser::SerializeStruct, Deserialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -16,7 +15,14 @@ pub struct RouteRule {
 
     #[serde(default = "default_secure")]
     pub secure: bool,
+
+    #[serde(default = "default_proxy")]
+    pub proxy: bool,
+
+    #[serde(default = "default_proxy_config")]
+    pub proxy_config: String,
 }
+
 
 #[derive(Debug, Deserialize)]
 pub struct RouteConfig {
@@ -81,7 +87,6 @@ impl Serialize for AppConfig {
 pub struct AppState {
     pub config: Arc<AppConfig>,
     pub routes: Arc<RouteConfig>,
-    pub client: Client,
 }
 
 #[derive(Deserialize)]
@@ -108,6 +113,14 @@ fn default_secure() -> bool {
 
 fn default_worker() -> u8 {
     4
+}
+
+fn default_proxy() -> bool {
+    false
+}
+
+fn default_proxy_config() -> String {
+    "".to_string()
 }
 
 fn default_ratelimit() -> HashMap<String, u64> {

@@ -11,7 +11,6 @@ use config::{AppConfig, AppState, AuthRequest, RouteConfig, load_config};
 use proxy::proxy;
 use ratelimit::UserToken;
 use auth::auth;
-use reqwest::Client;
 use std::{fs, sync::Arc};
 use tracing::info;
 
@@ -26,7 +25,6 @@ async fn main() -> std::io::Result<()> {
     let state = web::Data::new(AppState {
         config: Arc::clone(&config),
         routes: Arc::new(routes),
-        client: Client::new(),
     });
 
     let requests_per_second_config = config
