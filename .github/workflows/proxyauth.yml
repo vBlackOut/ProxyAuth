@@ -1,4 +1,4 @@
-name: Build and Test ProxyAuth
+name: Build/Test ProxyAuth
 
 on:
   push:
