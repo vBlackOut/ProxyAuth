@@ -7,6 +7,7 @@ repository = "https://github.com/vBlackOut/ProxyAuth"
 readme = "README.md"
 license = "Apache-2.0"
 license-file = "LICENSE"
+description = "Proxy Authentication Token"
 build = "src/build.rs"
 
 [build]
