@@ -6,6 +6,8 @@
 </div>
 <br>
 
+![Security Audit](https://img.shields.io/badge/Security%20Score-70%2F100-blue?style=for-the-badge&logo=rust)
+
 ProxyAuth is an application that secures backend APIs without requiring them to implement their own security mechanisms.
 It acts as a gateway that ensures the secure transmission of internal information to the outside, encrypted with CHACHA20 (HMAC SHA-256 + ROTATE).
 This allows generating a secure token, defined by a secret specified in the ProxyAuth configuration.
