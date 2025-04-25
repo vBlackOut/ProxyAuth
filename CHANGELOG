@@ -1,3 +1,9 @@
+Version 0.5.0
+    [ADD] Experimental feacture forward on https requests.
+
+Version 0.4.2
+    [FIX] Minor bug over message proxy
+
 Version 0.4.1
     [ADD] possible config proxy on file routes.yml
 
