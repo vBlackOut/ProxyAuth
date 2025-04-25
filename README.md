@@ -14,6 +14,8 @@
 [![Crates.io version](https://img.shields.io/crates/v/proxyauth?style=for-the-badge)](https://crates.io/crates/proxyauth)
 [![Crates.io downloads](https://img.shields.io/crates/d/proxyauth?style=for-the-badge)](https://crates.io/crates/proxyauth)
 ![Benchmark](https://img.shields.io/badge/benchmark-+150_000req/s-blue?style=for-the-badge&logo=rust "Benchmark proxyauth on laptop")
+[![Join us on Discord](https://img.shields.io/badge/Discord-Join%20us-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/TjD3MDwF)
+
 
 ProxyAuth secures backend APIs through a fast authentication gateway.
 It encrypts tokens using ChaCha20 + HMAC-SHA256, with config-defined secrets.
