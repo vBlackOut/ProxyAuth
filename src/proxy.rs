@@ -1,10 +1,11 @@
 use crate::security::validate_token;
 use crate::AppState;
+use std::fs;
 use actix_web::{web, Error, error, HttpRequest, HttpResponse, Result};
 use std::net::IpAddr;
 use tracing::{info, warn};
 use reqwest::Proxy;
-use reqwest::{Client, header};
+use reqwest::{Client, header, Identity};
 
 pub fn client_ip(req: &HttpRequest) -> Option<IpAddr> {
     if let Some(forwarded) = req.headers().get("x-forwarded-for") {
@@ -49,7 +50,7 @@ pub async fn proxy(
 
         let client = if rule.proxy {
             let proxy = Proxy::all(&rule.proxy_config).map_err(|e| {
-                error::ErrorBadRequest(format!("Configuration du proxy invalide: {}", e))
+                error::ErrorBadRequest(format!("Error configuration proxy: {}", e))
             })?;
 
             Client::builder()
@@ -57,11 +58,34 @@ pub async fn proxy(
                 .danger_accept_invalid_certs(true)
                 .build()
                 .map_err(|e| {
-                    error::ErrorInternalServerError(format!("Erreur lors de la construction du client: {}", e))
+                    error::ErrorInternalServerError(format!("Error build client: {}", e))
+                })?
+        } else if !rule.cert.is_empty() {
+            let file_path = rule.cert.get("file").ok_or_else(|| {
+                error::ErrorInternalServerError(format!("No found file certificat for target_url {}.", target_url))
+            })?;
+
+            let password = rule.cert.get("password").map(|s| s.as_str()).unwrap_or("");
+
+            let cert_bytes = fs::read(file_path).map_err(|e| {
+                error::ErrorInternalServerError(format!("Error read certificat: {}", e))
+            })?;
+
+            let identity = Identity::from_pkcs12_der(&cert_bytes, password).map_err(|e| {
+                error::ErrorInternalServerError(format!("Error identity: {}", e))
+            })?;
+
+            Client::builder()
+                .identity(identity)
+                .danger_accept_invalid_certs(true)
+                .build()
+                .map_err(|e| {
+                    error::ErrorInternalServerError(format!("Error build request for client: {}", e))
                 })?
         } else {
             Client::new()
         };
+
 
         if rule.secure {
 

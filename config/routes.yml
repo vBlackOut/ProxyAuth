@@ -12,3 +12,4 @@ routes:
     username: ["admin", "alice1", "alice15", "alice30"]
     proxy: true
     proxy_config: "http://127.0.0.1:8888"
+    cert: {"file": "certif.pkc12", "password": "1234"}

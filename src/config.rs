@@ -21,8 +21,10 @@ pub struct RouteRule {
 
     #[serde(default = "default_proxy_config")]
     pub proxy_config: String,
-}
 
+    #[serde(default = "default_cert")]
+    pub cert: HashMap<String, String>,
+}
 
 #[derive(Debug, Deserialize)]
 pub struct RouteConfig {
@@ -131,6 +133,13 @@ fn default_ratelimit() -> HashMap<String, u64> {
     ratelimit.insert("auth".to_string(), 5);
     ratelimit.insert("block_delay_auth".to_string(), 10000);
     ratelimit
+}
+
+fn default_cert() -> HashMap<String, String> {
+    let mut cert = HashMap::new();
+    cert.insert("file".to_string(), "".to_string());
+    cert.insert("password".to_string(), "".to_string());
+    cert
 }
 
 pub fn load_config(path: &str) -> Arc<AppConfig> {
