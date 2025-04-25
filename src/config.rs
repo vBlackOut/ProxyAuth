@@ -1,9 +1,9 @@
-use std::fs;
-use serde::{Serialize, Serializer, ser::SerializeStruct, Deserialize};
-use std::collections::HashMap;
-use std::sync::Arc;
+use argon2::password_hash::{rand_core::OsRng, SaltString};
 use argon2::{Argon2, PasswordHasher};
-use argon2::password_hash::{SaltString, rand_core::OsRng};
+use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
+use std::collections::HashMap;
+use std::fs;
+use std::sync::Arc;
 
 #[derive(Debug, Deserialize)]
 pub struct RouteRule {
@@ -144,7 +144,8 @@ fn default_cert() -> HashMap<String, String> {
 
 pub fn load_config(path: &str) -> Arc<AppConfig> {
     let config_str = fs::read_to_string(path).expect("Could not read config.json file");
-    let mut config: AppConfig = serde_json::from_str(&config_str).expect("Invalid config format config.json");
+    let mut config: AppConfig =
+        serde_json::from_str(&config_str).expect("Invalid config format config.json");
 
     let mut updated = false;
     for user in &mut config.users {
@@ -152,7 +153,10 @@ pub fn load_config(path: &str) -> Arc<AppConfig> {
             let salt = SaltString::generate(&mut OsRng);
             let hash = Argon2::default()
                 .hash_password(user.password.as_bytes(), &salt)
-                .expect(&format!("Password hashing failed for user {}", user.username))
+                .expect(&format!(
+                    "Password hashing failed for user {}",
+                    user.username
+                ))
                 .to_string();
 
             user.password = hash;

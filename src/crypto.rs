@@ -1,12 +1,12 @@
+use crate::security::get_build_rand;
 use base64::{engine::general_purpose, Engine as _};
-use crate::security::{get_build_rand};
-use hmac::{Hmac, Mac};
 use chacha20poly1305::aead::generic_array::typenum::Unsigned;
 use chacha20poly1305::aead::generic_array::GenericArray;
 use chacha20poly1305::{
     aead::{Aead, KeyInit, OsRng},
     AeadCore, ChaCha20Poly1305,
 };
+use hmac::{Hmac, Mac};
 use rand::Rng;
 use sha2::{Digest, Sha256};
 use std::error::Error;
@@ -44,7 +44,6 @@ pub fn encrypt(cleartext: &str, key: &[u8]) -> String {
 }
 
 pub fn decrypt(obsf: &str, key: &[u8]) -> Result<String, ()> {
-
     let obsf_bytes = match general_purpose::STANDARD.decode(obsf) {
         Ok(b) => b,
         Err(_) => return Err(()),
@@ -209,7 +208,6 @@ pub fn calcul_cipher(hashdata: String) -> String {
 
 #[allow(dead_code)]
 pub fn calcul_cipherfromfactor(hashdata: String, factor: i64) -> String {
-
     let hash_split = split_hash(hashdata, 10);
 
     if factor < 10 && factor > 99 {

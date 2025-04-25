@@ -1,11 +1,11 @@
 use actix_web::{test, web, App, HttpResponse};
-use std::sync::Arc;
-use serde_json::json;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::fs;
 use serde::de::DeserializeOwned;
+use serde_json::json;
+use std::fs;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::sync::Arc;
 
-use proxyauth::{AppState, AppConfig, RouteConfig, auth as auth_handler};
+use proxyauth::{auth as auth_handler, AppConfig, AppState, RouteConfig};
 
 fn load_config<T: DeserializeOwned>(path: &str) -> T {
     let data = fs::read_to_string(path).expect("Failed to read config file");
@@ -28,8 +28,9 @@ fn create_app_for_test() -> App<
     let config: Arc<AppConfig> = Arc::new(load_config("config/config.json"));
 
     let routes: RouteConfig = serde_yaml::from_str(
-        &fs::read_to_string("config/routes.yml").expect("Failed to read routes.yml")
-    ).expect("Failed to parse routes YAML");
+        &fs::read_to_string("config/routes.yml").expect("Failed to read routes.yml"),
+    )
+    .expect("Failed to parse routes YAML");
 
     let state = web::Data::new(AppState {
         config: Arc::clone(&config),
@@ -52,7 +53,10 @@ async fn test_auth_route() {
             "username": "admin",
             "password": "admin123"
         }))
-        .peer_addr(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080))
+        .peer_addr(SocketAddr::new(
+            IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+            8080,
+        ))
         .to_request();
 
     let resp = test::call_service(&app, req).await;

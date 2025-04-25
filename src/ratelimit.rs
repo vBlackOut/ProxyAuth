@@ -1,12 +1,12 @@
 use crate::ratelimit::governor::clock::DefaultClock;
 use crate::security::extract_token_user;
 use crate::AppState;
-use actix_web::{web};
 use actix_governor::governor::clock::Clock;
 use actix_governor::{governor, KeyExtractor, SimpleKeyExtractionError};
 use actix_web::dev::ServiceRequest;
 use actix_web::http::header::ContentType;
 use actix_web::http::StatusCode;
+use actix_web::web;
 use actix_web::{HttpResponse, HttpResponseBuilder};
 use std::net::IpAddr;
 
@@ -51,7 +51,7 @@ impl KeyExtractor for UserToken {
             if let Ok(auth_str) = auth_header.to_str() {
                 if let Some(stripped) = auth_str.strip_prefix("Bearer ") {
                     let user = extract_token_user(stripped, &app_data.config, ip)
-                    .map_err(|_| SimpleKeyExtractionError::new("invalid token"))?;
+                        .map_err(|_| SimpleKeyExtractionError::new("invalid token"))?;
                     return Ok(user);
                 }
             }

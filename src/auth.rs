@@ -1,19 +1,20 @@
+use crate::config::AuthRequest;
 use crate::crypto::{calcul_cipher, derive_key_from_secret, encrypt};
 use crate::proxy::client_ip;
 use crate::security::generate_token;
 use crate::AppState;
-use crate::config::AuthRequest;
-use argon2::Argon2;
-use argon2::password_hash::{PasswordHash, PasswordVerifier};
 use actix_web::{web, HttpRequest, HttpResponse, Responder};
+use argon2::password_hash::{PasswordHash, PasswordVerifier};
+use argon2::Argon2;
 use chrono::{Duration, Utc};
 use chrono_tz::Europe::Paris;
 use tracing::{info, warn};
 
-
 pub fn verify_password(input: &str, stored_hash: &str) -> bool {
     match PasswordHash::new(stored_hash) {
-        Ok(parsed) => Argon2::default().verify_password(input.as_bytes(), &parsed).is_ok(),
+        Ok(parsed) => Argon2::default()
+            .verify_password(input.as_bytes(), &parsed)
+            .is_ok(),
         Err(_) => false,
     }
 }
@@ -23,7 +24,6 @@ pub async fn auth(
     auth: web::Json<AuthRequest>,
     data: web::Data<AppState>,
 ) -> impl Responder {
-
     let ip = client_ip(&req).expect("?").to_string();
 
     if let Some(index_user) = data
@@ -31,7 +31,9 @@ pub async fn auth(
         .users
         .iter()
         .enumerate()
-        .find(|(_, user)| user.username == auth.username && verify_password(&auth.password, &user.password))
+        .find(|(_, user)| {
+            user.username == auth.username && verify_password(&auth.password, &user.password)
+        })
         .map(|(i, _)| i)
     {
         let user = &data.config.users[index_user];
@@ -68,6 +70,6 @@ pub async fn auth(
         }))
     } else {
         warn!("Invalid credential for enter user {}.", auth.username);
-        return HttpResponse::Unauthorized().body("Invalid credentials")
+        return HttpResponse::Unauthorized().body("Invalid credentials");
     }
 }

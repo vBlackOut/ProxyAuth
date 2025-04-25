@@ -55,7 +55,6 @@ fn check_date_token(time_str: &str, username: &str, ip: &str) -> Result<u64, ()>
     let now = Utc::now();
     let fr_time = now.with_timezone(&Paris).timestamp();
 
-
     if fr_time >= expire {
         warn!("[{}] token is expired for user {}", ip, username);
         return Err(());
@@ -113,11 +112,9 @@ pub fn validate_token(token: &str, config: &AppConfig, ip: &str) -> Result<Strin
     let mut token_hash_bytes = Sha256::new();
     token_hash_bytes.update(token_hash.as_bytes());
 
-
     if hex::encode(token_hash_bytes.finalize().as_slice()) == token_hash_decrypt {
         username = user.username.clone();
     }
-
 
     if !username.is_empty() {
         info!(
