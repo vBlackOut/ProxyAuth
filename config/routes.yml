@@ -7,8 +7,8 @@ routes:
     target: "http://localhost:8000/api_test/openapi.json"
     secure: false
 
-  - prefix: "/api_test"
-    target: "http://localhost:8000/api_test"
+  - prefix: "/api_test_proxy"
+    target: "http://localhost:8000/api_test_proxy"
     username: ["admin", "alice1", "alice15", "alice30"]
     proxy: true
     proxy_config: "http://127.0.0.1:8888"
