@@ -2,7 +2,7 @@ use crate::crypto::{calcul_cipher, derive_key_from_secret, encrypt};
 use crate::proxy::client_ip;
 use crate::security::generate_token;
 use crate::AppState;
-use crate::AuthRequest;
+use crate::config::AuthRequest;
 use argon2::Argon2;
 use argon2::password_hash::{PasswordHash, PasswordVerifier};
 use actix_web::{web, HttpRequest, HttpResponse, Responder};

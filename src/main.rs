@@ -7,7 +7,7 @@ mod security;
 
 use actix_governor::{Governor, GovernorConfigBuilder};
 use actix_web::{web, App, HttpServer};
-use config::{AppConfig, AppState, AuthRequest, RouteConfig, load_config};
+use config::{AppConfig, AppState, RouteConfig, load_config};
 use proxy::proxy;
 use ratelimit::UserToken;
 use auth::auth;

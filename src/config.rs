@@ -26,7 +26,7 @@ pub struct RouteRule {
     pub cert: HashMap<String, String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Default, Debug, Deserialize)]
 pub struct RouteConfig {
     pub routes: Vec<RouteRule>,
 }
@@ -49,7 +49,7 @@ impl Serialize for User {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Default)]
 pub struct AppConfig {
     pub token_expiry_seconds: i64,
     pub secret: String,

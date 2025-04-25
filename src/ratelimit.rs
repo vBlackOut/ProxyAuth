@@ -1,6 +1,7 @@
 use crate::ratelimit::governor::clock::DefaultClock;
 use crate::security::extract_token_user;
-use crate::{web, AppState};
+use crate::AppState;
+use actix_web::{web};
 use actix_governor::governor::clock::Clock;
 use actix_governor::{governor, KeyExtractor, SimpleKeyExtractionError};
 use actix_web::dev::ServiceRequest;
