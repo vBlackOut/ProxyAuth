@@ -59,6 +59,7 @@ routes:
     username: ["admin", "alice1", "alice15", "alice30"]
     proxy: true/false # --> configure proxy
     proxy_config: "http://myproxyurl:8888" # --> pass via proxy for call the target.
+    cert: {"file": "certificat.pk12", "password": "1234"} # /!\ this fonctionnality is experimental untested /!\
 ```
 </details>
 
