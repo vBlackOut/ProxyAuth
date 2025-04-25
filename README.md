@@ -23,7 +23,7 @@ The service is extremely fast, handling 100,000+ requests per second under load.
 **Project based on a other personal project (evolution): <a href="https://github.com/vBlackOut/rust_actixweb_token">rust_actixweb_token</a>
 
 ## Security Mechanism
-todo...
+todo... website is building...
 
 ## Auto Salt config.json password for argon2
 Please enter your password in config.json. The application will automatically generate the Argon2 salt on first startup and rewrite the file with the hashed password.
