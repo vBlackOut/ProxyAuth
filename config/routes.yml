@@ -12,5 +12,9 @@ routes:
     username: ["admin", "alice1", "alice15", "alice30"]
     proxy: true
     proxy_config: "http://127.0.0.1:8888"
+
+  - prefix: "/api_test_cert"
+    target: "https://localhost:8000/api_test_cert"
+    username: ["admin", "alice1", "alice15", "alice30"]
     cert: {"file": "certificat.pk12", "password": "1234"} # /!\ this fonctionnality is experimental untested /!\
 
