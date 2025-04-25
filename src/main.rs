@@ -67,7 +67,7 @@ async fn main() -> std::io::Result<()> {
         .finish()
         .unwrap();
 
-    info!("\nlaunch ProxyAuth v0.4.2 \nratelimit On, ({} requests per seconds, {} requests burst, blocked delay: {} seconds)", requests_per_second_config, burst_config, delay_block_config);
+    info!("\nlaunch ProxyAuth v0.5.0 \nratelimit On, ({} requests per seconds, {} requests burst, blocked delay: {} seconds)", requests_per_second_config, burst_config, delay_block_config);
 
     if auth_ratelimit_config > 0 {
         HttpServer::new(move || {
