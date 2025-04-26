@@ -23,22 +23,6 @@ The service is extremely fast, handling 100,000+ requests per second under load.
 
 **Project based on a other personal project (evolution): <a href="https://github.com/vBlackOut/rust_actixweb_token">rust_actixweb_token</a>
 
-## Begin install Cargo/Rust
-```
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-```
-
-## Install ProxyAuth (Cargo required)
-```
-curl -fsSL https://proxyauth.app/sh/install | bash
-cd proxyauth/
-```
-
-### launch the service (inside the directory proxyauth)
-```
-proxyauth
-````
-
 ## Documentation
 <a href="http://proxyauth.app">Views the documentation</a>
 
