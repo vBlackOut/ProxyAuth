@@ -14,7 +14,6 @@
 [![Crates.io version](https://img.shields.io/crates/v/proxyauth?style=for-the-badge)](https://crates.io/crates/proxyauth)
 [![Crates.io downloads](https://img.shields.io/crates/d/proxyauth?style=for-the-badge)](https://crates.io/crates/proxyauth)
 ![Benchmark](https://img.shields.io/badge/benchmark-+150_000req/s-blue?style=for-the-badge&logo=rust "Benchmark proxyauth on laptop")
-[![Join us on Discord](https://img.shields.io/badge/Discord-Join%20us-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/TjD3MDwF)
 
 
 ProxyAuth secures backend APIs through a fast authentication gateway.
@@ -24,8 +23,8 @@ The service is extremely fast, handling 100,000+ requests per second under load.
 
 **Project based on a other personal project (evolution): <a href="https://github.com/vBlackOut/rust_actixweb_token">rust_actixweb_token</a>
 
-## Security Mechanism
-todo... website is building...
+## Documentation
+<a href="http://proxyauth.app">Views the documentation</a>
 
 ## Auto Salt config.json password for argon2
 Please enter your password in config.json. The application will automatically generate the Argon2 salt on first startup and rewrite the file with the hashed password.
@@ -208,7 +207,4 @@ sequenceDiagram
 ```
 
 This application allows applying global authentication tokens to any application, removing the need for them to implement token validation themselves, which simplifies future development.
-
-## Benchmark
-todo... website is building...
 
