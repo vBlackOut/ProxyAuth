@@ -66,6 +66,10 @@ pub struct AppConfig {
 
     #[serde(default = "default_ratelimit")]
     pub ratelimit: HashMap<String, u64>,
+
+    #[serde(default = "default_log")]
+    pub log: HashMap<String, String>,
+
 }
 
 impl Serialize for AppConfig {
@@ -123,6 +127,12 @@ fn default_proxy() -> bool {
 
 fn default_proxy_config() -> String {
     "".to_string()
+}
+
+fn default_log() -> HashMap<String, String> {
+    let mut log = HashMap::new();
+    log.insert("type".to_string(), "local".to_string());
+    log
 }
 
 fn default_ratelimit() -> HashMap<String, u64> {

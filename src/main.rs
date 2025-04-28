@@ -12,11 +12,16 @@ use config::{load_config, AppConfig, AppState, RouteConfig};
 use proxy::proxy;
 use ratelimit::UserToken;
 use std::{fs, sync::Arc};
-use tracing::info;
+use tracing_subscriber::Layer;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::filter::LevelFilter;
+use tracing_loki::url::Url;
+use std::process;
+use std::io;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    tracing_subscriber::fmt::init();
 
     let config: Arc<AppConfig> = load_config("config/config.json");
     let routes: RouteConfig =
@@ -26,6 +31,38 @@ async fn main() -> std::io::Result<()> {
         config: Arc::clone(&config),
         routes: Arc::new(routes),
     });
+
+
+    if let Some(logs) = config.log.get("type") {
+        if logs == "loki" {
+
+            let host = config.log.get("host").ok_or_else(|| {
+                io::Error::new(io::ErrorKind::InvalidInput, "Missing Loki host config")
+            })?;
+
+            let url = Url::parse(host).map_err(|e| {
+                io::Error::new(io::ErrorKind::InvalidInput, format!("Invalid Loki URL: {}", e))
+            })?;
+
+
+            let Ok((layer, task)) = tracing_loki::builder()
+            .label("host", "proxyauth").expect("REASON")
+            .extra_field("pid", format!("{}", process::id())).expect("REASON")
+            .build_url(url) else { todo!() };
+
+            // We need to register our layer with `tracing`.
+            tracing_subscriber::registry()
+            .with(layer.with_filter(LevelFilter::INFO))
+            .with(tracing_subscriber::fmt::Layer::new().with_filter(LevelFilter::INFO)) // Affichage console aussi
+            .init();
+
+            tokio::spawn(task);
+        }
+
+        if logs == "local" {
+            tracing_subscriber::fmt::init();  // ici ton code
+        }
+    }
 
     let requests_per_second_config = config
         .ratelimit
@@ -67,7 +104,7 @@ async fn main() -> std::io::Result<()> {
         .finish()
         .unwrap();
 
-    info!("\nlaunch ProxyAuth v0.5.0 \nratelimit On, ({} requests per seconds, {} requests burst, blocked delay: {} seconds)", requests_per_second_config, burst_config, delay_block_config);
+    println!("\nlaunch ProxyAuth v0.5.2 \nratelimit On, ({} requests per seconds, {} requests burst, blocked delay: {} seconds)", requests_per_second_config, burst_config, delay_block_config);
 
     if auth_ratelimit_config > 0 {
         HttpServer::new(move || {
