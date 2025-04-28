@@ -157,6 +157,7 @@ docker compose restart
   just define the same secret across all instances to have the same token calculations (if use the same images).
 - ~Semi-static tokens (refresh_token is only recalculated at intervals defined in the config)~
 - Tokens can be recalculated using a random exponential factor, allowing for further complexity.
+- Possible send logs via loki [v0.5.2]  
 
 # Potential Disadvantages
 - If someone can reverse-engineer the hash, they could potentially access services.
