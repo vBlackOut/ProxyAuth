@@ -73,6 +73,7 @@ routes:
   "secret": "supersecretvalue",
   "host": "127.0.0.1",
   "port": 8080,
+  log: {"type": "local"}, --> use for loki {"type": "loki", "host": "http://host_loki:port"} 
   "ratelimit":{
          "requests_per_second": 5, --> Number requests per seconds for proxy call
          "burst": 10, --> burst allow requests
