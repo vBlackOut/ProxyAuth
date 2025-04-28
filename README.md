@@ -147,8 +147,8 @@ docker compose restart
 
 ## TODO
 - Log to stdout using `tracing` (Rust log lib) [still being deployed]
-- Protect passwords config.json using Argon2.
-- Add Loki integration with tracing [needs further exploration]
+- ~Protect passwords config.json using Argon2.~ [Done v0.4.0]
+- ~Add Loki integration with tracing [needs further exploration]~ [Done v0.5.2]
 
 # ProxyAuth Advantages
 - Centralized access point
