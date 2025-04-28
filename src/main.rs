@@ -46,7 +46,7 @@ async fn main() -> std::io::Result<()> {
 
 
             let Ok((layer, task)) = tracing_loki::builder()
-            .label("host", "proxyauth").expect("REASON")
+            .label("app", "proxyauth").expect("REASON")
             .extra_field("pid", format!("{}", process::id())).expect("REASON")
             .build_url(url) else { todo!() };
 
