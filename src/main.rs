@@ -53,7 +53,7 @@ async fn main() -> std::io::Result<()> {
             // We need to register our layer with `tracing`.
             tracing_subscriber::registry()
             .with(layer.with_filter(LevelFilter::INFO))
-            .with(tracing_subscriber::fmt::Layer::new().with_filter(LevelFilter::INFO)) // Affichage console aussi
+            .with(tracing_subscriber::fmt::Layer::new().with_filter(LevelFilter::INFO))
             .init();
 
             tokio::spawn(task);
