@@ -5,8 +5,9 @@ use reqwest;
 use std::process::Command;
 use std::io;
 use nix::unistd::{Uid, User, setuid};
-use chrono::Duration;
+use std::time::Duration;
 use std::thread;
+use nix::unistd::Group;
 
 pub fn ensure_running_as_proxyauth() {
     let uid = Uid::effective();
