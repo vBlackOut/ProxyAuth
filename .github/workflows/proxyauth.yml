@@ -25,6 +25,9 @@ jobs:
       - name: Build the binary
         run: cargo build --release
 
+      - name: Prepare User for run proxyauth
+        run: ./target/release/proxyauth prepare
+
       - name: Start ProxyAuth in background
         run: |
           ./target/release/proxyauth &
