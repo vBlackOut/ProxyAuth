@@ -112,6 +112,13 @@ curl -fsSL https://proxyauth.app/sh/uninstall | bash
 ```
 </details>
 
+<details>
+<summary>Easy launch ProxyAuth</summary>
+
+```
+proxyauth
+```
+</details>
 
 <details>
   <summary>Use on docker</summary>
