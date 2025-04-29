@@ -98,33 +98,20 @@ routes:
 </details>
 
 <details>
-<summary>To compile the server</summary>
+<summary>Install on the server</summary>
 
 ```
-cargo build --release
+curl -fsSL https://proxyauth.app/sh/install | bash
 ```
 </details>
-
 <details>
-<summary>To run the binary</summary>
+<summary>Uninstall on the server</summary>
 
 ```
-sudo ./target/release/proxyauth prepare // it's for prepare user/group directory /etc/proxyauth permission creation and other...
-./target/release/proxyauth // launch
+curl -fsSL https://proxyauth.app/sh/uninstall | bash
 ```
-
-Post-compilation structure:
-```
- --- app (parent directory)
-  | --- proxyauth (binary)
-  | --- config/
-     |--- config.json (user/server configurations)
-     |--- routes.yml (route configurations)
-```
-You can then copy the binary anywhere; it will work on any Linux architecture compatible with your current OS.
-**You must create `config.json` and `routes.yml` at the root of the binary. See examples here: <a href="">config.json</a> and <a href="">routes.yml</a>
-
 </details>
+
 
 <details>
   <summary>Use on docker</summary>
