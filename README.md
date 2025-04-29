@@ -27,6 +27,9 @@ The service is extremely fast, handling 100,000+ requests per second under load.
 <a href="http://proxyauth.app">Views the documentation</a>  
 <b>Possible to contribute the documentation: <a href="https://github.com/vBlackOut/ProxyAuth-Docs">ProxyAuth Docs</a> </b> :heart:
 
+## Automatic `config/` Setup [Since v0.5.4]
+If the required configuration files are missing, they will be automatically downloaded from this repository during initialization.
+
 ## Auto Salt config.json password for argon2
 Please enter your password in config.json. The application will automatically generate the Argon2 salt on first startup and rewrite the file with the hashed password.
 
