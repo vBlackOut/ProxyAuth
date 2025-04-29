@@ -86,6 +86,7 @@ pub fn ensure_user_proxyauth_exists() -> io::Result<()> {
         println!("User 'proxyauth' created.");
         println!("Waiting for system to register new user...");
         thread::sleep(Duration::from_millis(500));
+      
     } else {
         println!("User 'proxyauth' already exists.");
     }
