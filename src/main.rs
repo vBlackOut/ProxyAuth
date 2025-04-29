@@ -4,12 +4,14 @@ mod crypto;
 mod proxy;
 mod ratelimit;
 mod security;
+mod def_config;
 
 use actix_governor::{Governor, GovernorConfigBuilder};
 use actix_web::{web, App, HttpServer};
 use auth::auth;
 use config::{load_config, AppConfig, AppState, RouteConfig};
 use proxy::proxy;
+use def_config::create_config;
 use ratelimit::UserToken;
 use std::{fs, sync::Arc};
 use tracing_subscriber::Layer;
@@ -22,6 +24,17 @@ use std::io;
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
+
+    // download default config from repository
+    create_config(
+        "https://raw.githubusercontent.com/vBlackOut/ProxyAuth/refs/heads/main/config/config.json",
+        "config/config.json",
+    ).await.expect("No possible download config/config.json");
+
+    create_config(
+        "https://raw.githubusercontent.com/vBlackOut/ProxyAuth/refs/heads/main/config/routes.yml",
+        "config/routes.yml",
+    ).await.expect("No possible download config/routes.yml");
 
     let config: Arc<AppConfig> = load_config("config/config.json");
     let routes: RouteConfig =
