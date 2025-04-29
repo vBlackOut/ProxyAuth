@@ -29,7 +29,7 @@ fn is_alpine() -> bool {
     }
 }
 
-pub fn ensure_user_proxyauth_exist() -> io::Result<()> {
+pub fn ensure_user_proxyauth_exists() -> io::Result<()> {
     let alpine = is_alpine();
 
     println!("Detected OS: {}", if alpine { "Alpine" } else { "Debian/Ubuntu" });
