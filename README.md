@@ -116,7 +116,7 @@ curl -fsSL https://proxyauth.app/sh/uninstall | bash
 <summary>Easy launch ProxyAuth</summary>
 
 ```
-proxyauth
+sudo systemd start proxyauth
 ```
 </details>
 
