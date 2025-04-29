@@ -139,7 +139,7 @@ async fn main() -> std::io::Result<()> {
         .finish()
         .unwrap();
 
-    println!("\nlaunch ProxyAuth v0.5.5 \nratelimit On, ({} requests per seconds, {} requests burst, blocked delay: {} seconds)", requests_per_second_config, burst_config, delay_block_config);
+    println!("\nlaunch ProxyAuth v0.5.6 \nratelimit On, ({} requests per seconds, {} requests burst, blocked delay: {} seconds)", requests_per_second_config, burst_config, delay_block_config);
 
     if auth_ratelimit_config > 0 {
         HttpServer::new(move || {

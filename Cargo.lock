@@ -1736,7 +1736,7 @@ dependencies = [
 
 [[package]]
 name = "proxyauth"
-version = "0.5.5"
+version = "0.5.6"
 dependencies = [
  "actix-governor",
  "actix-http",

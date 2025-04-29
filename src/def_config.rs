@@ -5,6 +5,9 @@ use reqwest;
 use std::process::Command;
 use std::io;
 use nix::unistd::{Uid, User, setuid};
+use std::time::Duration;
+use std::thread;
+use nix::unistd::Group;
 
 pub fn ensure_running_as_proxyauth() {
     let uid = Uid::effective();
@@ -21,33 +24,76 @@ pub fn ensure_running_as_proxyauth() {
     }
 }
 
-pub fn ensure_user_proxyauth_exists() -> io::Result<()> {
-    if let Ok(Some(_)) = User::from_name("proxyauth") {
-        println!("User 'proxyauth' already exists.");
-        return Ok(());
-    }
-
-    println!("User 'proxyauth' not found. Creating user...");
-
-    let status = Command::new("useradd")
-        .args([
-            "--system",
-            "--no-create-home",
-            "--shell", "/usr/sbin/nologin",
-            "proxyauth",
-        ])
-        .status()?;
-
-    thread::sleep(Duration::from_millis(500));
-
-    if status.success() {
-        println!("User 'proxyauth' created successfully.");
-        Ok(())
+fn is_alpine() -> bool {
+    if let Ok(content) = fs::read_to_string("/etc/os-release") {
+        content.to_lowercase().contains("alpine")
     } else {
-        eprintln!("Failed to create user 'proxyauth'. Are you running as root?");
-        std::process::exit(1);
+        false
     }
 }
+
+pub fn ensure_user_proxyauth_exists() -> io::Result<()> {
+    let alpine = is_alpine();
+
+    println!("Detected OS: {}", if alpine { "Alpine" } else { "Debian/Ubuntu" });
+
+    if Group::from_name("proxyauth")?.is_none() {
+        println!("Group 'proxyauth' not found. Creating group...");
+
+        let group_cmd = if alpine { "addgroup" } else { "groupadd" };
+
+        let status_group = Command::new(group_cmd)
+            .arg("proxyauth")
+            .status()?;
+
+        if !status_group.success() {
+            eprintln!("Failed to create group 'proxyauth'.");
+            std::process::exit(1);
+        }
+        println!("Group 'proxyauth' created.");
+    } else {
+        println!("Group 'proxyauth' already exists.");
+    }
+
+    if User::from_name("proxyauth")?.is_none() {
+        println!("User 'proxyauth' not found. Creating user...");
+
+        let status_user = if alpine {
+            Command::new("adduser")
+                .args([
+                    "-S",               // small/system account
+                    "-G", "proxyauth",   // associate group
+                    "proxyauth",
+                ])
+                .status()?
+        } else {
+            Command::new("useradd")
+                .args([
+                    "--system",
+                    "--no-create-home",
+                    "--shell", "/usr/sbin/nologin",
+                    "--gid", "proxyauth",
+                    "proxyauth",
+                ])
+                .status()?
+        };
+
+        if !status_user.success() {
+            eprintln!("Failed to create user 'proxyauth'.");
+            std::process::exit(1);
+        }
+
+        println!("User 'proxyauth' created.");
+        println!("Waiting for system to register new user...");
+        thread::sleep(Duration::from_millis(500));
+      
+    } else {
+        println!("User 'proxyauth' already exists.");
+    }
+
+    Ok(())
+}
+
 
 pub fn setup_proxyauth_directory() -> io::Result<()> {
     let path = Path::new("/etc/proxyauth");
