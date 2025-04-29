@@ -38,6 +38,8 @@ pub fn ensure_user_proxyauth_exists() -> io::Result<()> {
         ])
         .status()?;
 
+    thread::sleep(Duration::from_millis(500));
+
     if status.success() {
         println!("User 'proxyauth' created successfully.");
         Ok(())
