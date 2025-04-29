@@ -5,13 +5,15 @@ mod proxy;
 mod ratelimit;
 mod security;
 mod def_config;
+mod command;
 
 use actix_governor::{Governor, GovernorConfigBuilder};
 use actix_web::{web, App, HttpServer};
 use auth::auth;
 use config::{load_config, AppConfig, AppState, RouteConfig};
 use proxy::proxy;
-use def_config::create_config;
+use def_config::{create_config, ensure_running_as_proxyauth, ensure_user_proxyauth_exists, switch_to_user, setup_proxyauth_directory};
+use command::{Cli, Commands};
 use ratelimit::UserToken;
 use std::{fs, sync::Arc};
 use tracing_subscriber::Layer;
@@ -19,26 +21,46 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::filter::LevelFilter;
 use tracing_loki::url::Url;
+use clap::Parser;
 use std::process;
 use std::io;
+
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
 
+    let cli = Cli::parse();
+
+    if let Some(command) = &cli.command {
+        match command {
+            Commands::Prepare => {
+                let _ = ensure_user_proxyauth_exists();
+                let _ = setup_proxyauth_directory();
+                return Ok(());
+            }
+        }
+    }
+
+    // launch as user proxyauth
+    let _ = switch_to_user("proxyauth");
+
+    // detect if program is running proxyauth user
+    ensure_running_as_proxyauth();
+
     // download default config from repository
     create_config(
         "https://raw.githubusercontent.com/vBlackOut/ProxyAuth/refs/heads/main/config/config.json",
-        "config/config.json",
+        "/etc/proxyauth/config/config.json",
     ).await.expect("No possible download config/config.json");
 
     create_config(
         "https://raw.githubusercontent.com/vBlackOut/ProxyAuth/refs/heads/main/config/routes.yml",
-        "config/routes.yml",
+        "/etc/proxyauth/config/routes.yml",
     ).await.expect("No possible download config/routes.yml");
 
-    let config: Arc<AppConfig> = load_config("config/config.json");
+    let config: Arc<AppConfig> = load_config("/etc/proxyauth/config/config.json");
     let routes: RouteConfig =
-        serde_yaml::from_str(&fs::read_to_string("config/routes.yml")?).unwrap();
+        serde_yaml::from_str(&fs::read_to_string("/etc/proxyauth/config/routes.yml")?).unwrap();
 
     let state = web::Data::new(AppState {
         config: Arc::clone(&config),
@@ -117,7 +139,7 @@ async fn main() -> std::io::Result<()> {
         .finish()
         .unwrap();
 
-    println!("\nlaunch ProxyAuth v0.5.4 \nratelimit On, ({} requests per seconds, {} requests burst, blocked delay: {} seconds)", requests_per_second_config, burst_config, delay_block_config);
+    println!("\nlaunch ProxyAuth v0.5.5 \nratelimit On, ({} requests per seconds, {} requests burst, blocked delay: {} seconds)", requests_per_second_config, burst_config, delay_block_config);
 
     if auth_ratelimit_config > 0 {
         HttpServer::new(move || {
