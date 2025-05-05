@@ -13,7 +13,7 @@
   "ratelimit_auth": {
     "burst": 10,
     "block_delay": 500,
-    "requests_per_second": 10,
+    "requests_per_second": 10
   },
   "users": [
     {
