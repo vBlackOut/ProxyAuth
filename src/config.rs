@@ -64,8 +64,11 @@ pub struct AppConfig {
     #[serde(default = "default_worker")]
     pub worker: u8,
 
-    #[serde(default = "default_ratelimit")]
-    pub ratelimit: HashMap<String, u64>,
+    #[serde(default = "default_ratelimit_proxy")]
+    pub ratelimit_proxy: HashMap<String, u64>,
+
+    #[serde(default = "default_ratelimit_auth")]
+    pub ratelimit_auth: HashMap<String, u64>,
 
     #[serde(default = "default_log")]
     pub log: HashMap<String, String>,
@@ -83,7 +86,8 @@ impl Serialize for AppConfig {
         state.serialize_field("host", &self.host)?;
         state.serialize_field("port", &self.port)?;
         state.serialize_field("worker", &self.worker)?;
-        state.serialize_field("ratelimit", &self.ratelimit)?;
+        state.serialize_field("ratelimit_auth", &self.ratelimit_auth)?;
+        state.serialize_field("ratelimit_proxy", &self.ratelimit_proxy)?;
         state.serialize_field("users", &self.users)?; // en dernier
         state.end()
     }
@@ -135,13 +139,19 @@ fn default_log() -> HashMap<String, String> {
     log
 }
 
-fn default_ratelimit() -> HashMap<String, u64> {
+fn default_ratelimit_proxy() -> HashMap<String, u64> {
     let mut ratelimit = HashMap::new();
     ratelimit.insert("requests_per_second".to_string(), 1000);
     ratelimit.insert("burst".to_string(), 10);
     ratelimit.insert("block_delay".to_string(), 500);
-    ratelimit.insert("auth".to_string(), 5);
-    ratelimit.insert("block_delay_auth".to_string(), 10000);
+    ratelimit
+}
+
+fn default_ratelimit_auth() -> HashMap<String, u64> {
+    let mut ratelimit = HashMap::new();
+    ratelimit.insert("requests_per_second".to_string(), 10);
+    ratelimit.insert("burst".to_string(), 10);
+    ratelimit.insert("block_delay".to_string(), 500);
     ratelimit
 }
 

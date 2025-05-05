@@ -101,53 +101,70 @@ async fn main() -> std::io::Result<()> {
         }
     }
 
-    let requests_per_second_config = config
-        .ratelimit
+
+    // configuration proxy ratelimot
+    let requests_per_second_proxy_config = config
+        .ratelimit_proxy
         .get("requests_per_second")
         .copied()
         .expect("Error value per_second");
 
-    let burst_config = config
-        .ratelimit
+    let burst_proxy_config = config
+        .ratelimit_proxy
         .get("burst")
         .copied()
         .expect("Error value burst")
         .try_into()
         .unwrap();
-    let delay_block_config = config
-        .ratelimit
+
+    let delay_block_proxy_config = config
+        .ratelimit_proxy
         .get("block_delay")
         .copied()
         .expect("Error value block_delay");
 
-    let auth_ratelimit_config = config
-        .ratelimit
-        .get("auth")
+    // configuration auth ratelimit
+    let requests_per_second_auth_config = config
+        .ratelimit_auth
+        .get("requests_per_second")
         .copied()
-        .expect("Error value auth_ratelimit");
+        .expect("Error value per_second");
+
+    let burst_auth_config = config
+        .ratelimit_auth
+        .get("burst")
+        .copied()
+        .expect("Error value burst")
+        .try_into()
+        .unwrap();
+
+    let delay_block_auth_config = config
+        .ratelimit_auth
+        .get("block_delay")
+        .copied()
+        .expect("Error value block_delay");
 
     let governor_auth_conf = GovernorConfigBuilder::default()
-        .requests_per_second(auth_ratelimit_config)
-        .burst_size(auth_ratelimit_config.try_into().unwrap())
+        .requests_per_second(requests_per_second_auth_config)
+        .burst_size(burst_auth_config)
         .use_headers()
-        .period(std::time::Duration::from_millis(10000u64))
+        .period(std::time::Duration::from_millis(delay_block_auth_config))
         .finish()
         .unwrap();
 
     let governor_proxy_conf = GovernorConfigBuilder::default()
-        .requests_per_second(requests_per_second_config)
-        .burst_size(burst_config)
+        .requests_per_second(requests_per_second_proxy_config)
+        .burst_size(burst_proxy_config)
         .key_extractor(UserToken)
-        .period(std::time::Duration::from_millis(delay_block_config as u64))
+        .period(std::time::Duration::from_millis(delay_block_proxy_config as u64))
         .finish()
         .unwrap();
 
-
-    let mode_actix = mode_actix_web(&auth_ratelimit_config, &requests_per_second_config);
+    let mode_actix = mode_actix_web(&requests_per_second_auth_config, &requests_per_second_proxy_config);
 
     match mode_actix.to_string().as_str() {
         "NO_RATELIMIT_AUTH" => {
-            println!("\nlaunch ProxyAuth v{} \nratelimit On, ({} requests per seconds, {} requests burst, blocked delay: {} milliseconds)", version, requests_per_second_config, burst_config, delay_block_config);
+            println!("\nlaunch ProxyAuth v{} \nratelimit On, (Proxy)", version);
             HttpServer::new(move || {
                 App::new()
                     .app_data(state.clone())
@@ -161,7 +178,7 @@ async fn main() -> std::io::Result<()> {
        }
 
        "NO_RATELIMIT_PROXY" => {
-            println!("\nlaunch ProxyAuth v{} \nratelimit On (Auth), ({} requests per seconds, {} requests burst, blocked delay: {} milliseconds)", version, auth_ratelimit_config, auth_ratelimit_config, 10000u64);
+            println!("\nlaunch ProxyAuth v{} \nratelimit On (Auth)", version);
             HttpServer::new(move || {
             App::new()
                 .app_data(state.clone())
@@ -181,7 +198,7 @@ async fn main() -> std::io::Result<()> {
        }
 
        "RATELIMITE_GLOBAL_ON" => {
-            println!("\nlaunch ProxyAuth v{} \nratelimit On, ({} requests per seconds, {} requests burst, blocked delay: {} milliseconds)", version, requests_per_second_config, burst_config, delay_block_config);
+            println!("\nlaunch ProxyAuth v{} \nratelimit On, (Proxy, Auth)", version);
             HttpServer::new(move || {
             App::new()
                 .app_data(state.clone())

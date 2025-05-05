@@ -5,11 +5,15 @@
   "port": 8080,
   "worker": 4,
   "log": {"type": "local"},
-  "ratelimit": {
+  "ratelimit_proxy": {
     "burst": 100,
-    "auth": 5,
     "block_delay": 500,
     "requests_per_second": 10
+  },
+  "ratelimit_auth": {
+    "burst": 10,
+    "block_delay": 500,
+    "requests_per_second": 10,
   },
   "users": [
     {
