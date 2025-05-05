@@ -1,6 +1,6 @@
 
 
-pub fn start_actix_web(auth_ratelimit_config: &u64, requests_per_second_config: &u64) -> String {
+pub fn mode_actix_web(auth_ratelimit_config: &u64, requests_per_second_config: &u64) -> String {
     let mut mode = String::new();
 
     if *auth_ratelimit_config == 0 && *requests_per_second_config >= 1 {

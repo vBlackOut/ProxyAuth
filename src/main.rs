@@ -13,7 +13,7 @@ use actix_web::{web, App, HttpServer};
 use auth::auth;
 use config::{load_config, AppConfig, AppState, RouteConfig};
 use proxy::proxy;
-use start_actix::start_actix_web;
+use start_actix::mode_actix_web;
 use def_config::{create_config, ensure_running_as_proxyauth, ensure_user_proxyauth_exists, switch_to_user, setup_proxyauth_directory};
 use command::{Cli, Commands};
 use ratelimit::UserToken;
@@ -31,6 +31,7 @@ use std::io;
 async fn main() -> std::io::Result<()> {
 
     let cli = Cli::parse();
+    let version = "0.5.10".to_string();
 
     if let Some(command) = &cli.command {
         match command {
@@ -105,6 +106,7 @@ async fn main() -> std::io::Result<()> {
         .get("requests_per_second")
         .copied()
         .expect("Error value per_second");
+
     let burst_config = config
         .ratelimit
         .get("burst")
@@ -140,12 +142,12 @@ async fn main() -> std::io::Result<()> {
         .finish()
         .unwrap();
 
-    println!("\nlaunch ProxyAuth v0.5.9 \nratelimit On, ({} requests per seconds, {} requests burst, blocked delay: {} milliseconds)", requests_per_second_config, burst_config, delay_block_config);
 
-    let start_actix = start_actix_web(&auth_ratelimit_config, &requests_per_second_config);
+    let mode_actix = mode_actix_web(&auth_ratelimit_config, &requests_per_second_config);
 
-    match start_actix.to_string().as_str() {
+    match mode_actix.to_string().as_str() {
         "NO_RATELIMIT_AUTH" => {
+            println!("\nlaunch ProxyAuth v{} \nratelimit On, ({} requests per seconds, {} requests burst, blocked delay: {} milliseconds)", version, requests_per_second_config, burst_config, delay_block_config);
             HttpServer::new(move || {
                 App::new()
                     .app_data(state.clone())
@@ -159,6 +161,7 @@ async fn main() -> std::io::Result<()> {
        }
 
        "NO_RATELIMIT_PROXY" => {
+            println!("\nlaunch ProxyAuth v{} \nratelimit On (Auth), ({} requests per seconds, {} requests burst, blocked delay: {} milliseconds)", version, auth_ratelimit_config, auth_ratelimit_config, 10000u64);
             HttpServer::new(move || {
             App::new()
                 .app_data(state.clone())
@@ -178,6 +181,7 @@ async fn main() -> std::io::Result<()> {
        }
 
        "RATELIMITE_GLOBAL_ON" => {
+            println!("\nlaunch ProxyAuth v{} \nratelimit On, ({} requests per seconds, {} requests burst, blocked delay: {} milliseconds)", version, requests_per_second_config, burst_config, delay_block_config);
             HttpServer::new(move || {
             App::new()
                 .app_data(state.clone())
@@ -197,6 +201,7 @@ async fn main() -> std::io::Result<()> {
         }
 
        "RATELIMIT_GLOBAL_OFF" => {
+            println!("\nlaunch ProxyAuth v{} \nratelimit Off", version);
             HttpServer::new(move || {
                 App::new()
                     .app_data(state.clone())
@@ -210,6 +215,7 @@ async fn main() -> std::io::Result<()> {
        }
 
        _ => {
+            println!("\nlaunch ProxyAuth v{} \nratelimit Off", version);
             HttpServer::new(move || {
                 App::new()
                     .app_data(state.clone())
