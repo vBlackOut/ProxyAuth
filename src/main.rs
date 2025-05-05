@@ -6,12 +6,14 @@ mod ratelimit;
 mod security;
 mod def_config;
 mod command;
+mod start_actix;
 
 use actix_governor::{Governor, GovernorConfigBuilder};
 use actix_web::{web, App, HttpServer};
 use auth::auth;
 use config::{load_config, AppConfig, AppState, RouteConfig};
 use proxy::proxy;
+use start_actix::start_actix_web;
 use def_config::{create_config, ensure_running_as_proxyauth, ensure_user_proxyauth_exists, switch_to_user, setup_proxyauth_directory};
 use command::{Cli, Commands};
 use ratelimit::UserToken;
@@ -24,7 +26,6 @@ use tracing_loki::url::Url;
 use clap::Parser;
 use std::process;
 use std::io;
-
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -139,10 +140,45 @@ async fn main() -> std::io::Result<()> {
         .finish()
         .unwrap();
 
-    println!("\nlaunch ProxyAuth v0.5.8 \nratelimit On, ({} requests per seconds, {} requests burst, blocked delay: {} milliseconds)", requests_per_second_config, burst_config, delay_block_config);
+    println!("\nlaunch ProxyAuth v0.5.9 \nratelimit On, ({} requests per seconds, {} requests burst, blocked delay: {} milliseconds)", requests_per_second_config, burst_config, delay_block_config);
 
-    if auth_ratelimit_config > 0 {
-        HttpServer::new(move || {
+    let start_actix = start_actix_web(&auth_ratelimit_config, &requests_per_second_config);
+
+    match start_actix.to_string().as_str() {
+        "NO_RATELIMIT_AUTH" => {
+            HttpServer::new(move || {
+                App::new()
+                    .app_data(state.clone())
+                    .service(web::resource("/auth").route(web::post().to(auth)))
+                    .default_service(web::to(proxy).wrap(Governor::new(&governor_proxy_conf)))
+            })
+            .workers((config.worker as u8).into())
+            .bind((config.host.as_str(), config.port as u16))?
+            .run()
+            .await
+       }
+
+       "NO_RATELIMIT_PROXY" => {
+            HttpServer::new(move || {
+            App::new()
+                .app_data(state.clone())
+                .service(
+                    web::resource("/auth").route(
+                        web::post()
+                            .to(auth)
+                            .wrap(Governor::new(&governor_auth_conf)),
+                    ),
+                )
+                .default_service(web::to(proxy))
+            })
+            .workers((config.worker as u8).into())
+            .bind((config.host.as_str(), config.port as u16))?
+            .run()
+            .await
+       }
+
+       "RATELIMITE_GLOBAL_ON" => {
+            HttpServer::new(move || {
             App::new()
                 .app_data(state.clone())
                 .service(
@@ -153,21 +189,37 @@ async fn main() -> std::io::Result<()> {
                     ),
                 )
                 .default_service(web::to(proxy).wrap(Governor::new(&governor_proxy_conf)))
-        })
-        .workers((config.worker as u8).into())
-        .bind((config.host.as_str(), config.port as u16))?
-        .run()
-        .await
-    } else {
-        HttpServer::new(move || {
-            App::new()
-                .app_data(state.clone())
-                .service(web::resource("/auth").route(web::post().to(auth)))
-                .default_service(web::to(proxy).wrap(Governor::new(&governor_proxy_conf)))
-        })
-        .workers((config.worker as u8).into())
-        .bind((config.host.as_str(), config.port as u16))?
-        .run()
-        .await
+            })
+            .workers((config.worker as u8).into())
+            .bind((config.host.as_str(), config.port as u16))?
+            .run()
+            .await
+        }
+
+       "RATELIMIT_GLOBAL_OFF" => {
+            HttpServer::new(move || {
+                App::new()
+                    .app_data(state.clone())
+                    .service(web::resource("/auth").route(web::post().to(auth)))
+                    .default_service(web::to(proxy))
+            })
+            .workers((config.worker as u8).into())
+            .bind((config.host.as_str(), config.port as u16))?
+            .run()
+            .await
+       }
+
+       _ => {
+            HttpServer::new(move || {
+                App::new()
+                    .app_data(state.clone())
+                    .service(web::resource("/auth").route(web::post().to(auth)))
+                    .default_service(web::to(proxy))
+            })
+            .workers((config.worker as u8).into())
+            .bind((config.host.as_str(), config.port as u16))?
+            .run()
+            .await
+       }
     }
 }

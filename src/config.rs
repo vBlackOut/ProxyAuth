@@ -146,7 +146,7 @@ fn default_ratelimit() -> HashMap<String, u64> {
 }
 
 fn default_cert() -> HashMap<String, String> {
-    let mut cert = HashMap::new();
+    let cert = HashMap::new();
     cert
 }
 
