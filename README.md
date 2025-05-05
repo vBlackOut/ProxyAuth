@@ -81,12 +81,16 @@ routes:
   "host": "127.0.0.1",
   "port": 8080,
   log: {"type": "local"}, --> use for loki {"type": "loki", "host": "http://host_loki:port"} 
-  "ratelimit":{
-         "requests_per_second": 5, --> Number requests per seconds for proxy call
-         "burst": 10, --> burst allow requests
-         "block_delay": 100, --> number block requests in milliseconds
-         "auth": 5 --> number blocked authentifications user per seconds
-},
+  "ratelimit_proxy": {
+    "burst": 100,
+    "block_delay": 500,
+    "requests_per_second": 10
+  },
+  "ratelimit_auth": {
+    "burst": 10,
+    "block_delay": 500,
+    "requests_per_second": 10
+  },
   "worker": 4,
   "users": [
     { "username": "admin", "password": "admin123" },
