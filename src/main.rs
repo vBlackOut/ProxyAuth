@@ -31,7 +31,7 @@ use std::io;
 async fn main() -> std::io::Result<()> {
 
     let cli = Cli::parse();
-    let version = "0.5.10".to_string();
+    let version = "0.5.11".to_string();
 
     if let Some(command) = &cli.command {
         match command {
@@ -162,7 +162,7 @@ async fn main() -> std::io::Result<()> {
 
     let mode_actix = mode_actix_web(&requests_per_second_auth_config, &requests_per_second_proxy_config);
 
-    match mode_actix.to_string().as_str() {
+    match mode_actix {
         "NO_RATELIMIT_AUTH" => {
             println!("\nlaunch ProxyAuth v{} \nratelimit On, (Proxy)", version);
             HttpServer::new(move || {
