@@ -103,7 +103,7 @@ pub async fn proxy(
 
             let token_hash = &token_header;
 
-            let username = match validate_token(&token_hash, &data.config, &ip) {
+            let username = match validate_token(&token_hash, &data, &data.config, &ip) {
                 Ok(username) => username,
                 Err(err) => return Ok(HttpResponse::Unauthorized().body(err)),
             };

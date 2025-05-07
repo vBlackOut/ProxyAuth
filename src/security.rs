@@ -1,5 +1,7 @@
 use crate::crypto::{calcul_factorhash, decrypt, derive_key_from_secret};
 use crate::AppConfig;
+use crate::AppState;
+use actix_web::web;
 use chrono::{Timelike, Utc};
 use chrono_tz::Europe::Paris;
 use hex;
@@ -64,7 +66,7 @@ fn check_date_token(time_str: &str, username: &str, ip: &str) -> Result<u64, ()>
     diff.try_into().map_err(|_| ())
 }
 
-pub fn validate_token(token: &str, config: &AppConfig, ip: &str) -> Result<String, String> {
+pub fn validate_token(token: &str, data_app: &web::Data<AppState>, config: &AppConfig, ip: &str) -> Result<String, String> {
     let mut username = String::new();
 
     let key = derive_key_from_secret(&config.secret);
@@ -76,10 +78,22 @@ pub fn validate_token(token: &str, config: &AppConfig, ip: &str) -> Result<Strin
 
     let data: Vec<&str> = decrypt_token.split('|').collect();
 
+    info!("{:?}", data[3]);
+
+    // Access the CounterToken
+    let mut counter = data_app.counter.lock().map_err(|_| "Failed to lock counter")?;
+
+    // record counter_token
+    counter.record_call(data[3]);
+
+    // give counter
+    let count = counter.get_count(data[3]);
+
     let cleaned_token = decrypt_token
         .split('|')
         .next()
         .ok_or("Invalid token format")?;
+
 
     let (token_hash_decrypt, factor) = match cleaned_token.rsplit_once('=') {
         Some((hash, factor_str)) => match factor_str.parse::<i64>() {
@@ -118,8 +132,8 @@ pub fn validate_token(token: &str, config: &AppConfig, ip: &str) -> Result<Strin
 
     if !username.is_empty() {
         info!(
-            "[{}] user {} is logged token expire in {} seconds",
-            ip, user.username, time_expire
+            "[{}] user {} is logged token expire in {} seconds [token used: {}]",
+            ip, user.username, time_expire, count
         );
         Ok(username)
     } else {

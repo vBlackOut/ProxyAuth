@@ -4,6 +4,8 @@ use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
 use std::collections::HashMap;
 use std::fs;
 use std::sync::Arc;
+use crate::tokencount::CounterToken;
+use std::sync::Mutex;
 
 #[derive(Debug, Deserialize)]
 pub struct RouteRule {
@@ -97,6 +99,7 @@ impl Serialize for AppConfig {
 pub struct AppState {
     pub config: Arc<AppConfig>,
     pub routes: Arc<RouteConfig>,
+    pub counter: Arc<Mutex<CounterToken>>,
 }
 
 #[derive(Deserialize)]

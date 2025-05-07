@@ -7,6 +7,7 @@ mod security;
 mod def_config;
 mod command;
 mod start_actix;
+mod tokencount;
 
 use actix_governor::{Governor, GovernorConfigBuilder};
 use actix_web::{web, App, HttpServer};
@@ -17,6 +18,7 @@ use start_actix::mode_actix_web;
 use def_config::{create_config, ensure_running_as_proxyauth, ensure_user_proxyauth_exists, switch_to_user, setup_proxyauth_directory};
 use command::{Cli, Commands};
 use ratelimit::UserToken;
+pub use tokencount::CounterToken;
 use std::{fs, sync::Arc};
 use tracing_subscriber::Layer;
 use tracing_subscriber::layer::SubscriberExt;
@@ -65,11 +67,13 @@ async fn main() -> std::io::Result<()> {
     let routes: RouteConfig =
         serde_yaml::from_str(&fs::read_to_string("/etc/proxyauth/config/routes.yml")?).unwrap();
 
+    let counter_token = CounterToken::new();
+
     let state = web::Data::new(AppState {
         config: Arc::clone(&config),
         routes: Arc::new(routes),
+        counter: Arc::new(counter_token.into()),
     });
-
 
     if let Some(logs) = config.log.get("type") {
         if logs == "loki" {
