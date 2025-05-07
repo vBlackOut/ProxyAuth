@@ -5,7 +5,7 @@ use std::fs;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 
-use proxyauth::{auth as auth_handler, AppConfig, AppState, RouteConfig};
+use proxyauth::{auth as auth_handler, AppConfig, AppState, RouteConfig, CounterToken};
 
 fn load_config<T: DeserializeOwned>(path: &str) -> T {
     let data = fs::read_to_string(path).expect("Failed to read config file");
@@ -32,9 +32,12 @@ fn create_app_for_test() -> App<
     )
     .expect("Failed to parse routes YAML");
 
+    let counter_token = CounterToken::new();
+
     let state = web::Data::new(AppState {
         config: Arc::clone(&config),
         routes: Arc::new(routes),
+        counter: Arc::new(counter_token.into()),
     });
 
     App::new()
