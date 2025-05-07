@@ -27,11 +27,12 @@ use clap::Parser;
 use std::process;
 use std::io;
 
+const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
 
     let cli = Cli::parse();
-    let version = "0.5.11".to_string();
 
     if let Some(command) = &cli.command {
         match command {
@@ -164,7 +165,7 @@ async fn main() -> std::io::Result<()> {
 
     match mode_actix {
         "NO_RATELIMIT_AUTH" => {
-            println!("\nlaunch ProxyAuth v{} \nratelimit On, (Proxy)", version);
+            println!("\nlaunch ProxyAuth v{} \nratelimit On, (Proxy)", VERSION);
             HttpServer::new(move || {
                 App::new()
                     .app_data(state.clone())
@@ -178,7 +179,7 @@ async fn main() -> std::io::Result<()> {
        }
 
        "NO_RATELIMIT_PROXY" => {
-            println!("\nlaunch ProxyAuth v{} \nratelimit On (Auth)", version);
+            println!("\nlaunch ProxyAuth v{} \nratelimit On (Auth)", VERSION);
             HttpServer::new(move || {
             App::new()
                 .app_data(state.clone())
@@ -198,7 +199,7 @@ async fn main() -> std::io::Result<()> {
        }
 
        "RATELIMITE_GLOBAL_ON" => {
-            println!("\nlaunch ProxyAuth v{} \nratelimit On, (Proxy, Auth)", version);
+            println!("\nlaunch ProxyAuth v{} \nratelimit On, (Proxy, Auth)", VERSION);
             HttpServer::new(move || {
             App::new()
                 .app_data(state.clone())
@@ -218,7 +219,7 @@ async fn main() -> std::io::Result<()> {
         }
 
        "RATELIMIT_GLOBAL_OFF" => {
-            println!("\nlaunch ProxyAuth v{} \nratelimit Off", version);
+            println!("\nlaunch ProxyAuth v{} \nratelimit Off", VERSION);
             HttpServer::new(move || {
                 App::new()
                     .app_data(state.clone())
@@ -232,7 +233,7 @@ async fn main() -> std::io::Result<()> {
        }
 
        _ => {
-            println!("\nlaunch ProxyAuth v{} \nratelimit Off", version);
+            println!("\nlaunch ProxyAuth v{} \nratelimit Off", VERSION);
             HttpServer::new(move || {
                 App::new()
                     .app_data(state.clone())
