@@ -102,7 +102,7 @@ async fn main() -> std::io::Result<()> {
     }
 
 
-    // configuration proxy ratelimot
+    // configuration proxy ratelimit
     let requests_per_second_proxy_config = config
         .ratelimit_proxy
         .get("requests_per_second")

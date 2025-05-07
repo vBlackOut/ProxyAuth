@@ -18,5 +18,5 @@ pub fn mode_actix_web(auth_ratelimit_config: &u64, requests_per_second_config: &
         return "RATELIMITE_GLOBAL_OFF"
     }
 
-    return "No_CONFIG"
+    return "NO_CONFIG"
 }
