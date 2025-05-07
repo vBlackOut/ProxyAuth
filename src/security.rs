@@ -78,8 +78,6 @@ pub fn validate_token(token: &str, data_app: &web::Data<AppState>, config: &AppC
 
     let data: Vec<&str> = decrypt_token.split('|').collect();
 
-    info!("{:?}", data[3]);
-
     // Access the CounterToken
     let mut counter = data_app.counter.lock().map_err(|_| "Failed to lock counter")?;
 
