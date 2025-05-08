@@ -8,10 +8,14 @@ mod def_config;
 mod command;
 mod start_actix;
 mod tokencount;
+mod stats;
+
 
 use actix_governor::{Governor, GovernorConfigBuilder};
 use actix_web::{web, App, HttpServer};
+use reqwest::blocking::get;
 use auth::auth;
+use stats::stats as metric_stats;
 use config::{load_config, AppConfig, AppState, RouteConfig};
 use proxy::proxy;
 use start_actix::mode_actix_web;
@@ -19,17 +23,17 @@ use def_config::{create_config, ensure_running_as_proxyauth, ensure_user_proxyau
 use command::{Cli, Commands};
 use ratelimit::UserToken;
 pub use tokencount::CounterToken;
-use std::{fs, sync::Arc};
+use std::{fs, sync::Arc, sync::Mutex};
 use tracing_subscriber::Layer;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::filter::LevelFilter;
 use tracing_loki::url::Url;
 use clap::Parser;
-use std::process;
-use std::io;
+use std::{io, process};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -42,6 +46,31 @@ async fn main() -> std::io::Result<()> {
                 let _ = ensure_user_proxyauth_exists();
                 let _ = setup_proxyauth_directory();
                 return Ok(());
+            }
+            Commands::Stats => {
+                match get("http://127.0.0.1:8080/adm/stats") {
+                    Ok(response) => {
+                        if response.status().is_success() {
+                            match response.text() {
+                                Ok(body) => {
+                                    println!("{}", body);
+                                    std::process::exit(0);
+                                },
+                                Err(err) => {
+                                    eprintln!("Failed to read response body: {}", err);
+                                    std::process::exit(1);
+                                }
+                            }
+                        } else {
+                            eprintln!("Server responded with error status: {}", response.status());
+                            std::process::exit(1);
+                        }
+                    }
+                    Err(_err) => {
+                        eprintln!("Failed to connect to proxyauth.");
+                        std::process::exit(1);
+                    }
+                }
             }
         }
     }
@@ -67,12 +96,12 @@ async fn main() -> std::io::Result<()> {
     let routes: RouteConfig =
         serde_yaml::from_str(&fs::read_to_string("/etc/proxyauth/config/routes.yml")?).unwrap();
 
-    let counter_token = CounterToken::new();
+    let counter_token = Arc::new(Mutex::new(CounterToken::new()));
 
     let state = web::Data::new(AppState {
         config: Arc::clone(&config),
         routes: Arc::new(routes),
-        counter: Arc::new(counter_token.into()),
+        counter: counter_token,
     });
 
     if let Some(logs) = config.log.get("type") {
@@ -174,6 +203,7 @@ async fn main() -> std::io::Result<()> {
                 App::new()
                     .app_data(state.clone())
                     .service(web::resource("/auth").route(web::post().to(auth)))
+                    .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
                     .default_service(web::to(proxy).wrap(Governor::new(&governor_proxy_conf)))
             })
             .workers((config.worker as u8).into())
@@ -194,6 +224,7 @@ async fn main() -> std::io::Result<()> {
                             .wrap(Governor::new(&governor_auth_conf)),
                     ),
                 )
+                .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
                 .default_service(web::to(proxy))
             })
             .workers((config.worker as u8).into())
@@ -214,6 +245,7 @@ async fn main() -> std::io::Result<()> {
                             .wrap(Governor::new(&governor_auth_conf)),
                     ),
                 )
+                .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
                 .default_service(web::to(proxy).wrap(Governor::new(&governor_proxy_conf)))
             })
             .workers((config.worker as u8).into())
@@ -228,6 +260,7 @@ async fn main() -> std::io::Result<()> {
                 App::new()
                     .app_data(state.clone())
                     .service(web::resource("/auth").route(web::post().to(auth)))
+                    .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
                     .default_service(web::to(proxy))
             })
             .workers((config.worker as u8).into())
@@ -242,6 +275,7 @@ async fn main() -> std::io::Result<()> {
                 App::new()
                     .app_data(state.clone())
                     .service(web::resource("/auth").route(web::post().to(auth)))
+                    .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
                     .default_service(web::to(proxy))
             })
             .workers((config.worker as u8).into())

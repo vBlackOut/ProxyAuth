@@ -3,7 +3,7 @@ use serde::Serialize;
 
 #[derive(Debug, Serialize)]
 pub struct TokenUsage {
-    pub token: String,
+    pub token_id: String,
     pub count: usize,
 }
 
@@ -67,7 +67,7 @@ impl CounterToken {
             let tokens: Vec<TokenUsage> = tokens
             .iter()
             .map(|(token, count)| TokenUsage {
-                token: token.clone(),
+                token_id: token.clone(),
                  count: *count,
             })
             .collect();
