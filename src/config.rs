@@ -191,8 +191,6 @@ pub fn load_config(path: &str) -> Arc<AppConfig> {
     }
 
     if config.token_admin.trim().is_empty() {
-        use rand::{distributions::Alphanumeric, Rng};
-
         let token: String = generate_random_string(64);
         config.token_admin = token;
         updated = true;

@@ -13,7 +13,8 @@ mod stats;
 
 use actix_governor::{Governor, GovernorConfigBuilder};
 use actix_web::{web, App, HttpServer};
-use reqwest::blocking::get;
+use reqwest::blocking::Client;
+use reqwest::header::{HeaderMap, HeaderValue};
 use auth::auth;
 use stats::stats as metric_stats;
 use config::{load_config, AppConfig, AppState, RouteConfig};
@@ -40,6 +41,14 @@ async fn main() -> std::io::Result<()> {
 
     let cli = Cli::parse();
 
+    // download default config from repository
+    create_config(
+        "https://raw.githubusercontent.com/vBlackOut/ProxyAuth/refs/heads/main/config/config.json",
+        "/etc/proxyauth/config/config.json",
+    ).await.expect("No possible download config/config.json");
+
+    let config: Arc<AppConfig> = load_config("/etc/proxyauth/config/config.json");
+
     if let Some(command) = &cli.command {
         match command {
             Commands::Prepare => {
@@ -47,15 +56,28 @@ async fn main() -> std::io::Result<()> {
                 let _ = setup_proxyauth_directory();
                 return Ok(());
             }
+
             Commands::Stats => {
-                match get("http://127.0.0.1:8080/adm/stats") {
+                let mut headers = HeaderMap::new();
+                headers.insert(
+                    "X-Auth-Token",
+                    HeaderValue::from_str(&config.token_admin).expect("invalid token string"),
+                );
+
+                let client = Client::new();
+
+                match client
+                .get("http://127.0.0.1:8080/adm/stats")
+                .headers(headers)
+                .send()
+                {
                     Ok(response) => {
                         if response.status().is_success() {
                             match response.text() {
                                 Ok(body) => {
                                     println!("{}", body);
                                     std::process::exit(0);
-                                },
+                                }
                                 Err(err) => {
                                     eprintln!("Failed to read response body: {}", err);
                                     std::process::exit(1);
@@ -66,8 +88,8 @@ async fn main() -> std::io::Result<()> {
                             std::process::exit(1);
                         }
                     }
-                    Err(_err) => {
-                        eprintln!("Failed to connect to proxyauth.");
+                    Err(err) => {
+                        eprintln!("Failed to connect to proxyauth: {}", err);
                         std::process::exit(1);
                     }
                 }
@@ -81,18 +103,11 @@ async fn main() -> std::io::Result<()> {
     // detect if program is running proxyauth user
     ensure_running_as_proxyauth();
 
-    // download default config from repository
-    create_config(
-        "https://raw.githubusercontent.com/vBlackOut/ProxyAuth/refs/heads/main/config/config.json",
-        "/etc/proxyauth/config/config.json",
-    ).await.expect("No possible download config/config.json");
-
     create_config(
         "https://raw.githubusercontent.com/vBlackOut/ProxyAuth/refs/heads/main/config/routes.yml",
         "/etc/proxyauth/config/routes.yml",
     ).await.expect("No possible download config/routes.yml");
 
-    let config: Arc<AppConfig> = load_config("/etc/proxyauth/config/config.json");
     let routes: RouteConfig =
         serde_yaml::from_str(&fs::read_to_string("/etc/proxyauth/config/routes.yml")?).unwrap();
 
