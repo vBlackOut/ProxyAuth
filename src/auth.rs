@@ -21,9 +21,9 @@ pub fn verify_password(input: &str, stored_hash: &str) -> bool {
     }
 }
 
-fn generate_random_string(max_len: usize) -> String {
+pub fn generate_random_string(max_len: usize) -> String {
     let mut rng = thread_rng();
-    let charset: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()+-=";
+    let charset: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^*()+-=";
     let filtered: Vec<u8> = charset.iter().cloned().filter(|&c| c != b'|').collect();
 
     let len = rng.gen_range(max_len..=max_len);

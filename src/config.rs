@@ -6,6 +6,7 @@ use std::fs;
 use std::sync::Arc;
 use crate::tokencount::CounterToken;
 use std::sync::Mutex;
+use crate::auth::generate_random_string;
 
 #[derive(Debug, Deserialize)]
 pub struct RouteRule {
@@ -57,6 +58,9 @@ pub struct AppConfig {
     pub secret: String,
     pub users: Vec<User>,
 
+    #[serde(default)]
+    pub token_admin: String,
+
     #[serde(default = "default_host")]
     pub host: String,
 
@@ -85,6 +89,7 @@ impl Serialize for AppConfig {
         let mut state = serializer.serialize_struct("AppConfig", 7)?;
         state.serialize_field("token_expiry_seconds", &self.token_expiry_seconds)?;
         state.serialize_field("secret", &self.secret)?;
+        state.serialize_field("token_admin", &self.token_admin)?;
         state.serialize_field("host", &self.host)?;
         state.serialize_field("port", &self.port)?;
         state.serialize_field("worker", &self.worker)?;
@@ -183,6 +188,14 @@ pub fn load_config(path: &str) -> Arc<AppConfig> {
             user.password = hash;
             updated = true;
         }
+    }
+
+    if config.token_admin.trim().is_empty() {
+        use rand::{distributions::Alphanumeric, Rng};
+
+        let token: String = generate_random_string(64);
+        config.token_admin = token;
+        updated = true;
     }
 
     if updated {
