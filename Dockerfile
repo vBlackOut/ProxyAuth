@@ -6,7 +6,6 @@ RUN cargo install --root /usr/local -j $(($(nproc) - 1)) proxyauth # stable vers
 WORKDIR /app
 
 RUN sudo proxyauth prepare
-USER proxyauth
 
 EXPOSE 8080
 CMD ["proxyauth"]
