@@ -81,12 +81,6 @@ pub fn validate_token(token: &str, data_app: &web::Data<AppState>, config: &AppC
     // Access the CounterToken
     let mut counter = data_app.counter.lock().map_err(|_| "Failed to lock counter")?;
 
-    // record counter_token
-    counter.record_call(data[3]);
-
-    // give counter
-    let count = counter.get_count(data[3]);
-
     let cleaned_token = decrypt_token
         .split('|')
         .next()
@@ -129,6 +123,13 @@ pub fn validate_token(token: &str, data_app: &web::Data<AppState>, config: &AppC
     }
 
     if !username.is_empty() {
+
+        // record counter_token
+        counter.record_call(user.username.clone(), data[3].to_string());
+
+        // give counter for this token
+        let count = counter.get_token_count(data[3]);
+
         info!(
             "[{}] user {} is logged token expire in {} seconds [token used: {}]",
             ip, user.username, time_expire, count
