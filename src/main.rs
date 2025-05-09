@@ -50,6 +50,12 @@ async fn main() -> std::io::Result<()> {
             }
 
             Commands::Stats => {
+                // launch as user proxyauth
+                let _ = switch_to_user("proxyauth");
+
+                // detect if program is running proxyauth user
+                ensure_running_as_proxyauth();
+                
                 let config: Arc<AppConfig> = load_config("/etc/proxyauth/config/config.json");
 
                 let mut headers = HeaderMap::new();
