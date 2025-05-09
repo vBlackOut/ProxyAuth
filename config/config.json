@@ -1,7 +1,6 @@
 {
   "token_expiry_seconds": 3600,
   "secret": "supersecretvalue",
-  "token_admin": "@r+2gb8$vzcoX9IOpMewu55DR#j+=#GqglTwa9P2t)lXT#aC7Rigd!rxj@R0QMfk",
   "host": "0.0.0.0",
   "port": 8080,
   "worker": 4,
