@@ -256,7 +256,7 @@ async fn main() -> std::io::Result<()> {
             .await
        }
 
-       "RATELIMITE_GLOBAL_ON" => {
+       "RATELIMIT_GLOBAL_ON" => {
             println!("\nlaunch ProxyAuth v{} \nratelimit On, (Proxy, Auth)", VERSION);
             HttpServer::new(move || {
             App::new()
