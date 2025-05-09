@@ -41,14 +41,6 @@ async fn main() -> std::io::Result<()> {
 
     let cli = Cli::parse();
 
-    // download default config from repository
-    create_config(
-        "https://raw.githubusercontent.com/vBlackOut/ProxyAuth/refs/heads/main/config/config.json",
-        "/etc/proxyauth/config/config.json",
-    ).await.expect("No possible download config/config.json");
-
-    let config: Arc<AppConfig> = load_config("/etc/proxyauth/config/config.json");
-
     if let Some(command) = &cli.command {
         match command {
             Commands::Prepare => {
@@ -58,6 +50,8 @@ async fn main() -> std::io::Result<()> {
             }
 
             Commands::Stats => {
+                let config: Arc<AppConfig> = load_config("/etc/proxyauth/config/config.json");
+
                 let mut headers = HeaderMap::new();
                 headers.insert(
                     "X-Auth-Token",
@@ -103,10 +97,19 @@ async fn main() -> std::io::Result<()> {
     // detect if program is running proxyauth user
     ensure_running_as_proxyauth();
 
+    // download default config from repository
+    create_config(
+        "https://raw.githubusercontent.com/vBlackOut/ProxyAuth/refs/heads/main/config/config.json",
+        "/etc/proxyauth/config/config.json",
+    ).await.expect("No possible download config/config.json");
+
+
     create_config(
         "https://raw.githubusercontent.com/vBlackOut/ProxyAuth/refs/heads/main/config/routes.yml",
         "/etc/proxyauth/config/routes.yml",
     ).await.expect("No possible download config/routes.yml");
+
+    let config: Arc<AppConfig> = load_config("/etc/proxyauth/config/config.json");
 
     let routes: RouteConfig =
         serde_yaml::from_str(&fs::read_to_string("/etc/proxyauth/config/routes.yml")?).unwrap();
