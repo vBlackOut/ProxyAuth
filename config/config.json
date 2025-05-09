@@ -1,12 +1,13 @@
 {
   "token_expiry_seconds": 3600,
   "secret": "supersecretvalue",
+  "token_admin": "SYbLduq8Pwc8)AQwsVw*z!wg(%g(EcqcB*Y%=csd7#)P8E%jHihxTmBB*7Ssa-VS",
   "host": "0.0.0.0",
   "port": 8080,
   "worker": 4,
   "ratelimit_auth": {
-    "requests_per_second": 10,
     "burst": 10,
+    "requests_per_second": 10,
     "block_delay": 500
   },
   "ratelimit_proxy": {
