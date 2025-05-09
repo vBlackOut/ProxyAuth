@@ -1,11 +1,25 @@
 FROM rust:alpine
 
-RUN apk add openssl openssl-libs-static openssl-dev musl-dev build-base pkgconf alpine-sdk sudo
+# Install required system dependencies
+RUN apk add --no-cache openssl openssl-libs-static openssl-dev musl-dev build-base pkgconf alpine-sdk sudo
 
-RUN cargo install --root /usr/local -j $(($(nproc) - 1)) proxyauth # stable version proxyauth@0.5.10
-WORKDIR /app
+# Create non-root user
+RUN addgroup -g 1000 proxyauth && \
+    adduser -D -u 1000 -G proxyauth -h /home/proxyauth proxyauth
 
-RUN sudo proxyauth prepare
+# Install proxyauth from crates.io (adapt version if needed)
+RUN cargo install proxyauth --root /usr/local --locked
 
+RUN mkdir -p /etc/proxyauth/config && \
+    chown -R proxyauth:proxyauth /etc/proxyauth
+
+RUN proxyauth prepare
+
+USER proxyauth
+
+# Expose the service port
 EXPOSE 8080
-CMD ["proxyauth"]
+
+# Launch the binary
+CMD ["/usr/local/bin/proxyauth"]
+
