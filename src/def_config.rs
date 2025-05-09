@@ -135,7 +135,6 @@ pub fn setup_proxyauth_directory() -> io::Result<()> {
 pub fn switch_to_user(username: &str) -> Result<(), Box<dyn std::error::Error>> {
     let user = User::from_name(username)?.ok_or("User not found")?;
     setuid(user.uid)?;
-    println!("Switched to user '{}'", username);
     Ok(())
 }
 
