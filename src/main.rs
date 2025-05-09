@@ -293,7 +293,7 @@ async fn main() -> std::io::Result<()> {
        }
 
        _ => {
-            println!("\nlaunch ProxyAuth v{} \nratelimit Off", VERSION);
+            println!("\nlaunch ProxyAuth v{} \nratelimit Off (No config)", VERSION);
             HttpServer::new(move || {
                 App::new()
                     .app_data(state.clone())
