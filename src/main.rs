@@ -55,7 +55,7 @@ async fn main() -> std::io::Result<()> {
 
                 // detect if program is running proxyauth user
                 ensure_running_as_proxyauth();
-                
+
                 let config: Arc<AppConfig> = load_config("/etc/proxyauth/config/config.json");
 
                 let mut headers = HeaderMap::new();
@@ -108,7 +108,6 @@ async fn main() -> std::io::Result<()> {
         "https://raw.githubusercontent.com/vBlackOut/ProxyAuth/refs/heads/main/config/config.json",
         "/etc/proxyauth/config/config.json",
     ).await.expect("No possible download config/config.json");
-
 
     create_config(
         "https://raw.githubusercontent.com/vBlackOut/ProxyAuth/refs/heads/main/config/routes.yml",
