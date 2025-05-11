@@ -1,6 +1,6 @@
 [package]
 name = "proxyauth"
-version = "0.5.21"
+version = "0.5.22"
 edition = "2024"
 authors = ["Vladimir S"]
 repository = "https://github.com/vBlackOut/ProxyAuth"
@@ -48,3 +48,4 @@ argon2 = "0.5"
 nix = "0.26"
 clap = { version = "4", features = ["derive"] }
 signal-hook = "0.3"
+rand_chacha = "0.3"

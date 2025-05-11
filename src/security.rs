@@ -7,6 +7,8 @@ use chrono_tz::Europe::Paris;
 use hex;
 use sha2::{Digest, Sha256};
 use tracing::{error, info, warn};
+use rand::{seq::SliceRandom, SeedableRng};
+use rand_chacha::ChaCha8Rng;
 
 fn get_build_time() -> u64 {
     env!("BUILD_TIME").parse().expect("Invalid build time")
@@ -14,6 +16,10 @@ fn get_build_time() -> u64 {
 
 pub fn get_build_rand() -> u64 {
     env!("BUILD_RAND").parse().expect("Invalid build random")
+}
+
+pub fn get_build_seed() -> u64 {
+    env!("BUILD_SEED").parse().expect("Invalid build SEED")
 }
 
 pub fn generate_secret(secret: &str) -> String {
@@ -34,20 +40,30 @@ pub fn generate_secret(secret: &str) -> String {
     dynamic_secret
 }
 
+pub fn shuffle_fields(fields: Vec<String>, seed: u64) -> String {
+    let mut rng = ChaCha8Rng::seed_from_u64(seed);
+    let mut shuffled = fields.clone();
+    shuffled.shuffle(&mut rng);
+    shuffled.join(":")
+}
+
 pub fn generate_token(username: &str, secret: &str, time_expire: &str, token_id: &str) -> String {
     let secret_with_timestamp = generate_secret(secret);
-    let data = format!(
-        "{}:{}:{}:{}:{}:{}",
-        username,
+    let seed = get_build_seed();
+
+    let fields = vec![
+        username.to_string(),
         secret_with_timestamp,
-        get_build_time(),
-        time_expire,
-        get_build_rand(),
-        token_id
-    );
+        get_build_time().to_string(),
+        time_expire.to_string(),
+        get_build_rand().to_string(),
+        token_id.to_string(),
+    ];
+
+    let shuffle_data = shuffle_fields(fields, seed);
 
     let mut signature = Sha256::new();
-    signature.update(data.as_bytes());
+    signature.update(shuffle_data.as_bytes());
 
     format!("{:x}", signature.finalize())
 }
