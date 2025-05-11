@@ -9,7 +9,6 @@ use chacha20poly1305::{
 use hmac::{Hmac, Mac};
 use rand::Rng;
 use sha2::{Digest, Sha256};
-use std::error::Error;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -125,61 +124,6 @@ fn process_string(s: &str, factor: u64) -> String {
     final_result
 }
 
-fn revert_string(s: &str, factor: u64) -> String {
-    let mut result = String::new();
-    let limited_factor = factor % 26; // Limiter le facteur au modulo 26 pour l'alphabet
-
-    for c in s.chars() {
-        if c.is_ascii_alphabetic() {
-            let new_char = if c.is_lowercase() {
-                let base = 'a' as u8;
-                let new_pos = (c as u8 - base + (26 - limited_factor as u8) % 26) % 26 + base;
-                new_pos as char
-            } else {
-                let base = 'A' as u8;
-                let new_pos = (c as u8 - base + (26 - limited_factor as u8) % 26) % 26 + base;
-                new_pos as char
-            };
-            result.push(new_char);
-        } else {
-            result.push(c);
-        }
-    }
-
-    let mut final_result = String::new();
-    let mut current_number = String::new();
-
-    for c in result.chars() {
-        if c.is_ascii_digit() {
-            current_number.push(c);
-        } else {
-            if !current_number.is_empty() {
-                let num: u64 = current_number.parse().unwrap_or(0);
-                if num >= factor {
-                    let original = num / factor;
-                    final_result.push_str(&original.to_string());
-                } else {
-                    final_result.push_str(&current_number);
-                }
-                current_number.clear();
-            }
-            final_result.push(c);
-        }
-    }
-
-    if !current_number.is_empty() {
-        let num: u64 = current_number.parse().unwrap_or(0);
-        if num >= factor {
-            let original = num / factor;
-            final_result.push_str(&original.to_string());
-        } else {
-            final_result.push_str(&current_number);
-        }
-    }
-
-    final_result
-}
-
 pub fn calcul_cipher(hashdata: String) -> String {
     let hash_split = split_hash(hashdata, 10);
     let mut rng = rand::thread_rng();
@@ -190,36 +134,7 @@ pub fn calcul_cipher(hashdata: String) -> String {
 
     for (i, hash) in hash_split.iter().enumerate() {
         let transformed = process_string(hash, factor);
-        let _reverted = revert_string(&transformed, factor);
-        if i == totalhash_iter - 1 {
-            hash_cypher += &format!("-{}::{}", &transformed, factor).to_string();
-        } else if i >= 1 {
-            hash_cypher += &format!("-{}", &transformed).to_string();
-        } else {
-            hash_cypher += &format!("{}", &transformed).to_string();
-        }
-    }
 
-    let mut hashed = Sha256::new();
-    hashed.update(hash_cypher.as_bytes());
-
-    format!("{:x}={}", hashed.finalize(), factor)
-}
-
-#[allow(dead_code)]
-pub fn calcul_cipherfromfactor(hashdata: String, factor: i64) -> String {
-    let hash_split = split_hash(hashdata, 10);
-
-    if factor < 10 && factor > 99 {
-        return format!("");
-    }
-
-    let mut hash_cypher = "".to_string();
-    let totalhash_iter = hash_split.iter().count();
-
-    for (i, hash) in hash_split.iter().enumerate() {
-        let transformed = process_string(hash, factor.try_into().unwrap());
-        let _reverted = revert_string(&transformed, factor.try_into().unwrap());
         if i == totalhash_iter - 1 {
             hash_cypher += &format!("-{}::{}", &transformed, factor).to_string();
         } else if i >= 1 {
@@ -247,7 +162,7 @@ pub fn calcul_factorhash(hashdata: String, factor: i64) -> String {
 
     for (i, hash) in hash_split.iter().enumerate() {
         let transformed = process_string(hash, factor.try_into().unwrap());
-        let _reverted = revert_string(&transformed, factor.try_into().unwrap());
+
         if i == totalhash_iter - 1 {
             hash_cypher += &format!("-{}::{}", &transformed, factor).to_string();
         } else if i >= 1 {
@@ -258,27 +173,4 @@ pub fn calcul_factorhash(hashdata: String, factor: i64) -> String {
     }
 
     hash_cypher
-}
-
-#[allow(dead_code)]
-pub fn transform_ciphertohash(hashdata: &str) -> Result<String, Box<dyn Error>> {
-    if !hashdata.contains("::") {
-        return Err("bad token defined".into());
-    }
-
-    let mut token = "".to_string();
-
-    let parts: Vec<&str> = hashdata.split("::").collect();
-    if parts.len() != 2 {
-        return Err("bad token structure".into());
-    }
-
-    let hashes_part = parts[0];
-    let factor = parts[1].parse::<i64>()?;
-
-    for hash in hashes_part.split('-') {
-        token += &revert_string(hash, factor.try_into().unwrap());
-    }
-
-    Ok("valid hash".to_string())
 }
