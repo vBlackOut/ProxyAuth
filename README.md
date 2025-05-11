@@ -10,7 +10,7 @@
 [![Build Status](https://github.com/vBlackOut/ProxyAuth/actions/workflows/proxyauth.yml/badge.svg)](https://github.com/vBlackOut/ProxyAuth/actions/workflows/proxyauth.yml)
 [![Crates.io Downloads (latest version)](https://img.shields.io/crates/dv/proxyauth?style=flat&link=https%3A%2F%2Fcrates.io%2Fcrates%2Fproxyauth)](https://crates.io/crates/proxyauth)
 
-![Security Score](https://img.shields.io/badge/SECURITY%20SCORE-80%2F100-blue?style=for-the-badge&logo=rust)
+![Security Score](https://img.shields.io/badge/SECURITY%20SCORE-92%2F100-blue?style=for-the-badge&logo=rust)
 [![Crates.io version](https://img.shields.io/crates/v/proxyauth?style=for-the-badge)](https://crates.io/crates/proxyauth)
 [![Crates.io downloads](https://img.shields.io/crates/d/proxyauth?style=for-the-badge)](https://crates.io/crates/proxyauth)
 ![Benchmark](https://img.shields.io/badge/benchmark-+150_000req/s-blue?style=for-the-badge&logo=rust "Benchmark proxyauth on laptop")
