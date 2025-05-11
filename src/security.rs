@@ -34,15 +34,16 @@ pub fn generate_secret(secret: &str) -> String {
     dynamic_secret
 }
 
-pub fn generate_token(username: &str, secret: &str, time_expire: &str) -> String {
+pub fn generate_token(username: &str, secret: &str, time_expire: &str, token_id: &str) -> String {
     let secret_with_timestamp = generate_secret(secret);
     let data = format!(
-        "{}:{}:{}:{}:{}",
+        "{}:{}:{}:{}:{}:{}",
         username,
         secret_with_timestamp,
         get_build_time(),
         time_expire,
         get_build_rand(),
+        token_id
     );
 
     let mut signature = Sha256::new();
@@ -111,7 +112,7 @@ pub fn validate_token(token: &str, data_app: &web::Data<AppState>, config: &AppC
         return Err("Bad time token".into());
     }
 
-    let token_generated = generate_token(&user.username, &config.secret, data[1]);
+    let token_generated = generate_token(&user.username, &config.secret, data[1], data[3]);
 
     let token_hash = calcul_factorhash(token_generated, factor);
 

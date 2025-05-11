@@ -55,13 +55,14 @@ pub async fn auth(
         let fr_time = now.with_timezone(&Paris);
         let expiry = fr_time + Duration::seconds(data.config.token_expiry_seconds);
 
+        let id_token = generate_random_string(48);
+
         let token = generate_token(
             &auth.username,
             &data.config.secret,
             &expiry.timestamp().to_string(),
+            &id_token
         );
-
-        let id_token = generate_random_string(48);
 
         let key = derive_key_from_secret(&data.config.secret);
 
