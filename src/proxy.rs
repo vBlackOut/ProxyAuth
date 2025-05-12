@@ -2,7 +2,7 @@ use crate::security::validate_token;
 use crate::AppState;
 use actix_web::{error, web, Error, HttpRequest, HttpResponse, Result};
 use reqwest::Proxy;
-use std::time::Duration;
+//use std::time::Duration;
 use reqwest::{header, Client, Identity};
 use std::fs;
 use std::net::IpAddr;
@@ -78,7 +78,7 @@ pub async fn proxy(
                 .map_err(|e| error::ErrorInternalServerError(format!("Error identity: {}", e)))?;
 
             Client::builder()
-                .timeout(Duration::from_millis(100))
+                //.timeout(Duration::from_millis(100))
                 .identity(identity)
                 .danger_accept_invalid_certs(true)
                 .build()
@@ -90,7 +90,7 @@ pub async fn proxy(
                 })?
         } else {
             reqwest::Client::builder()
-            .timeout(Duration::from_millis(100))
+            //.timeout(Duration::from_millis(100))
             .build()
             .expect("Failed to build reqwest client")
         };
