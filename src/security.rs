@@ -5,10 +5,11 @@ use crate::timezone::check_date_token;
 use actix_web::web;
 use chrono::{Timelike, Utc};
 use hex;
-use rand::{SeedableRng, seq::SliceRandom};
-use rand_chacha::ChaCha8Rng;
 use sha2::{Digest, Sha256};
 use tracing::{error, info, warn};
+use std::collections::HashMap;
+
+include!(concat!(env!("OUT_DIR"), "/shuffle_generated.rs"));
 
 fn get_build_time() -> u64 {
     env!("BUILD_TIME").parse().expect("Invalid build time")
@@ -16,10 +17,6 @@ fn get_build_time() -> u64 {
 
 pub fn get_build_rand() -> u64 {
     env!("BUILD_RAND").parse().expect("Invalid build random")
-}
-
-pub fn get_build_seed() -> u64 {
-    env!("BUILD_SEED").parse().expect("Invalid build SEED")
 }
 
 pub fn generate_secret(secret: &str) -> String {
@@ -40,31 +37,21 @@ pub fn generate_secret(secret: &str) -> String {
     dynamic_secret
 }
 
-pub fn shuffle_fields(fields: Vec<String>, seed: u64) -> String {
-    let mut rng = ChaCha8Rng::seed_from_u64(seed);
-    let mut shuffled = fields.clone();
-    shuffled.shuffle(&mut rng);
-    shuffled.join(":")
-}
-
 pub fn generate_token(username: &str, secret: &str, time_expire: &str, token_id: &str) -> String {
-    let secret_with_timestamp = generate_secret(secret);
-    let seed = get_build_seed();
+    let values_map = HashMap::from([
+        ("username", username.to_string()),
+        ("secret_with_timestamp", generate_secret(secret)),
+        ("build_time", get_build_time().to_string()),
+        ("time_expire", time_expire.to_string()),
+        ("build_rand", get_build_rand().to_string()),
+        ("token_id", token_id.to_string()),
+    ]);
 
-    let fields = vec![
-        username.to_string(),
-        secret_with_timestamp,
-        get_build_time().to_string(),
-        time_expire.to_string(),
-        get_build_rand().to_string(),
-        token_id.to_string(),
-    ];
+    let shuffled: Vec<String> = SHUFFLED_ORDER.iter().map(|k| values_map[*k].clone()).collect();
 
-    let shuffle_data = shuffle_fields(fields, seed);
-
+    let shuffle_data = shuffled.join(":");
     let mut signature = Sha256::new();
     signature.update(shuffle_data.as_bytes());
-
     format!("{:x}", signature.finalize())
 }
 

@@ -1749,7 +1749,7 @@ dependencies = [
 
 [[package]]
 name = "proxyauth"
-version = "0.5.25"
+version = "0.5.26"
 dependencies = [
  "actix-governor",
  "actix-http",
@@ -1765,6 +1765,7 @@ dependencies = [
  "hex",
  "hmac",
  "nix",
+ "once_cell",
  "quanta",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
