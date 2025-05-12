@@ -1,14 +1,14 @@
-use crate::crypto::{calcul_factorhash, decrypt, derive_key_from_secret};
 use crate::AppConfig;
 use crate::AppState;
+use crate::crypto::{calcul_factorhash, decrypt, derive_key_from_secret};
+use crate::timezone::check_date_token;
 use actix_web::web;
 use chrono::{Timelike, Utc};
-use chrono_tz::Europe::Paris;
 use hex;
+use rand::{SeedableRng, seq::SliceRandom};
+use rand_chacha::ChaCha8Rng;
 use sha2::{Digest, Sha256};
 use tracing::{error, info, warn};
-use rand::{seq::SliceRandom, SeedableRng};
-use rand_chacha::ChaCha8Rng;
 
 fn get_build_time() -> u64 {
     env!("BUILD_TIME").parse().expect("Invalid build time")
@@ -68,22 +68,12 @@ pub fn generate_token(username: &str, secret: &str, time_expire: &str, token_id:
     format!("{:x}", signature.finalize())
 }
 
-fn check_date_token(time_str: &str, username: &str, ip: &str) -> Result<u64, ()> {
-    let expire: i64 = time_str.parse().expect("Error"); // check hour
-                                                        //println!("{:?}", expire);
-    let now = Utc::now();
-    let fr_time = now.with_timezone(&Paris).timestamp();
-
-    if fr_time >= expire {
-        warn!("[{}] token is expired for user {}", ip, username);
-        return Err(());
-    }
-
-    let diff = expire - fr_time;
-    diff.try_into().map_err(|_| ())
-}
-
-pub fn validate_token(token: &str, data_app: &web::Data<AppState>, config: &AppConfig, ip: &str) -> Result<String, String> {
+pub fn validate_token(
+    token: &str,
+    data_app: &web::Data<AppState>,
+    config: &AppConfig,
+    ip: &str,
+) -> Result<String, String> {
     let mut username = String::new();
 
     let key = derive_key_from_secret(&config.secret);
@@ -96,13 +86,15 @@ pub fn validate_token(token: &str, data_app: &web::Data<AppState>, config: &AppC
     let data: Vec<&str> = decrypt_token.split('|').collect();
 
     // Access the CounterToken
-    let mut counter = data_app.counter.lock().map_err(|_| "Failed to lock counter")?;
+    let mut counter = data_app
+        .counter
+        .lock()
+        .map_err(|_| "Failed to lock counter")?;
 
     let cleaned_token = decrypt_token
         .split('|')
         .next()
         .ok_or("Invalid token format")?;
-
 
     let (token_hash_decrypt, factor) = match cleaned_token.rsplit_once('=') {
         Some((hash, factor_str)) => match factor_str.parse::<i64>() {
@@ -140,7 +132,6 @@ pub fn validate_token(token: &str, data_app: &web::Data<AppState>, config: &AppC
     }
 
     if !username.is_empty() {
-
         // record counter_token
         counter.record_call(user.username.clone(), data[3].to_string());
 

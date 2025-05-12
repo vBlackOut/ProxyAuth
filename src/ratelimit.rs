@@ -1,11 +1,11 @@
+use crate::AppState;
 use crate::ratelimit::governor::clock::DefaultClock;
 use crate::security::extract_token_user;
-use crate::AppState;
 use actix_governor::governor::clock::Clock;
-use actix_governor::{governor, KeyExtractor, SimpleKeyExtractionError};
+use actix_governor::{KeyExtractor, SimpleKeyExtractionError, governor};
 use actix_web::dev::ServiceRequest;
-use actix_web::http::header::ContentType;
 use actix_web::http::StatusCode;
+use actix_web::http::header::ContentType;
 use actix_web::web;
 use actix_web::{HttpResponse, HttpResponseBuilder};
 use std::net::IpAddr;

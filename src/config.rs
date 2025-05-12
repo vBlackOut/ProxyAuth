@@ -1,12 +1,12 @@
-use argon2::password_hash::{rand_core::OsRng, SaltString};
+use crate::auth::generate_random_string;
+use crate::tokencount::CounterToken;
+use argon2::password_hash::{SaltString, rand_core::OsRng};
 use argon2::{Argon2, PasswordHasher};
-use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Serialize, Serializer, ser::SerializeStruct};
 use std::collections::HashMap;
 use std::fs;
 use std::sync::Arc;
-use crate::tokencount::CounterToken;
 use std::sync::Mutex;
-use crate::auth::generate_random_string;
 
 #[derive(Debug, Deserialize)]
 pub struct RouteRule {
@@ -78,7 +78,6 @@ pub struct AppConfig {
 
     #[serde(default = "default_log")]
     pub log: HashMap<String, String>,
-
 }
 
 impl Serialize for AppConfig {

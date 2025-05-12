@@ -1,9 +1,7 @@
-use actix_web::{HttpRequest, HttpResponse, web, Responder};
 use crate::AppState;
-
+use actix_web::{HttpRequest, HttpResponse, Responder, web};
 
 pub async fn stats(req: HttpRequest, data: web::Data<AppState>) -> impl Responder {
-
     let expected_token = &data.config.token_admin;
     let auth_header = req.headers().get("X-Auth-Token");
 
@@ -12,8 +10,8 @@ pub async fn stats(req: HttpRequest, data: web::Data<AppState>) -> impl Responde
             let stats = data.counter.lock().unwrap().get_all_tokens_json();
             let json = serde_json::to_string_pretty(&stats).unwrap();
             HttpResponse::Ok()
-            .content_type("application/json")
-            .body(json)
+                .content_type("application/json")
+                .body(json)
         }
         _ => HttpResponse::Unauthorized().body("Invalid or missing token"),
     }

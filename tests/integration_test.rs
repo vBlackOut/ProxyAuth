@@ -1,11 +1,11 @@
-use actix_web::{test, web, App, HttpResponse};
+use actix_web::{App, HttpResponse, test, web};
 use serde::de::DeserializeOwned;
 use serde_json::json;
 use std::fs;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 
-use proxyauth::{auth as auth_handler, AppConfig, AppState, RouteConfig, CounterToken};
+use proxyauth::{AppConfig, AppState, CounterToken, RouteConfig, auth as auth_handler};
 
 fn load_config<T: DeserializeOwned>(path: &str) -> T {
     let data = fs::read_to_string(path).expect("Failed to read config file");
