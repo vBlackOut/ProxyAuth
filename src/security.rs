@@ -85,12 +85,6 @@ pub fn validate_token(
 
     let data: Vec<&str> = decrypt_token.split('|').collect();
 
-    // Access the CounterToken
-    let mut counter = data_app
-        .counter
-        .lock()
-        .map_err(|_| "Failed to lock counter")?;
-
     let cleaned_token = decrypt_token
         .split('|')
         .next()
@@ -133,10 +127,10 @@ pub fn validate_token(
 
     if !username.is_empty() {
         // record counter_token
-        counter.record_call(user.username.clone(), data[3].to_string());
+        data_app.counter.record_call(&user.username, data[3]);
 
         // give counter for this token
-        let count = counter.get_token_count(data[3]);
+        let count = data_app.counter.get_token_count(data[3]);
 
         info!(
             "[{}] user {} is logged token expire in {} seconds [token used: {}]",

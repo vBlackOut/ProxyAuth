@@ -1,5 +1,5 @@
+use dashmap::DashMap;
 use serde::Serialize;
-use std::collections::HashMap;
 
 #[derive(Debug, Serialize)]
 pub struct TokenUsage {
@@ -15,45 +15,45 @@ pub struct AllTokenUsage {
 
 #[derive(Debug)]
 pub struct CounterToken {
-    calls: HashMap<String, HashMap<String, usize>>,
+    calls: DashMap<String, DashMap<String, usize>>,
 }
 
 impl CounterToken {
     pub fn new() -> Self {
         Self {
-            calls: HashMap::new(),
+            calls: DashMap::new(),
         }
     }
 
-    pub fn record_call<S: Into<String>>(&mut self, user: S, token_id: S) {
-        let user = user.into();
-        let token_id = token_id.into();
-        let user_entry = self.calls.entry(user).or_insert_with(HashMap::new);
-        *user_entry.entry(token_id).or_insert(0) += 1;
+    pub fn record_call(&self, user: &str, token_id: &str) {
+        let user_entry = self.calls.entry(user.to_string()).or_insert_with(DashMap::new);
+        user_entry
+            .entry(token_id.to_string())
+            .and_modify(|e| *e += 1)
+            .or_insert(1);
     }
 
-    pub fn get_count_user<S: AsRef<str>>(&self, user: S) -> usize {
+    pub fn get_count_user(&self, user: &str) -> usize {
         self.calls
-            .get(user.as_ref())
-            .map(|tokens| tokens.values().sum())
+            .get(user)
+            .map(|tokens| tokens.iter().map(|r| *r.value()).sum())
             .unwrap_or(0)
     }
 
-    pub fn get_token_count<S: AsRef<str>>(&self, token_id: S) -> usize {
-        let token_id = token_id.as_ref();
+    pub fn get_token_count(&self, token_id: &str) -> usize {
         self.calls
-            .values()
-            .map(|tokens| tokens.get(token_id).unwrap_or(&0))
+            .iter()
+            .map(|user_tokens| user_tokens.value().get(token_id).map_or(0, |v| *v))
             .sum()
     }
 
-    pub fn show_user<S: AsRef<str>>(&self, user: S) -> Vec<(String, usize)> {
+    pub fn show_user(&self, user: &str) -> Vec<(String, usize)> {
         self.calls
-            .get(user.as_ref())
+            .get(user)
             .map(|tokens| {
                 tokens
                     .iter()
-                    .map(|(token_id, count)| (token_id.clone(), *count))
+                    .map(|kv| (kv.key().clone(), *kv.value()))
                     .collect()
             })
             .unwrap_or_else(Vec::new)
@@ -62,17 +62,18 @@ impl CounterToken {
     pub fn get_all_tokens_json(&self) -> Vec<AllTokenUsage> {
         self.calls
             .iter()
-            .map(|(user, tokens)| {
-                let tokens: Vec<TokenUsage> = tokens
+            .map(|user_tokens| {
+                let tokens: Vec<TokenUsage> = user_tokens
+                    .value()
                     .iter()
-                    .map(|(token, count)| TokenUsage {
-                        token_id: token.clone(),
-                        count: *count,
+                    .map(|token| TokenUsage {
+                        token_id: token.key().clone(),
+                        count: *token.value(),
                     })
                     .collect();
 
                 AllTokenUsage {
-                    user: user.clone(),
+                    user: user_tokens.key().clone(),
                     tokens,
                 }
             })

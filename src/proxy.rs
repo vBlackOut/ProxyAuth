@@ -1,8 +1,8 @@
-use crate::AppState;
 use crate::security::validate_token;
-use actix_web::{Error, HttpRequest, HttpResponse, Result, error, web};
+use crate::AppState;
+use actix_web::{error, web, Error, HttpRequest, HttpResponse, Result};
 use reqwest::Proxy;
-use reqwest::{Client, Identity, header};
+use reqwest::{header, Client, Identity};
 use std::fs;
 use std::net::IpAddr;
 use tracing::{info, warn};

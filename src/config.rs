@@ -6,7 +6,6 @@ use serde::{Deserialize, Serialize, Serializer, ser::SerializeStruct};
 use std::collections::HashMap;
 use std::fs;
 use std::sync::Arc;
-use std::sync::Mutex;
 
 #[derive(Debug, Deserialize)]
 pub struct RouteRule {
@@ -103,7 +102,7 @@ impl Serialize for AppConfig {
 pub struct AppState {
     pub config: Arc<AppConfig>,
     pub routes: Arc<RouteConfig>,
-    pub counter: Arc<Mutex<CounterToken>>,
+    pub counter: Arc<CounterToken>,
 }
 
 #[derive(Deserialize)]

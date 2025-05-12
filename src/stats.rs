@@ -7,7 +7,7 @@ pub async fn stats(req: HttpRequest, data: web::Data<AppState>) -> impl Responde
 
     match auth_header {
         Some(token) if *token == *expected_token => {
-            let stats = data.counter.lock().unwrap().get_all_tokens_json();
+            let stats = data.counter.get_all_tokens_json();
             let json = serde_json::to_string_pretty(&stats).unwrap();
             HttpResponse::Ok()
                 .content_type("application/json")

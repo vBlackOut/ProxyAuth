@@ -27,7 +27,7 @@ use reqwest::blocking::Client;
 use reqwest::header::{HeaderMap, HeaderValue};
 use start_actix::mode_actix_web;
 use stats::stats as metric_stats;
-use std::{fs, sync::Arc, sync::Mutex};
+use std::{fs, sync::Arc};
 use std::{io, process};
 pub use tokencount::CounterToken;
 use tracing_loki::url::Url;
@@ -124,7 +124,7 @@ async fn main() -> std::io::Result<()> {
     let routes: RouteConfig =
         serde_yaml::from_str(&fs::read_to_string("/etc/proxyauth/config/routes.yml")?).unwrap();
 
-    let counter_token = Arc::new(Mutex::new(CounterToken::new()));
+    let counter_token = Arc::new(CounterToken::new());
 
     let state = web::Data::new(AppState {
         config: Arc::clone(&config),
