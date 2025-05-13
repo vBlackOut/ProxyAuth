@@ -4,7 +4,8 @@ use serde_json::json;
 use std::fs;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
-
+use reqwest::Client;
+use std::time::Duration;
 use proxyauth::{AppConfig, AppState, CounterToken, RouteConfig, auth as auth_handler};
 
 fn load_config<T: DeserializeOwned>(path: &str) -> T {
@@ -34,10 +35,20 @@ fn create_app_for_test() -> App<
 
     let counter_token = CounterToken::new();
 
+    let client = Client::builder()
+                .timeout(Duration::from_millis(100))
+                .pool_idle_timeout(Some(Duration::from_secs(30)))
+                .pool_max_idle_per_host(5000)
+                .tcp_keepalive(Some(Duration::from_secs(30)))
+                .danger_accept_invalid_certs(true)
+                .build()
+                .expect("Failed to build high-performance reqwest client");
+
     let state = web::Data::new(AppState {
         config: Arc::clone(&config),
         routes: Arc::new(routes),
         counter: Arc::new(counter_token.into()),
+        client: client,
     });
 
     App::new()
