@@ -129,7 +129,7 @@ async fn main() -> std::io::Result<()> {
     let counter_token = Arc::new(CounterToken::new());
 
     let client = Client::builder()
-                .timeout(Duration::from_millis(100))
+                .timeout(Duration::from_millis(500))
                 .pool_idle_timeout(Some(Duration::from_secs(30)))
                 .pool_max_idle_per_host(5000)
                 .tcp_keepalive(Some(Duration::from_secs(30)))
