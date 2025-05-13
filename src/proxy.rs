@@ -1,11 +1,11 @@
+
 use crate::AppState;
 use crate::security::validate_token;
 use actix_web::{Error, HttpRequest, HttpResponse, Result, error, web};
-use reqwest::Proxy;
-//use std::time::Duration;
-use reqwest::{Client, Identity, header};
+use reqwest::{Client, Identity, Proxy, header};
 use std::fs;
 use std::net::IpAddr;
+use std::time::Duration;
 use tracing::{info, warn};
 
 pub fn client_ip(req: &HttpRequest) -> Option<IpAddr> {
@@ -36,79 +36,28 @@ pub async fn proxy(
     data: web::Data<AppState>,
 ) -> Result<HttpResponse, Error> {
     let path = req.path();
-    let ip = client_ip(&req).expect("?").to_string();
+    let ip = client_ip(&req).unwrap_or_else(|| "0.0.0.0".parse().unwrap()).to_string();
     let method = req.method().clone();
-    let mut username_check = "".to_string();
+    let mut username_check = String::new();
 
-    if let Some(rule) = data
-        .routes
-        .routes
-        .iter()
-        .find(|r| path.starts_with(&r.prefix))
-    {
+    if let Some(rule) = data.routes.routes.iter().find(|r| path.starts_with(&r.prefix)) {
         let forward_path = path.strip_prefix(&rule.prefix).unwrap_or("");
         let target_url = format!("{}{}", rule.target.trim_end_matches('/'), forward_path);
 
-        let client = if rule.proxy {
-            let proxy = Proxy::all(&rule.proxy_config)
-                .map_err(|e| error::ErrorBadRequest(format!("Error configuration proxy: {}", e)))?;
-
-            Client::builder()
-                .proxy(proxy)
-                .danger_accept_invalid_certs(true)
-                .build()
-                .map_err(|e| {
-                    error::ErrorInternalServerError(format!("Error build client: {}", e))
-                })?
-        } else if !rule.cert.is_empty() {
-            let file_path = rule.cert.get("file").ok_or_else(|| {
-                error::ErrorInternalServerError(format!(
-                    "No found file certificat for target_url {}.",
-                    target_url
-                ))
-            })?;
-
-            let password = rule.cert.get("password").map(|s| s.as_str()).unwrap_or("");
-
-            let cert_bytes = fs::read(file_path).map_err(|e| {
-                error::ErrorInternalServerError(format!("Error read certificat: {}", e))
-            })?;
-
-            let identity = Identity::from_pkcs12_der(&cert_bytes, password)
-                .map_err(|e| error::ErrorInternalServerError(format!("Error identity: {}", e)))?;
-
-            Client::builder()
-                //.timeout(Duration::from_millis(100))
-                .identity(identity)
-                .danger_accept_invalid_certs(true)
-                .build()
-                .map_err(|e| {
-                    error::ErrorInternalServerError(format!(
-                        "Error build request for client: {}",
-                        e
-                    ))
-                })?
-        } else {
-            reqwest::Client::builder()
-                //.timeout(Duration::from_millis(100))
-                .build()
-                .expect("Failed to build reqwest client")
-        };
+        let client = &data.client;
 
         if rule.secure {
             let token_header = match req
-                .headers()
-                .get("Authorization")
-                .and_then(|v| v.to_str().ok())
-                .and_then(|s| s.strip_prefix("Bearer "))
+            .headers()
+            .get("Authorization")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|s| s.strip_prefix("Bearer "))
             {
                 Some(t) => t.to_string(),
                 None => return Ok(HttpResponse::Unauthorized().body("Missing token")),
             };
 
-            let token_hash = &token_header;
-
-            let username = match validate_token(&token_hash, &data, &data.config, &ip) {
+            let username = match validate_token(&token_header, &data, &data.config, &ip) {
                 Ok(username) => username,
                 Err(err) => return Ok(HttpResponse::Unauthorized().body(err)),
             };
@@ -125,50 +74,61 @@ pub async fn proxy(
         }
 
         let mut forwarded_req = client
-            .request(method, &target_url)
-            .header(header::USER_AGENT, "ProxyAuth");
+        .request(method, &target_url)
+        .header(header::USER_AGENT, "ProxyAuth");
+
         for (key, value) in req.headers() {
-            if "Authorization" != key && "user-agent" != key {
+            if key != header::AUTHORIZATION && key != header::USER_AGENT {
                 forwarded_req = forwarded_req.header(key, value);
             }
         }
 
-        let res = forwarded_req.body(body.clone()).send().await;
-
-        match res {
+        match forwarded_req.body(body.clone()).send().await {
             Ok(resp) => {
                 let mut client_resp = HttpResponse::build(resp.status());
+
                 for (key, value) in resp.headers() {
                     client_resp.append_header((key.clone(), value.clone()));
                 }
 
-                let bytes = resp.bytes().await.unwrap_or_default();
-                if username_check != "" {
-                    info!(
-                        "[{}] user {} forward request {} to url {} proxy response code 200",
-                        ip, username_check, rule.prefix, target_url
-                    );
-                } else {
-                    info!(
-                        "[{}] forward request {} to url {} proxy response code 200",
-                        ip, rule.prefix, target_url
-                    );
+                match resp.bytes().await {
+                    Ok(bytes) => {
+                        if !username_check.is_empty() {
+                            info!(
+                                "[{}] user {} forward request {} to url {} proxy response code 200",
+                                ip, username_check, rule.prefix, target_url
+                            );
+                        } else {
+                            info!(
+                                "[{}] forward request {} to url {} proxy response code 200",
+                                ip, rule.prefix, target_url
+                            );
+                        }
+
+                        Ok(client_resp.body(bytes))
+                    }
+                    Err(e) => {
+                        warn!(
+                            "[{}] user {} forward request {} failed to read body from {}: {}",
+                            ip, username_check, rule.prefix, target_url, e
+                        );
+                        Ok(HttpResponse::BadGateway().body("Failed to read response body"))
+                    }
                 }
-                return Ok(client_resp.body(bytes));
             }
-            Err(_) => {
+            Err(e) => {
                 warn!(
-                    "[{}] user {} forward request {} proxy response url unreachable for {}",
-                    ip, username_check, rule.prefix, target_url
+                    "[{}] Failed to forward request for user '{}' on route '{}' → target '{}': connection error: {}",
+                    ip, username_check, rule.prefix, target_url, e
                 );
-                return Ok(HttpResponse::BadGateway().body("Target unreachable"));
+                Ok(HttpResponse::BadGateway().body("Target unreachable"))
             }
         }
     } else {
-        info!(
-            "[{}] try to access route {} proxy response no route",
+        warn!(
+            "[{}] Rejected request: no matching route for path '{}'. Responded with 404 Not Found.",
             ip, path
         );
-        return Ok(HttpResponse::NotFound().body("404 Not Found"));
+        Ok(HttpResponse::NotFound().body("404 Not Found"))
     }
 }

@@ -23,7 +23,7 @@ use def_config::{
 };
 use proxy::proxy;
 use ratelimit::UserToken;
-use reqwest::blocking::Client;
+use reqwest::Client;
 use reqwest::header::{HeaderMap, HeaderValue};
 use start_actix::mode_actix_web;
 use stats::stats as metric_stats;
@@ -35,6 +35,7 @@ use tracing_subscriber::Layer;
 use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
+use std::time::Duration;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -71,10 +72,11 @@ async fn main() -> std::io::Result<()> {
                     .get("http://127.0.0.1:8080/adm/stats")
                     .headers(headers)
                     .send()
+                    .await
                 {
                     Ok(response) => {
                         if response.status().is_success() {
-                            match response.text() {
+                            match response.text().await {
                                 Ok(body) => {
                                     println!("{}", body);
                                     std::process::exit(0);
@@ -126,10 +128,20 @@ async fn main() -> std::io::Result<()> {
 
     let counter_token = Arc::new(CounterToken::new());
 
+    let client = Client::builder()
+                .timeout(Duration::from_millis(100))
+                .pool_idle_timeout(Some(Duration::from_secs(30)))
+                .pool_max_idle_per_host(5000)
+                .tcp_keepalive(Some(Duration::from_secs(30)))
+                .danger_accept_invalid_certs(true)
+                .build()
+                .expect("Failed to build high-performance reqwest client");
+
     let state = web::Data::new(AppState {
         config: Arc::clone(&config),
         routes: Arc::new(routes),
         counter: counter_token,
+        client: client,
     });
 
     if let Some(logs) = config.log.get("type") {
@@ -166,6 +178,9 @@ async fn main() -> std::io::Result<()> {
 
         if logs == "local" {
             tracing_subscriber::fmt::init();
+            // tracing_subscriber::fmt()
+            // .with_writer(|| std::io::sink())
+            // .init();
         }
     }
 

@@ -117,10 +117,7 @@ pub fn validate_token(
 
     if !username.is_empty() {
         // record counter_token
-        data_app.counter.record_call(&user.username, data[3]);
-
-        // give counter for this token
-        let count = data_app.counter.get_token_count(data[3]);
+        let count = data_app.counter.record_and_get(&user.username, data[3]);
 
         info!(
             "[{}] user {} is logged token expire in {} seconds [token used: {}]",

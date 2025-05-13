@@ -103,6 +103,7 @@ pub struct AppState {
     pub config: Arc<AppConfig>,
     pub routes: Arc<RouteConfig>,
     pub counter: Arc<CounterToken>,
+    pub client: reqwest::Client,
 }
 
 #[derive(Deserialize)]
