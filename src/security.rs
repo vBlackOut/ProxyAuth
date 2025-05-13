@@ -6,8 +6,8 @@ use actix_web::web;
 use chrono::{Timelike, Utc};
 use hex;
 use sha2::{Digest, Sha256};
-use tracing::{error, info, warn};
 use std::collections::HashMap;
+use tracing::{error, info, warn};
 
 include!(concat!(env!("OUT_DIR"), "/shuffle_generated.rs"));
 
@@ -47,7 +47,10 @@ pub fn generate_token(username: &str, secret: &str, time_expire: &str, token_id:
         ("token_id", token_id.to_string()),
     ]);
 
-    let shuffled: Vec<String> = SHUFFLED_ORDER.iter().map(|k| values_map[*k].clone()).collect();
+    let shuffled: Vec<String> = SHUFFLED_ORDER
+        .iter()
+        .map(|k| values_map[*k].clone())
+        .collect();
 
     let shuffle_data = shuffled.join(":");
     let mut signature = Sha256::new();

@@ -1,9 +1,9 @@
-use crate::security::validate_token;
 use crate::AppState;
-use actix_web::{error, web, Error, HttpRequest, HttpResponse, Result};
+use crate::security::validate_token;
+use actix_web::{Error, HttpRequest, HttpResponse, Result, error, web};
 use reqwest::Proxy;
 //use std::time::Duration;
-use reqwest::{header, Client, Identity};
+use reqwest::{Client, Identity, header};
 use std::fs;
 use std::net::IpAddr;
 use tracing::{info, warn};
@@ -90,9 +90,9 @@ pub async fn proxy(
                 })?
         } else {
             reqwest::Client::builder()
-            //.timeout(Duration::from_millis(100))
-            .build()
-            .expect("Failed to build reqwest client")
+                //.timeout(Duration::from_millis(100))
+                .build()
+                .expect("Failed to build reqwest client")
         };
 
         if rule.secure {

@@ -147,16 +147,16 @@ fn default_log() -> HashMap<String, String> {
 
 fn default_ratelimit_proxy() -> HashMap<String, u64> {
     let mut ratelimit = HashMap::new();
-    ratelimit.insert("requests_per_second".to_string(), 1000);
-    ratelimit.insert("burst".to_string(), 10);
+    ratelimit.insert("requests_per_second".to_string(), 0);
+    ratelimit.insert("burst".to_string(), 1);
     ratelimit.insert("block_delay".to_string(), 500);
     ratelimit
 }
 
 fn default_ratelimit_auth() -> HashMap<String, u64> {
     let mut ratelimit = HashMap::new();
-    ratelimit.insert("requests_per_second".to_string(), 10);
-    ratelimit.insert("burst".to_string(), 10);
+    ratelimit.insert("requests_per_second".to_string(), 0);
+    ratelimit.insert("burst".to_string(), 1);
     ratelimit.insert("block_delay".to_string(), 500);
     ratelimit
 }

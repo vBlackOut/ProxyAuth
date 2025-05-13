@@ -1,10 +1,10 @@
+use rand::seq::SliceRandom;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-use rand::seq::SliceRandom;
 use std::fs;
 use std::io::Write;
-use std::time::{SystemTime, UNIX_EPOCH};
 use std::path::Path;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 fn main() {
     let mut rng = rand::thread_rng();
@@ -37,7 +37,11 @@ fn main() {
     let const_string = format!(
         "pub const SHUFFLED_ORDER: [&str; {}] = [{}];",
         fields.len(),
-        fields.iter().map(|s| format!("\"{}\"", s)).collect::<Vec<_>>().join(", ")
+        fields
+            .iter()
+            .map(|s| format!("\"{}\"", s))
+            .collect::<Vec<_>>()
+            .join(", ")
     );
 
     let out_dir = std::env::var("OUT_DIR").unwrap();

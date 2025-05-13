@@ -174,60 +174,46 @@ async fn main() -> std::io::Result<()> {
         .ratelimit_proxy
         .get("requests_per_second")
         .copied()
-        .expect("Error value per_second");
+        .unwrap_or(0);
 
     let burst_proxy_config = config
         .ratelimit_proxy
         .get("burst")
         .copied()
-        .expect("Error value burst")
+        .unwrap_or(0)
         .try_into()
-        .unwrap();
+        .expect("bad burst_proxy value");
 
     let delay_block_proxy_config = config
         .ratelimit_proxy
         .get("block_delay")
         .copied()
-        .expect("Error value block_delay");
+        .unwrap_or(0)
+        .try_into()
+        .expect("bad delay_proxy value");
 
     // configuration auth ratelimit
     let requests_per_second_auth_config = config
         .ratelimit_auth
         .get("requests_per_second")
         .copied()
-        .expect("Error value per_second");
+        .unwrap_or(0);
 
     let burst_auth_config = config
         .ratelimit_auth
         .get("burst")
         .copied()
-        .expect("Error value burst")
+        .unwrap_or(0)
         .try_into()
-        .unwrap();
+        .expect("bad burst_auth value");
 
     let delay_block_auth_config = config
         .ratelimit_auth
         .get("block_delay")
         .copied()
-        .expect("Error value block_delay");
-
-    let governor_auth_conf = GovernorConfigBuilder::default()
-        .requests_per_second(requests_per_second_auth_config)
-        .burst_size(burst_auth_config)
-        .use_headers()
-        .period(std::time::Duration::from_millis(delay_block_auth_config))
-        .finish()
-        .unwrap();
-
-    let governor_proxy_conf = GovernorConfigBuilder::default()
-        .requests_per_second(requests_per_second_proxy_config)
-        .burst_size(burst_proxy_config)
-        .key_extractor(UserToken)
-        .period(std::time::Duration::from_millis(
-            delay_block_proxy_config as u64,
-        ))
-        .finish()
-        .unwrap();
+        .unwrap_or(0)
+        .try_into()
+        .expect("bad delay_auth value");
 
     let mode_actix = mode_actix_web(
         &requests_per_second_auth_config,
@@ -236,6 +222,17 @@ async fn main() -> std::io::Result<()> {
 
     match mode_actix {
         "NO_RATELIMIT_AUTH" => {
+
+            let governor_proxy_conf = GovernorConfigBuilder::default()
+                .requests_per_second(requests_per_second_proxy_config)
+                .burst_size(burst_proxy_config)
+                .key_extractor(UserToken)
+                .period(std::time::Duration::from_millis(
+                    delay_block_proxy_config,
+                ))
+                .finish()
+                .unwrap();
+
             println!("\nlaunch ProxyAuth v{} \nratelimit On, (Proxy)", VERSION);
             HttpServer::new(move || {
                 App::new()
@@ -251,6 +248,15 @@ async fn main() -> std::io::Result<()> {
         }
 
         "NO_RATELIMIT_PROXY" => {
+
+            let governor_auth_conf = GovernorConfigBuilder::default()
+                .requests_per_second(requests_per_second_auth_config)
+                .burst_size(burst_auth_config)
+                .use_headers()
+                .period(std::time::Duration::from_millis(delay_block_auth_config))
+                .finish()
+                .unwrap();
+
             println!("\nlaunch ProxyAuth v{} \nratelimit On (Auth)", VERSION);
             HttpServer::new(move || {
                 App::new()
@@ -272,6 +278,25 @@ async fn main() -> std::io::Result<()> {
         }
 
         "RATELIMIT_GLOBAL_ON" => {
+
+            let governor_auth_conf = GovernorConfigBuilder::default()
+                .requests_per_second(requests_per_second_auth_config)
+                .burst_size(burst_auth_config)
+                .use_headers()
+                .period(std::time::Duration::from_millis(delay_block_auth_config))
+                .finish()
+                .unwrap();
+
+            let governor_proxy_conf = GovernorConfigBuilder::default()
+                .requests_per_second(requests_per_second_proxy_config)
+                .burst_size(burst_proxy_config)
+                .key_extractor(UserToken)
+                .period(std::time::Duration::from_millis(
+                    delay_block_proxy_config,
+                ))
+                .finish()
+                .unwrap();
+
             println!(
                 "\nlaunch ProxyAuth v{} \nratelimit On, (Proxy, Auth)",
                 VERSION

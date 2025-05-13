@@ -26,7 +26,10 @@ impl CounterToken {
     }
 
     pub fn record_call(&self, user: &str, token_id: &str) {
-        let user_entry = self.calls.entry(user.to_string()).or_insert_with(DashMap::new);
+        let user_entry = self
+            .calls
+            .entry(user.to_string())
+            .or_insert_with(DashMap::new);
         user_entry
             .entry(token_id.to_string())
             .and_modify(|e| *e += 1)
