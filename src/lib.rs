@@ -9,5 +9,5 @@ pub mod tokencount;
 
 pub use auth::auth;
 pub use config::{AppConfig, AppState, RouteConfig};
-pub use proxy::proxy;
+pub use proxy::global_proxy;
 pub use tokencount::CounterToken;

@@ -21,7 +21,7 @@ use def_config::{
     create_config, ensure_running_as_proxyauth, ensure_user_proxyauth_exists,
     setup_proxyauth_directory, switch_to_user,
 };
-use proxy::proxy;
+use proxy::global_proxy;
 use ratelimit::UserToken;
 use reqwest::Client;
 use reqwest::header::{HeaderMap, HeaderValue};
@@ -128,20 +128,10 @@ async fn main() -> std::io::Result<()> {
 
     let counter_token = Arc::new(CounterToken::new());
 
-    let client = Client::builder()
-                .timeout(Duration::from_millis(500))
-                .pool_idle_timeout(Some(Duration::from_secs(30)))
-                .pool_max_idle_per_host(5000)
-                .tcp_keepalive(Some(Duration::from_secs(30)))
-                .danger_accept_invalid_certs(true)
-                .build()
-                .expect("Failed to build high-performance reqwest client");
-
     let state = web::Data::new(AppState {
         config: Arc::clone(&config),
         routes: Arc::new(routes),
         counter: counter_token,
-        client: client,
     });
 
     if let Some(logs) = config.log.get("type") {
@@ -254,7 +244,7 @@ async fn main() -> std::io::Result<()> {
                     .app_data(state.clone())
                     .service(web::resource("/auth").route(web::post().to(auth)))
                     .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
-                    .default_service(web::to(proxy).wrap(Governor::new(&governor_proxy_conf)))
+                    .default_service(web::to(global_proxy).wrap(Governor::new(&governor_proxy_conf)))
             })
             .workers((config.worker as u8).into())
             .bind((config.host.as_str(), config.port as u16))?
@@ -284,7 +274,7 @@ async fn main() -> std::io::Result<()> {
                         ),
                     )
                     .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
-                    .default_service(web::to(proxy))
+                    .default_service(web::to(global_proxy))
             })
             .workers((config.worker as u8).into())
             .bind((config.host.as_str(), config.port as u16))?
@@ -327,7 +317,7 @@ async fn main() -> std::io::Result<()> {
                         ),
                     )
                     .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
-                    .default_service(web::to(proxy).wrap(Governor::new(&governor_proxy_conf)))
+                    .default_service(web::to(global_proxy).wrap(Governor::new(&governor_proxy_conf)))
             })
             .workers((config.worker as u8).into())
             .bind((config.host.as_str(), config.port as u16))?
@@ -342,7 +332,7 @@ async fn main() -> std::io::Result<()> {
                     .app_data(state.clone())
                     .service(web::resource("/auth").route(web::post().to(auth)))
                     .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
-                    .default_service(web::to(proxy))
+                    .default_service(web::to(global_proxy))
             })
             .workers((config.worker as u8).into())
             .bind((config.host.as_str(), config.port as u16))?
@@ -360,7 +350,7 @@ async fn main() -> std::io::Result<()> {
                     .app_data(state.clone())
                     .service(web::resource("/auth").route(web::post().to(auth)))
                     .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
-                    .default_service(web::to(proxy))
+                    .default_service(web::to(global_proxy))
             })
             .workers((config.worker as u8).into())
             .bind((config.host.as_str(), config.port as u16))?
