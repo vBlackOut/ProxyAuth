@@ -38,39 +38,39 @@ fn build_hyper_client_cert(opts: ClientOptions) -> Client<HttpsConnector<HttpCon
     }));
 
     // Ajouter le certificat CA de mitmproxy si disponible
-    if let Ok(mitm_cert) = std::fs::read("~/.mitmproxy/mitmproxy-ca-cert.pem") {
-        let mitm_cert = rustls::Certificate(mitm_cert);
-        root_store.add(&mitm_cert).expect("Erreur lors de l'ajout du certificat mitmproxy");
-    }
+//     if let Ok(mitm_cert) = std::fs::read("~/.mitmproxy/mitmproxy-ca-cert.pem") {
+//         let mitm_cert = rustls::Certificate(mitm_cert);
+//         root_store.add(&mitm_cert).expect("Error Proxy cert");
+//     }
 
     let config = if opts.use_cert {
         let cert_path = opts.cert_path.expect("cert_path requis");
         let key_path = opts.key_path.expect("key_path requis");
 
-        let cert_file = &mut BufReader::new(File::open(cert_path).expect("Impossible d'ouvrir le fichier de certificat"));
-        let key_file = &mut BufReader::new(File::open(key_path).expect("Impossible d'ouvrir le fichier de clé"));
+        let cert_file = &mut BufReader::new(File::open(cert_path).expect("Failed open certs file"));
+        let key_file = &mut BufReader::new(File::open(key_path).expect("Failed open key file"));
 
         let cert_chain: Vec<Certificate> = certs(cert_file)
-            .expect("Erreur lors de la lecture du fichier de certificat")
+            .expect("Error read file certificat")
             .into_iter()
             .map(Certificate)
             .collect();
 
         let mut keys: Vec<PrivateKey> = pkcs8_private_keys(key_file)
-            .expect("Erreur lors de la lecture du fichier de clé")
+            .expect("Error read file key")
             .into_iter()
             .map(PrivateKey)
             .collect();
 
         if keys.is_empty() {
-            panic!("Aucune clé privée trouvée dans {:?}", key_path);
+            panic!("No found key in file: {:?}", key_path);
         }
 
         ClientConfig::builder()
             .with_safe_defaults()
             .with_root_certificates(root_store)
-            .with_client_auth_cert(cert_chain, keys.remove(0)) // Correction de la méthode dépréciée
-            .expect("Paire certificat/clé invalide")
+            .with_client_auth_cert(cert_chain, keys.remove(0))
+            .expect("Pair certificat/Key invalid")
     } else {
         ClientConfig::builder()
             .with_safe_defaults()
@@ -101,40 +101,39 @@ fn build_hyper_client_proxy(opts: ClientOptions) -> Client<ProxyConnector<HttpsC
         )
     }));
 
-    // Ajouter le certificat CA de mitmproxy si disponible
-    if let Ok(mitm_cert) = std::fs::read("~/.mitmproxy/mitmproxy-ca-cert.pem") {
-        let mitm_cert = rustls::Certificate(mitm_cert);
-        root_store.add(&mitm_cert).expect("Erreur lors de l'ajout du certificat mitmproxy");
-    }
+//     if let Ok(mitm_cert) = std::fs::read("~/.mitmproxy/mitmproxy-ca-cert.pem") {
+//         let mitm_cert = rustls::Certificate(mitm_cert);
+//         root_store.add(&mitm_cert).expect("Erreur lors de l'ajout du certificat mitmproxy");
+//     }
 
     let config = if opts.use_cert {
-        let cert_path = opts.cert_path.expect("cert_path requis");
-        let key_path = opts.key_path.expect("key_path requis");
+        let cert_path = opts.cert_path.expect("cert_path required");
+        let key_path = opts.key_path.expect("key_path required");
 
-        let cert_file = &mut BufReader::new(File::open(cert_path).expect("Impossible d'ouvrir le fichier de certificat"));
-        let key_file = &mut BufReader::new(File::open(key_path).expect("Impossible d'ouvrir le fichier de clé"));
+        let cert_file = &mut BufReader::new(File::open(cert_path).expect("Failed open certs file"));
+        let key_file = &mut BufReader::new(File::open(key_path).expect("Failed open key file"));
 
         let cert_chain: Vec<Certificate> = certs(cert_file)
-            .expect("Erreur lors de la lecture du fichier de certificat")
+            .expect("Error read file certificat")
             .into_iter()
             .map(Certificate)
             .collect();
 
         let mut keys: Vec<PrivateKey> = pkcs8_private_keys(key_file)
-            .expect("Erreur lors de la lecture du fichier de clé")
+            .expect("Error read file key")
             .into_iter()
             .map(PrivateKey)
             .collect();
 
         if keys.is_empty() {
-            panic!("Aucune clé privée trouvée dans {:?}", key_path);
+            panic!("No found key in file: {:?}", key_path);
         }
 
         ClientConfig::builder()
             .with_safe_defaults()
             .with_root_certificates(root_store)
             .with_client_auth_cert(cert_chain, keys.remove(0))
-            .expect("Paire certificat/clé invalide")
+            .expect("Pair certificat/Key invalid")
     } else {
         ClientConfig::builder()
             .with_safe_defaults()
@@ -149,12 +148,12 @@ fn build_hyper_client_proxy(opts: ClientOptions) -> Client<ProxyConnector<HttpsC
     let https_connector = HttpsConnector::from((http_connector, tls_config));
 
     let proxy_connector = if opts.use_proxy {
-        let proxy_addr = opts.proxy_addr.unwrap_or("http://127.0.0.1:8080"); // Par défaut pour mitmproxy
+        let proxy_addr = opts.proxy_addr.unwrap_or("http://127.0.0.1:8888");
         let proxy_uri = hyper::Uri::from_str(proxy_addr).expect("Adresse proxy invalide");
         let proxy = Proxy::new(Intercept::All, proxy_uri);
         ProxyConnector::from_proxy(https_connector, proxy).expect("Échec de la création du connecteur proxy")
     } else {
-        let dummy_proxy = Proxy::new(Intercept::None, hyper::Uri::from_str("http://localhost").unwrap());
+        let dummy_proxy = Proxy::new(Intercept::None, hyper::Uri::from_str("http://127.0.0.1:8888").unwrap());
         ProxyConnector::from_proxy(https_connector, dummy_proxy).unwrap()
     };
 
@@ -175,11 +174,10 @@ fn build_hyper_client() -> Client<HttpsConnector<HttpConnector>> {
         )
     }));
 
-    // Ajouter le certificat CA de mitmproxy si disponible
-    if let Ok(mitm_cert) = std::fs::read("~/.mitmproxy/mitmproxy-ca-cert.pem") {
-        let mitm_cert = rustls::Certificate(mitm_cert);
-        root_store.add(&mitm_cert).expect("Erreur lors de l'ajout du certificat mitmproxy");
-    }
+//     if let Ok(mitm_cert) = std::fs::read("~/.mitmproxy/mitmproxy-ca-cert.pem") {
+//         let mitm_cert = rustls::Certificate(mitm_cert);
+//         root_store.add(&mitm_cert).expect("Erreur lors de l'ajout du certificat mitmproxy");
+//     }
 
     let config = ClientConfig::builder()
         .with_safe_defaults()
@@ -247,7 +245,7 @@ pub async fn proxy_with_proxy(
     let mut username_check = String::new();
 
     if let Some(rule) = data.routes.routes.iter().find(|r| path.starts_with(&r.prefix)) {
-        let forward_path = path.strip_prefix(&rule.prefix).unwrap_or(""); // Correction du typo
+        let forward_path = path.strip_prefix(&rule.prefix).unwrap_or("");
         let target_url = format!("{}{}", rule.target.trim_end_matches('/'), forward_path);
 
         let full_url = if target_url.starts_with("http") {
@@ -337,7 +335,7 @@ pub async fn proxy_without_proxy(
     let mut username_check = String::new();
 
     if let Some(rule) = data.routes.routes.iter().find(|r| path.starts_with(&r.prefix)) {
-        let forward_path = path.strip_prefix(&rule.prefix).unwrap_or(""); // Correction du typo
+        let forward_path = path.strip_prefix(&rule.prefix).unwrap_or("");
         let target_url = format!("{}{}", rule.target.trim_end_matches('/'), forward_path);
 
         let (client, uri) = if !rule.cert.is_empty() {
