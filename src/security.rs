@@ -58,7 +58,7 @@ pub fn generate_token(username: &str, secret: &str, time_expire: &str, token_id:
     format!("{:x}", signature.finalize())
 }
 
-pub fn validate_token(
+pub async fn validate_token(
     token: &str,
     data_app: &web::Data<AppState>,
     config: &AppConfig,
