@@ -36,6 +36,7 @@ jobs:
             -keyout /etc/proxyauth/certs/key.pem \
             -out /etc/proxyauth/certs/cert.pem \
             -subj "/CN=localhost"
+            sudo chown -R proxyauth:proxyauth /etc/proxyauth/certs
             
       - name: Start ProxyAuth in background
         run: |
