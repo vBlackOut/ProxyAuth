@@ -10,6 +10,7 @@ mod start_actix;
 mod stats;
 mod timezone;
 mod tokencount;
+mod tls;
 
 use actix_governor::{Governor, GovernorConfigBuilder};
 use actix_web::{App, HttpServer, web};
@@ -23,7 +24,8 @@ use def_config::{
 };
 use proxy::global_proxy;
 use ratelimit::UserToken;
-use reqwest::Client;
+use reqwest::ClientBuilder;
+use reqwest::tls::Version;
 use reqwest::header::{HeaderMap, HeaderValue};
 use start_actix::mode_actix_web;
 use stats::stats as metric_stats;
@@ -36,6 +38,7 @@ use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use std::time::Duration;
+use tls::load_rustls_config;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -66,10 +69,13 @@ async fn main() -> std::io::Result<()> {
                     HeaderValue::from_str(&config.token_admin).expect("invalid token string"),
                 );
 
-                let client = Client::new();
+                let client = ClientBuilder::new()
+                    .danger_accept_invalid_certs(true)
+                    .build()
+                    .expect("Failed to build reqwest client");
 
                 match client
-                    .get("http://127.0.0.1:8080/adm/stats")
+                    .get("https://127.0.0.1:8080/adm/stats")
                     .headers(headers)
                     .send()
                     .await
@@ -247,7 +253,7 @@ async fn main() -> std::io::Result<()> {
                     .default_service(web::to(global_proxy).wrap(Governor::new(&governor_proxy_conf)))
             })
             .workers((config.worker as u8).into())
-            .bind((config.host.as_str(), config.port as u16))?
+            .bind_rustls_021((config.host.as_str(), config.port as u16), load_rustls_config())?
             .run()
             .await
         }
@@ -277,7 +283,7 @@ async fn main() -> std::io::Result<()> {
                     .default_service(web::to(global_proxy))
             })
             .workers((config.worker as u8).into())
-            .bind((config.host.as_str(), config.port as u16))?
+            .bind_rustls_021((config.host.as_str(), config.port as u16), load_rustls_config())?
             .run()
             .await
         }
@@ -320,7 +326,7 @@ async fn main() -> std::io::Result<()> {
                     .default_service(web::to(global_proxy).wrap(Governor::new(&governor_proxy_conf)))
             })
             .workers((config.worker as u8).into())
-            .bind((config.host.as_str(), config.port as u16))?
+            .bind_rustls_021((config.host.as_str(), config.port as u16), load_rustls_config())?
             .run()
             .await
         }
@@ -335,7 +341,7 @@ async fn main() -> std::io::Result<()> {
                     .default_service(web::to(global_proxy))
             })
             .workers((config.worker as u8).into())
-            .bind((config.host.as_str(), config.port as u16))?
+            .bind_rustls_021((config.host.as_str(), config.port as u16), load_rustls_config())?
             .run()
             .await
         }
@@ -353,7 +359,7 @@ async fn main() -> std::io::Result<()> {
                     .default_service(web::to(global_proxy))
             })
             .workers((config.worker as u8).into())
-            .bind((config.host.as_str(), config.port as u16))?
+            .bind_rustls_021((config.host.as_str(), config.port as u16), load_rustls_config())?
             .run()
             .await
         }
