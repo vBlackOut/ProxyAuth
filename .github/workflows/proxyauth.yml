@@ -27,7 +27,16 @@ jobs:
 
       - name: Prepare User for run proxyauth
         run: sudo ./target/release/proxyauth prepare
-
+      
+      - name: Generate self-signed cert for ProxyAuth
+        run: |
+            sudo mkdir -p /etc/proxyauth/certs
+            sudo openssl req -x509 -newkey rsa:2048 -sha256 -days 1 \
+            -nodes \
+            -keyout /etc/proxyauth/certs/key.pem \
+            -out /etc/proxyauth/certs/cert.pem \
+            -subj "/CN=localhost"
+            
       - name: Start ProxyAuth in background
         run: |
           sudo -u proxyauth ./target/release/proxyauth &
@@ -35,7 +44,7 @@ jobs:
           sleep 2  # attendre que le serveur démarre
 
       - name: Test HTTP response
-        run: curl -I http://localhost:8080 || (cat proxyauth.pid | xargs kill && exit 1)
+        run: curl -k -I https://localhost:8080 || (cat proxyauth.pid | xargs kill && exit 1)
 
       - name: Stop the server
         run: |
