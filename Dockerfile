@@ -12,7 +12,7 @@ RUN cargo install proxyauth --root /usr/local  -j $(($(nproc) - 1)) --locked
 
 RUN mkdir -p /etc/proxyauth/config && \
     mkdir -p /etc/proxyauth/certs && \
-    sudo openssl req -x509 -newkey rsa:2048 -sha256 -days 1 \
+    openssl req -x509 -newkey rsa:2048 -sha256 -days 1 \
             -nodes \
             -keyout /etc/proxyauth/certs/key.pem \
             -out /etc/proxyauth/certs/cert.pem \
