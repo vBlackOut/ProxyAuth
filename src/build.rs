@@ -10,9 +10,8 @@ fn main() {
     let mut rng = OsRng;
 
     let build_rand = rng.gen_range(1..999_999_999);
-    let build_seed = rng.gen_range(1..999_999_999);
+    let build_seed = rng.gen_range(1..999);
     let build_seed2 = rng.gen_range(1..999_999_999);
-    let build_seed3 = rng.gen_range(100_000..999_999_999);
 
     let build_time = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -34,7 +33,7 @@ fn main() {
         "token_id".to_string(),
     ];
 
-    let mut shuffle_rng = ChaCha8Rng::seed_from_u64((((build_seed*build_seed2)/2)*3)+build_seed3);
+    let mut shuffle_rng = ChaCha8Rng::seed_from_u64((((build_seed*build_seed2)/2)*3));
     fields.shuffle(&mut shuffle_rng);
 
     let const_string = format!(
