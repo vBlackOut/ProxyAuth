@@ -26,7 +26,6 @@ use def_config::{
 use proxy::global_proxy;
 use ratelimit::UserToken;
 use reqwest::ClientBuilder;
-use reqwest::tls::Version;
 use reqwest::header::{HeaderMap, HeaderValue};
 use start_actix::mode_actix_web;
 use stats::stats as metric_stats;

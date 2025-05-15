@@ -1,7 +1,7 @@
 use actix_web::{web, HttpRequest, HttpResponse, Error, error};
 use hyper::{Client, Body, Request, Uri};
 use hyper::client::connect::HttpConnector;
-use hyper::header::{HeaderMap, HeaderValue, USER_AGENT};
+use hyper::header::USER_AGENT;
 use hyper_rustls::HttpsConnector;
 use rustls::client::ClientConfig;
 use rustls::{Certificate, PrivateKey, RootCertStore};

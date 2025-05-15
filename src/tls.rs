@@ -1,4 +1,3 @@
-use actix_web::HttpServer;
 use rustls::{Certificate, PrivateKey, ServerConfig};
 use rustls_pemfile::{certs, pkcs8_private_keys};
 use std::fs::File;
