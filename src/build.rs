@@ -10,7 +10,7 @@ fn main() {
     let mut rng = OsRng;
 
     let build_rand = rng.gen_range(1..999_999_999);
-    let build_seed = rng.gen_range(1..999);
+    let build_seed = rng.gen_range(1..999_999_999);
     let build_seed2 = rng.gen_range(1..999_999_999);
 
     let build_time = SystemTime::now()
