@@ -12,6 +12,15 @@ keywords = ["authentification", "proxy", "security", "token", "gateway"]
 categories = ["network-programming", "authentication", "api-bindings", "security"]
 documentation = "https://proxyauth.app"
 
+include = [
+    "src/**",
+    "Cargo.toml",
+    "Cargo.lock",
+    "README.md",
+    "LICENSE"
+]
+
+
 [build]
 jobs = 4 # number threads launch for build
 
