@@ -255,7 +255,7 @@ async fn main() -> std::io::Result<()> {
                     .default_service(web::to(global_proxy).wrap(Governor::new(&governor_proxy_conf)))
             })
             .workers((config.worker as u8).into())
-            .keep_alive(Duration::from_secs(75))
+            .keep_alive(Duration::from_secs(15))
             .bind_rustls_021((config.host.as_str(), config.port as u16), load_rustls_config())?
             .run()
             .await
@@ -286,7 +286,7 @@ async fn main() -> std::io::Result<()> {
                     .default_service(web::to(global_proxy))
             })
             .workers((config.worker as u8).into())
-            .keep_alive(Duration::from_secs(75))
+            .keep_alive(Duration::from_secs(15))
             .bind_rustls_021((config.host.as_str(), config.port as u16), load_rustls_config())?
             .run()
             .await
@@ -330,7 +330,7 @@ async fn main() -> std::io::Result<()> {
                     .default_service(web::to(global_proxy).wrap(Governor::new(&governor_proxy_conf)))
             })
             .workers((config.worker as u8).into())
-            .keep_alive(Duration::from_secs(75))
+            .keep_alive(Duration::from_secs(15))
             .bind_rustls_021((config.host.as_str(), config.port as u16), load_rustls_config())?
             .run()
             .await
@@ -346,7 +346,7 @@ async fn main() -> std::io::Result<()> {
                     .default_service(web::to(global_proxy))
             })
             .workers((config.worker as u8).into())
-            .keep_alive(Duration::from_secs(75))
+            .keep_alive(Duration::from_secs(15))
             .bind_rustls_021((config.host.as_str(), config.port as u16), load_rustls_config())?
             .run()
             .await
@@ -365,7 +365,7 @@ async fn main() -> std::io::Result<()> {
                     .default_service(web::to(global_proxy))
             })
             .workers((config.worker as u8).into())
-            .keep_alive(Duration::from_secs(75))
+            .keep_alive(Duration::from_secs(15))
             .bind_rustls_021((config.host.as_str(), config.port as u16), load_rustls_config())?
             .run()
             .await
