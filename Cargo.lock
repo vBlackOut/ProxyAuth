@@ -1848,6 +1848,7 @@ dependencies = [
  "hyper-proxy",
  "hyper-rustls",
  "hyper-tls",
+ "memchr",
  "nix",
  "once_cell",
  "quanta",

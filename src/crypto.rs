@@ -9,6 +9,7 @@ use chacha20poly1305::{
 use hmac::{Hmac, Mac};
 use rand::Rng;
 use sha2::{Digest, Sha256};
+use std::fmt::Write;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -77,51 +78,49 @@ fn split_hash(s: String, n: usize) -> Vec<String> {
         .collect()
 }
 
-fn process_string(s: &str, factor: u64) -> String {
-    let mut result = String::new();
-    let limited_factor = factor % 26;
+pub fn process_string(s: &str, factor: u64) -> String {
+    let mut result = String::with_capacity(s.len() * 2);
+    let limited_factor = (factor % 26) as u8;
+
+    let mut number_acc = 0u64;
+    let mut has_digits = false;
 
     for c in s.chars() {
         if c.is_ascii_alphabetic() {
-            let new_char = if c.is_lowercase() {
-                let base = 'a' as u8;
-                let new_pos = (c as u8 - base + limited_factor as u8) % 26 + base;
-                new_pos as char
+            if has_digits {
+                write!(result, "{}", number_acc * factor).unwrap();
+                number_acc = 0;
+                has_digits = false;
+            }
+
+            let (base, new_char) = if c.is_ascii_lowercase() {
+                let base = b'a';
+                let new_pos = (c as u8 - base + limited_factor) % 26 + base;
+                (base, new_pos as char)
             } else {
-                let base = 'A' as u8;
-                let new_pos = (c as u8 - base + limited_factor as u8) % 26 + base;
-                new_pos as char
+                let base = b'A';
+                let new_pos = (c as u8 - base + limited_factor) % 26 + base;
+                (base, new_pos as char)
             };
             result.push(new_char);
+        } else if c.is_ascii_digit() {
+            has_digits = true;
+            number_acc = number_acc * 10 + (c as u64 - b'0' as u64);
         } else {
+            if has_digits {
+                write!(result, "{}", number_acc * factor).unwrap();
+                number_acc = 0;
+                has_digits = false;
+            }
             result.push(c);
         }
     }
 
-    let mut final_result = String::new();
-    let mut current_number = String::new();
-
-    for c in result.chars() {
-        if c.is_ascii_digit() {
-            current_number.push(c); // Accumuler les chiffres
-        } else {
-            if !current_number.is_empty() {
-                let num: u64 = current_number.parse().unwrap_or(0);
-                let transformed = num * factor;
-                final_result.push_str(&transformed.to_string());
-                current_number.clear();
-            }
-            final_result.push(c);
-        }
+    if has_digits {
+        write!(result, "{}", number_acc * factor).unwrap();
     }
 
-    if !current_number.is_empty() {
-        let num: u64 = current_number.parse().unwrap_or(0);
-        let transformed = num * factor;
-        final_result.push_str(&transformed.to_string());
-    }
-
-    final_result
+    result
 }
 
 pub fn calcul_cipher(hashdata: String) -> String {
@@ -151,24 +150,23 @@ pub fn calcul_cipher(hashdata: String) -> String {
 }
 
 pub fn calcul_factorhash(hashdata: String, factor: i64) -> String {
-    let hash_split = split_hash(hashdata, 10);
-
-    if factor < 10 && factor > 99 {
-        return format!("");
+    if !(10..=99).contains(&factor) {
+        return String::new();
     }
 
-    let mut hash_cypher = "".to_string();
-    let totalhash_iter = hash_split.iter().count();
+    let hash_split = split_hash(hashdata, 10);
+
+    let mut hash_cypher = String::with_capacity(hash_split.len() * 16);
+    let factor: u32 = factor as u32;
 
     for (i, hash) in hash_split.iter().enumerate() {
-        let transformed = process_string(hash, factor.try_into().unwrap());
-
-        if i == totalhash_iter - 1 {
-            hash_cypher += &format!("-{}::{}", &transformed, factor).to_string();
-        } else if i >= 1 {
-            hash_cypher += &format!("-{}", &transformed).to_string();
+        let transformed = process_string(hash, factor.into());
+        if i == 0 {
+            write!(hash_cypher, "{}", transformed).unwrap();
+        } else if i == hash_split.len() - 1 {
+            write!(hash_cypher, "-{}::{}", transformed, factor).unwrap();
         } else {
-            hash_cypher += &format!("{}", &transformed).to_string();
+            write!(hash_cypher, "-{}", transformed).unwrap();
         }
     }
 

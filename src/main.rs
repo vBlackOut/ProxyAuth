@@ -14,6 +14,7 @@ mod tls;
 
 use actix_governor::{Governor, GovernorConfigBuilder};
 use actix_web::{App, HttpServer, web};
+use security::init_derived_key;
 use auth::auth;
 use clap::Parser;
 use command::{Cli, Commands};
@@ -139,6 +140,8 @@ async fn main() -> std::io::Result<()> {
         routes: Arc::new(routes),
         counter: counter_token,
     });
+
+    init_derived_key(&config.secret);
 
     if let Some(logs) = config.log.get("type") {
         if logs == "loki" {

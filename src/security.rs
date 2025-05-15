@@ -8,6 +8,7 @@ use hex;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use tracing::{error, info, warn};
+use std::sync::OnceLock;
 
 include!(concat!(env!("OUT_DIR"), "/shuffle_generated.rs"));
 
@@ -17,6 +18,13 @@ fn get_build_time() -> u64 {
 
 pub fn get_build_rand() -> u64 {
     env!("BUILD_RAND").parse().expect("Invalid build random")
+}
+
+static DERIVED_KEY: OnceLock<[u8; 32]> = OnceLock::new();
+
+pub fn init_derived_key(secret: &str) {
+    let key = derive_key_from_secret(secret); // ta fonction custom
+    DERIVED_KEY.set(key).expect("Key already initialized");
 }
 
 pub fn generate_secret(secret: &str) -> String {
@@ -64,70 +72,52 @@ pub async fn validate_token(
     config: &AppConfig,
     ip: &str,
 ) -> Result<String, String> {
-    let mut username = String::new();
-
     let key = derive_key_from_secret(&config.secret);
 
-    let decrypt_token = match decrypt(token, &key) {
-        Ok(val) => val,
-        Err(_) => "Invalid token format".to_string(),
-    };
+    let decrypt_token = decrypt(token, &key).map_err(|_| "Invalid token format")?;
 
-    let data: Vec<&str> = decrypt_token.split('|').collect();
+    let data: [&str; 4] = decrypt_token
+        .splitn(4, '|')
+        .collect::<Vec<&str>>()
+        .try_into()
+        .map_err(|_| "Invalid token format")?;
 
-    let cleaned_token = decrypt_token
-        .split('|')
-        .next()
-        .ok_or("Invalid token format")?;
+    let (token_hash_decrypt, factor) = data[0]
+        .rsplit_once('=')
+        .and_then(|(hash, factor_str)| factor_str.parse::<i64>().ok().map(|f| (hash, f)))
+        .ok_or("Invalid token format or factor")?;
 
-    let (token_hash_decrypt, factor) = match cleaned_token.rsplit_once('=') {
-        Some((hash, factor_str)) => match factor_str.parse::<i64>() {
-            Ok(factor) => (hash.to_string(), factor),
-            Err(_) => return Err("Invalid factor".into()),
-        },
-        None => return Err("Invalid token format".into()),
-    };
+    let index_user = data[2].parse::<usize>().map_err(|_| "Index invalide")?;
+    let user = config
+        .users
+        .get(index_user)
+        .ok_or("Utilisateur introuvable")?;
 
-    let index_user: usize = data[2].parse().map_err(|_| "Index invalide")?;
-    let user = &config.users[index_user];
+    let time_expire = check_date_token(data[1], &user.username, ip)
+        .map_err(|_| "Your token is expired")?;
 
-    let time_expire = match check_date_token(data[1], &user.username, ip) {
-        Ok(time) => time,
-        Err(_) => return Err("Your token is expired".into()),
-    };
-
-    if time_expire > config.token_expiry_seconds.try_into().unwrap() {
+    if (time_expire > (config.token_expiry_seconds as i64).try_into().unwrap()).try_into().unwrap() {
         error!(
             "[{}] username {} try to access token limit config {} value request {}",
             ip, user.username, config.token_expiry_seconds, time_expire
         );
-        return Err("Bad time token".into());
+        return Err("Bad time token".to_string());
     }
 
     let token_generated = generate_token(&user.username, &config.secret, data[1], data[3]);
-
     let token_hash = calcul_factorhash(token_generated, factor);
-
-    let mut token_hash_bytes = Sha256::new();
-    token_hash_bytes.update(token_hash.as_bytes());
-
-    if hex::encode(token_hash_bytes.finalize().as_slice()) == token_hash_decrypt {
-        username = user.username.clone();
-    }
-
-    if !username.is_empty() {
-        // record counter_token
-        let count = data_app.counter.record_and_get(&user.username, data[3]);
-
-        info!(
-            "[{}] user {} is logged token expire in {} seconds [token used: {}]",
-            ip, user.username, time_expire, count
-        );
-        Ok(username)
-    } else {
+    if hex::encode(Sha256::digest(token_hash)) != token_hash_decrypt {
         warn!("[{}] Invalid token", ip);
-        Err("no valid token".into())
+        return Err("no valid token".to_string());
     }
+
+    let count = data_app.counter.record_and_get(&user.username, data[3]);
+    info!(
+        "[{}] user {} is logged token expire in {} seconds [token used: {}]",
+        ip, user.username, time_expire, count
+    );
+
+    Ok(user.username.to_string())
 }
 
 pub fn extract_token_user(token: &str, config: &AppConfig, ip: String) -> Result<String, String> {
