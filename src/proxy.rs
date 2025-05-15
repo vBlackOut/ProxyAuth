@@ -81,7 +81,7 @@ fn build_hyper_client_cert(opts: ClientOptions) -> Client<HttpsConnector<HttpCon
 
     Client::builder()
         .pool_idle_timeout(Some(timeout_duration))
-        .pool_max_idle_per_host(50)
+        .pool_max_idle_per_host(10)
         .http2_adaptive_window(true)
         .build::<_, Body>(https_connector)
 }
@@ -152,7 +152,7 @@ fn build_hyper_client_proxy(opts: ClientOptions) -> Client<ProxyConnector<HttpsC
 
     Client::builder()
         .pool_idle_timeout(Some(timeout_duration))
-        .pool_max_idle_per_host(50)
+        .pool_max_idle_per_host(10)
         .http2_adaptive_window(true)
         .build::<_, Body>(proxy_connector)
 }
@@ -183,7 +183,7 @@ fn build_hyper_client() -> Client<HttpsConnector<HttpConnector>> {
 
     Client::builder()
         .pool_idle_timeout(Some(timeout_duration))
-        .pool_max_idle_per_host(50)
+        .pool_max_idle_per_host(10)
         .http2_adaptive_window(true)
         .build::<_, Body>(https_connector)
 }
