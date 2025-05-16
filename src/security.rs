@@ -112,14 +112,14 @@ pub async fn validate_token(
         return Err("no valid token".to_string());
     }
 
-    // if config.stats {
-    //     let count = data_app.counter.record_and_get(&user.username, data[3]);
-    //
-    //     info!(
-    //         "[{}] user {} is logged token expire in {} seconds [token used: {}]",
-    //         ip, user.username, time_expire, count
-    //     );
-    // }
+    if config.stats {
+        let count = data_app.counter.record_and_get(&user.username, data[3]);
+
+        info!(
+            "[{}] user {} is logged token expire in {} seconds [token used: {}]",
+            ip, user.username, time_expire, count
+        );
+    }
 
     Ok(user.username.to_string())
 }
