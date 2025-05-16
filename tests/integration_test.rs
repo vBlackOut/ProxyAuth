@@ -7,6 +7,7 @@ use std::sync::Arc;
 use reqwest::Client;
 use std::time::Duration;
 use proxyauth::{AppConfig, AppState, CounterToken, RouteConfig, auth as auth_handler};
+use proxyauth::shared_client::{build_hyper_client_proxy, build_hyper_client_normal, build_hyper_client_cert};
 
 fn load_config<T: DeserializeOwned>(path: &str) -> T {
     let data = fs::read_to_string(path).expect("Failed to read config file");
@@ -33,12 +34,33 @@ fn create_app_for_test() -> App<
     )
     .expect("Failed to parse routes YAML");
 
+    let client_normal = build_hyper_client_normal();
+    let client_with_cert = build_hyper_client_cert(ClientOptions {
+        use_proxy: false,
+        proxy_addr: None,
+        use_cert: false,
+        cert_path: None,
+        key_path: None,
+    });
+
+    let client_with_proxy = build_hyper_client_proxy(ClientOptions {
+        use_proxy: true,
+        proxy_addr: Some("http://127.0.0.1:8888".to_string()),
+        use_cert: false,
+        cert_path: None,
+        key_path: None,
+    });
+
     let counter_token = CounterToken::new();
 
     let state = web::Data::new(AppState {
         config: Arc::clone(&config),
         routes: Arc::new(routes),
         counter: Arc::new(counter_token.into()),
+        client_normal,
+        client_with_cert,
+        client_with_proxy,
+
     });
 
     App::new()
