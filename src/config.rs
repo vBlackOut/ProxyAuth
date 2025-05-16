@@ -6,6 +6,10 @@ use serde::{Deserialize, Serialize, Serializer, ser::SerializeStruct};
 use std::collections::HashMap;
 use std::fs;
 use std::sync::Arc;
+use hyper::Client;
+use hyper::client::HttpConnector;
+use hyper_rustls::HttpsConnector;
+use hyper_proxy::ProxyConnector;
 
 #[derive(Debug, Deserialize)]
 pub struct RouteRule {
@@ -106,6 +110,9 @@ pub struct AppState {
     pub config: Arc<AppConfig>,
     pub routes: Arc<RouteConfig>,
     pub counter: Arc<CounterToken>,
+    pub client_normal: Client<HttpsConnector<HttpConnector>>,
+    pub client_with_cert: Client<HttpsConnector<HttpConnector>>,
+    pub client_with_proxy: Client<ProxyConnector<HttpsConnector<HttpConnector>>>,
 }
 
 #[derive(Deserialize)]

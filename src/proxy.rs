@@ -16,176 +16,54 @@ use webpki_roots::TLS_SERVER_ROOTS;
 use hyper_proxy::{Proxy, ProxyConnector, Intercept};
 use crate::AppState;
 use crate::security::validate_token;
+use once_cell::sync::Lazy;
+use dashmap::DashMap;
+use crate::shared_client::{build_hyper_client_normal, build_hyper_client_cert, build_hyper_client_proxy};
 
-pub struct ClientOptions<'a> {
+static CLIENT_CACHE: Lazy<DashMap<ClientKey, Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>>> =
+Lazy::new(DashMap::new);
+
+#[derive(Clone, Hash, Eq, PartialEq, Debug)]
+pub struct ClientKey {
     pub use_proxy: bool,
-    pub proxy_addr: Option<&'a str>,
+    pub proxy_addr: Option<String>,
     pub use_cert: bool,
-    pub cert_path: Option<&'a str>,
-    pub key_path: Option<&'a str>,
+    pub cert_path: Option<String>,
+    pub key_path: Option<String>,
 }
 
-fn build_hyper_client_cert(opts: ClientOptions) -> Client<HttpsConnector<HttpConnector>> {
-    let timeout_duration = Duration::from_millis(500);
-
-    let mut root_store = RootCertStore::empty();
-    root_store.add_trust_anchors(TLS_SERVER_ROOTS.iter().map(|ta| {
-        rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
-            ta.subject,
-            ta.spki,
-            ta.name_constraints,
-        )
-    }));
-
-    let config = if opts.use_cert {
-        let cert_path = opts.cert_path.expect("cert_path required");
-        let key_path = opts.key_path.expect("key_path required");
-
-        let cert_file = &mut BufReader::new(File::open(cert_path).expect("Failed to open cert file"));
-        let key_file = &mut BufReader::new(File::open(key_path).expect("Failed to open key file"));
-
-        let cert_chain: Vec<Certificate> = certs(cert_file)
-            .expect("Error reading cert file")
-            .into_iter()
-            .map(Certificate)
-            .collect();
-
-        let mut keys: Vec<PrivateKey> = pkcs8_private_keys(key_file)
-            .expect("Error reading key file")
-            .into_iter()
-            .map(PrivateKey)
-            .collect();
-
-        if keys.is_empty() {
-            panic!("No key found in file: {:?}", key_path);
+impl ClientKey {
+    pub fn from_options(opts: &ClientOptions) -> Self {
+        ClientKey {
+            use_proxy: opts.use_proxy,
+            proxy_addr: opts.proxy_addr.clone().map(|s| s.to_string()),
+            use_cert: opts.use_cert,
+            cert_path: opts.cert_path.clone().map(|s| s.to_string()),
+            key_path: opts.key_path.clone().map(|s| s.to_string()),
         }
-
-        ClientConfig::builder()
-            .with_safe_defaults()
-            .with_root_certificates(root_store)
-            .with_client_auth_cert(cert_chain, keys.remove(0))
-            .expect("Invalid cert/key pair")
-    } else {
-        ClientConfig::builder()
-            .with_safe_defaults()
-            .with_root_certificates(root_store)
-            .with_no_client_auth()
-    };
-
-    let mut http_connector = HttpConnector::new();
-    http_connector.set_connect_timeout(Some(timeout_duration));
-    http_connector.enforce_http(false);
-
-    let tls_config = Arc::new(config);
-    let https_connector = HttpsConnector::from((http_connector, tls_config));
-
-    Client::builder()
-        .pool_idle_timeout(Some(timeout_duration))
-        .pool_max_idle_per_host(50)
-        .http2_adaptive_window(true)
-        .build::<_, Body>(https_connector)
+    }
 }
 
-fn build_hyper_client_proxy(opts: ClientOptions) -> Client<ProxyConnector<HttpsConnector<HttpConnector>>> {
-    let timeout_duration = Duration::from_millis(500);
+pub fn get_or_build_client(opts: ClientOptions) -> Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>> {
+    let key = ClientKey::from_options(&opts);
 
-    let mut root_store = RootCertStore::empty();
-    root_store.add_trust_anchors(TLS_SERVER_ROOTS.iter().map(|ta| {
-        rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
-            ta.subject,
-            ta.spki,
-            ta.name_constraints,
-        )
-    }));
+    if let Some(client) = CLIENT_CACHE.get(&key) {
+        return client.clone();
+    }
 
-    let config = if opts.use_cert {
-        let cert_path = opts.cert_path.expect("cert_path required");
-        let key_path = opts.key_path.expect("key_path required");
+    let client = build_hyper_client_cert(opts.clone());
 
-        let cert_file = &mut BufReader::new(File::open(cert_path).expect("Failed to open cert file"));
-        let key_file = &mut BufReader::new(File::open(key_path).expect("Failed to open key file"));
-
-        let cert_chain: Vec<Certificate> = certs(cert_file)
-            .expect("Error reading cert file")
-            .into_iter()
-            .map(Certificate)
-            .collect();
-
-        let mut keys: Vec<PrivateKey> = pkcs8_private_keys(key_file)
-            .expect("Error reading key file")
-            .into_iter()
-            .map(PrivateKey)
-            .collect();
-
-        if keys.is_empty() {
-            panic!("No key found in file: {:?}", key_path);
-        }
-
-        ClientConfig::builder()
-            .with_safe_defaults()
-            .with_root_certificates(root_store)
-            .with_client_auth_cert(cert_chain, keys.remove(0))
-            .expect("Invalid cert/key pair")
-    } else {
-        ClientConfig::builder()
-            .with_safe_defaults()
-            .with_root_certificates(root_store)
-            .with_no_client_auth()
-    };
-
-    let mut http_connector = HttpConnector::new();
-    http_connector.set_connect_timeout(Some(timeout_duration));
-    http_connector.enforce_http(false);
-
-    let tls_config = Arc::new(config);
-    let https_connector = HttpsConnector::from((http_connector, tls_config));
-
-    let proxy_connector = if opts.use_proxy {
-        let proxy_addr = opts.proxy_addr.unwrap_or("http://127.0.0.1:8888");
-        let proxy_uri = hyper::Uri::from_str(proxy_addr).expect("Invalid proxy address");
-        ProxyConnector::from_proxy(https_connector, Proxy::new(Intercept::All, proxy_uri))
-            .expect("Failed to create proxy connector")
-    } else {
-        ProxyConnector::from_proxy(https_connector, Proxy::new(Intercept::None, hyper::Uri::from_static("http://127.0.0.1:8888")))
-            .expect("Failed to create dummy proxy connector")
-    };
-
-    Client::builder()
-        .pool_idle_timeout(Some(timeout_duration))
-        .pool_max_idle_per_host(50)
-        .http2_adaptive_window(true)
-        .build::<_, Body>(proxy_connector)
+    CLIENT_CACHE.insert(key, client.clone());
+    client
 }
 
-fn build_hyper_client() -> Client<HttpsConnector<HttpConnector>> {
-    let timeout_duration = Duration::from_millis(500);
-
-    let mut root_store = RootCertStore::empty();
-    root_store.add_trust_anchors(TLS_SERVER_ROOTS.iter().map(|ta| {
-        rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
-            ta.subject,
-            ta.spki,
-            ta.name_constraints,
-        )
-    }));
-
-    let config = ClientConfig::builder()
-        .with_safe_defaults()
-        .with_root_certificates(root_store)
-        .with_no_client_auth();
-
-    let mut http_connector = HttpConnector::new();
-    http_connector.set_connect_timeout(Some(timeout_duration));
-    http_connector.enforce_http(false);
-
-    let tls_config = Arc::new(config);
-    let https_connector = HttpsConnector::from((http_connector, tls_config));
-
-    Client::builder()
-        .pool_idle_timeout(Some(timeout_duration))
-        .pool_max_idle_per_host(50)
-        .http2_adaptive_window(true)
-        .build::<_, Body>(https_connector)
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
+pub struct ClientOptions {
+    pub use_proxy: bool,
+    pub proxy_addr: Option<String>,
+    pub use_cert: bool,
+    pub cert_path: Option<String>,
+    pub key_path: Option<String>,
 }
 
 pub fn client_ip(req: &HttpRequest) -> Option<IpAddr> {
@@ -230,7 +108,7 @@ pub async fn proxy_with_proxy(
     let method = req.method();
 
     if let Some(rule) = data.routes.routes.iter().find(|r| path.starts_with(&r.prefix)) {
-        // Construire l'URL cible
+
         let forward_path = path.strip_prefix(&rule.prefix).unwrap_or("");
         let target_url = format!("{}{}", rule.target.trim_end_matches('/'), forward_path);
         let full_url = if target_url.starts_with("http") {
@@ -239,18 +117,17 @@ pub async fn proxy_with_proxy(
             format!("http://{}", target_url)
         };
 
-        let client = build_hyper_client_proxy(ClientOptions {
+        let client = get_or_build_client(ClientOptions {
             use_proxy: true,
-            proxy_addr: Some(&rule.proxy_config),
+            proxy_addr: Some(rule.proxy_config.clone()),
             use_cert: !rule.cert.is_empty(),
-            cert_path: rule.cert.get("file").map(|s| s.as_str()),
-            key_path: rule.cert.get("key").map(|s| s.as_str()),
+            cert_path: rule.cert.get("file").cloned(),
+            key_path: rule.cert.get("key").cloned(),
         });
 
         let uri = Uri::from_str(&full_url)
             .map_err(|e| error::ErrorBadRequest(format!("Invalid proxy URI: {}", e)))?;
 
-        // Validation du token si sécurisé
         let username = if rule.secure {
             let token_header = req
                 .headers()
@@ -271,7 +148,6 @@ pub async fn proxy_with_proxy(
             String::new()
         };
 
-        // Construction des en-têtes
         let mut request_builder = Request::builder()
             .method(method)
             .uri(&uri);
@@ -288,8 +164,7 @@ pub async fn proxy_with_proxy(
             .body(Body::from(body))
             .map_err(|e| error::ErrorInternalServerError(format!("Failed to build request: {}", e)))?;
 
-        // Envoi de la requête avec timeout
-        let response_result = timeout(Duration::from_secs(10), client.request(hyper_req)).await;
+        let response_result = timeout(Duration::from_secs(5), client.request(hyper_req)).await;
 
         match response_result {
             Ok(Ok(res)) => {
@@ -322,7 +197,7 @@ pub async fn proxy_without_proxy(
     let method = req.method();
 
     if let Some(rule) = data.routes.routes.iter().find(|r| path.starts_with(&r.prefix)) {
-        // Construire l'URL cible
+
         let forward_path = path.strip_prefix(&rule.prefix).unwrap_or("");
         let target_url = format!("{}{}", rule.target.trim_end_matches('/'), forward_path);
         let full_url = if target_url.starts_with("http") {
@@ -332,21 +207,20 @@ pub async fn proxy_without_proxy(
         };
 
         let client = if !rule.cert.is_empty() {
-            build_hyper_client_cert(ClientOptions {
+            get_or_build_client(ClientOptions {
                 use_proxy: false,
                 proxy_addr: None,
                 use_cert: true,
-                cert_path: rule.cert.get("file").map(|s| s.as_str()),
-                key_path: rule.cert.get("key").map(|s| s.as_str()),
+                cert_path: rule.cert.get("file").cloned(),
+                key_path: rule.cert.get("key").cloned(),
             })
         } else {
-            build_hyper_client()
+            build_hyper_client_normal()
         };
 
         let uri = Uri::from_str(&full_url)
             .map_err(|e| error::ErrorBadRequest(format!("Invalid URI: {}", e)))?;
 
-        // Validation du token si sécurisé
         let username = if rule.secure {
             let token_header = req
                 .headers()
@@ -384,7 +258,6 @@ pub async fn proxy_without_proxy(
             .body(Body::from(body))
             .map_err(|e| error::ErrorInternalServerError(format!("Failed to build request: {}", e)))?;
 
-        // Envoi de la requête avec timeout
         let response_result = timeout(Duration::from_secs(10), client.request(hyper_req)).await;
 
         match response_result {

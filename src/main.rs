@@ -11,6 +11,7 @@ mod stats;
 mod timezone;
 mod tokencount;
 mod tls;
+mod shared_client;
 
 use actix_governor::{Governor, GovernorConfigBuilder};
 use actix_web::{App, HttpServer, web};
@@ -39,6 +40,8 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use std::time::Duration;
 use tls::load_rustls_config;
+use crate::shared_client::{build_hyper_client_proxy, build_hyper_client_normal, build_hyper_client_cert};
+use crate::proxy::ClientOptions;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -134,10 +137,30 @@ async fn main() -> std::io::Result<()> {
 
     let counter_token = Arc::new(CounterToken::new());
 
+    let client_normal = build_hyper_client_normal();
+    let client_with_cert = build_hyper_client_cert(ClientOptions {
+        use_proxy: false,
+        proxy_addr: None,
+        use_cert: false,
+        cert_path: None,
+        key_path: None,
+    });
+
+    let client_with_proxy = build_hyper_client_proxy(ClientOptions {
+        use_proxy: true,
+        proxy_addr: Some("http://127.0.0.1:8888".to_string()),
+        use_cert: false,
+        cert_path: None,
+        key_path: None,
+    });
+
     let state = web::Data::new(AppState {
         config: Arc::clone(&config),
         routes: Arc::new(routes),
         counter: counter_token,
+        client_normal,
+        client_with_cert,
+        client_with_proxy,
     });
 
     init_derived_key(&config.secret);
