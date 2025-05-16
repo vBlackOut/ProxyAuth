@@ -77,6 +77,9 @@ pub struct AppConfig {
 
     #[serde(default = "default_log")]
     pub log: HashMap<String, String>,
+
+    #[serde(default = "default_stats")]
+    pub stats: bool,
 }
 
 impl Serialize for AppConfig {
@@ -132,6 +135,10 @@ fn default_worker() -> u8 {
 }
 
 fn default_proxy() -> bool {
+    false
+}
+
+fn default_stats() -> bool {
     false
 }
 

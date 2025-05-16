@@ -106,16 +106,20 @@ pub async fn validate_token(
 
     let token_generated = generate_token(&user.username, &config.secret, data[1], data[3]);
     let token_hash = calcul_factorhash(token_generated, factor);
+
     if hex::encode(Sha256::digest(token_hash)) != token_hash_decrypt {
         warn!("[{}] Invalid token", ip);
         return Err("no valid token".to_string());
     }
 
-    let count = data_app.counter.record_and_get(&user.username, data[3]);
-    info!(
-        "[{}] user {} is logged token expire in {} seconds [token used: {}]",
-        ip, user.username, time_expire, count
-    );
+    if config.stats {
+        let count = data_app.counter.record_and_get(&user.username, data[3]);
+
+        info!(
+            "[{}] user {} is logged token expire in {} seconds [token used: {}]",
+            ip, user.username, time_expire, count
+        );
+    }
 
     Ok(user.username.to_string())
 }
