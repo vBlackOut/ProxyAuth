@@ -47,7 +47,7 @@ fn format_long_date(seconds: u128) -> String {
 }
 
 pub fn init_derived_key(secret: &str) {
-    let key = derive_key_from_secret(secret); // ta fonction custom
+    let key = derive_key_from_secret(secret);
     DERIVED_KEY.set(key).expect("Key already initialized");
 }
 
