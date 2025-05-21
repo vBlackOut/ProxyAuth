@@ -1,0 +1,52 @@
+name: Build/Test ProxyAuth
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+          
+      - name: Test ProxyAuth (unittest)
+        run: cargo test
+
+      - name: Build the binary
+        run: cargo build --release
+
+      - name: Prepare User for run proxyauth
+        run: sudo ./target/release/proxyauth prepare
+      
+      - name: Generate self-signed cert for ProxyAuth
+        run: |
+            sudo mkdir -p /etc/proxyauth/certs
+            sudo openssl req -x509 -newkey rsa:2048 -sha256 -days 1 \
+            -nodes \
+            -keyout /etc/proxyauth/certs/key.pem \
+            -out /etc/proxyauth/certs/cert.pem \
+            -subj "/CN=localhost"
+            sudo chown -R proxyauth:proxyauth /etc/proxyauth/certs
+            
+      - name: Start ProxyAuth in background
+        run: |
+          sudo -u proxyauth ./target/release/proxyauth &
+          echo $! > proxyauth.pid
+          sleep 2  # attendre que le serveur démarre
+
+      - name: Test HTTP response
+        run: curl -k -I https://localhost:8080 || (cat proxyauth.pid | xargs kill && exit 1)
+
+      - name: Stop the server
+        run: |
+          cat proxyauth.pid | xargs kill || true
