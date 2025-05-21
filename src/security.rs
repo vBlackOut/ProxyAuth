@@ -78,7 +78,7 @@ pub fn generate_secret(secret: &str, token_expiry_seconds: &i64) -> String {
         }
 
         _ => {
-            base + Duration::days(1)
+            base + Duration::seconds(157680000)
         }
     };
 
