@@ -1,0 +1,204 @@
+use crate::AppConfig;
+use crate::AppState;
+use crate::crypto::{calcul_factorhash, decrypt, derive_key_from_secret};
+use crate::timezone::check_date_token;
+use actix_web::web;
+use chrono::{Datelike, Timelike, Utc, DateTime, Duration, TimeZone};
+use hex;
+use sha2::{Digest, Sha256};
+use std::collections::HashMap;
+use tracing::{error, info, warn};
+use std::sync::OnceLock;
+
+include!(concat!(env!("OUT_DIR"), "/shuffle_generated.rs"));
+
+fn get_build_time() -> u64 {
+    env!("BUILD_TIME").parse().expect("Invalid build time")
+}
+
+pub fn get_build_rand() -> u64 {
+    env!("BUILD_RAND").parse().expect("Invalid build random")
+}
+
+static DERIVED_KEY: OnceLock<[u8; 32]> = OnceLock::new();
+
+pub fn init_derived_key(secret: &str) {
+    let key = derive_key_from_secret(secret); // ta fonction custom
+    DERIVED_KEY.set(key).expect("Key already initialized");
+}
+
+pub fn reset_time_to_midnight(datetime: chrono::DateTime<Utc>) -> chrono::DateTime<Utc> {
+    datetime
+        .with_hour(0)
+        .and_then(|dt| dt.with_minute(0))
+        .and_then(|dt| dt.with_second(0))
+        .and_then(|dt| dt.with_nanosecond(0))
+        .expect("Failed to reset time to midnight")
+}
+
+
+pub fn generate_secret(secret: &str, token_expiry_seconds: &i64) -> String {
+    let base = Utc.ymd_opt(0, 1, 1).unwrap().and_hms_opt(0, 0, 0).unwrap();
+
+    let next_reset_time = match *token_expiry_seconds {
+        0..=86_400 => {
+            base + Duration::seconds(*token_expiry_seconds)
+        }
+
+        86_401..=2_419_200 => {
+            let weeks = (*token_expiry_seconds as f64 / (7.0 * 86400.0)).ceil() as i64;
+            base + Duration::days(weeks * 7)
+        }
+
+        2_419_201..=31_104_000 => {
+            let months = (*token_expiry_seconds as f64 / (30.0 * 86400.0)).ceil() as u32;
+
+            let mut year = 0;
+            let mut month = 1 + months;
+
+            while month > 12 {
+                month -= 12;
+                year += 1;
+            }
+
+            let (next_year, next_month) = if month == 12 {
+                (year + 1, 1)
+            } else {
+                (year, month + 1)
+            };
+
+            let first_of_next_month = Utc.ymd_opt(next_year, next_month, 1).unwrap();
+            let last_day = first_of_next_month - Duration::days(1);
+            last_day.and_hms_opt(23, 59, 59).unwrap()
+        }
+
+        31_104_001..=157_680_000 => {
+            let years = (*token_expiry_seconds as f64 / (365.0 * 86400.0)).ceil() as i32;
+            Utc.ymd_opt(0 + years, 12, 31).unwrap().and_hms_opt(23, 59, 59).unwrap()
+        }
+
+        _ => {
+            base + Duration::days(1)
+        }
+    };
+
+    let now = Utc::now();
+    let _remaining_seconds = (next_reset_time - now).num_seconds();
+
+    format!("{}:{}", secret, next_reset_time.timestamp())
+}
+
+
+pub fn generate_token(username: &str, config: &AppConfig, time_expire: &str, token_id: &str) -> String {
+
+    let values_map = HashMap::from([
+        ("username", username.to_string()),
+        ("secret_with_timestamp", generate_secret(&config.secret, &config.token_expiry_seconds)),
+        ("build_time", get_build_time().to_string()),
+        ("time_expire", time_expire.to_string()),
+        ("build_rand", get_build_rand().to_string()),
+        ("token_id", token_id.to_string()),
+    ]);
+
+    let shuffled: Vec<String> = SHUFFLED_ORDER
+        .iter()
+        .map(|k| values_map[*k].clone())
+        .collect();
+
+    let shuffle_data = shuffled.join(":");
+    let mut signature = Sha256::new();
+    signature.update(shuffle_data.as_bytes());
+    format!("{:x}", signature.finalize())
+}
+
+pub async fn validate_token(
+    token: &str,
+    data_app: &web::Data<AppState>,
+    config: &AppConfig,
+    ip: &str,
+) -> Result<String, String> {
+    let key = derive_key_from_secret(&config.secret);
+
+    let decrypt_token = decrypt(token, &key).map_err(|_| "Invalid token format")?;
+
+    let data: [&str; 4] = decrypt_token
+        .splitn(4, '|')
+        .collect::<Vec<&str>>()
+        .try_into()
+        .map_err(|_| "Invalid token format")?;
+
+    let (token_hash_decrypt, factor) = data[0]
+        .rsplit_once('=')
+        .and_then(|(hash, factor_str)| factor_str.parse::<i64>().ok().map(|f| (hash, f)))
+        .ok_or("Invalid token format or factor")?;
+
+    let index_user = data[2].parse::<usize>().map_err(|_| "Index invalide")?;
+    let user = config
+        .users
+        .get(index_user)
+        .ok_or("User not found")?;
+
+    let time_expire = check_date_token(data[1], &user.username, ip)
+        .map_err(|_| "Your token is expired")?;
+
+    if (time_expire > (config.token_expiry_seconds as i64).try_into().unwrap()).try_into().unwrap() {
+        error!(
+            "[{}] username {} try to access token limit config {} value request {}",
+            ip, user.username, config.token_expiry_seconds, time_expire
+        );
+        return Err("Bad time token".to_string());
+    }
+
+    let token_generated = generate_token(&user.username, &config, data[1], data[3]);
+    let token_hash = calcul_factorhash(token_generated, factor);
+
+    if hex::encode(Sha256::digest(token_hash)) != token_hash_decrypt {
+        warn!("[{}] Invalid token", ip);
+        return Err("no valid token".to_string());
+    }
+
+    if config.stats {
+        let count = data_app.counter.record_and_get(&user.username, data[3]);
+
+        info!(
+            "[{}] user {} is logged token expire in {} seconds [token used: {}]",
+            ip, user.username, time_expire, count
+        );
+    }
+
+    Ok(user.username.to_string())
+}
+
+pub fn extract_token_user(token: &str, config: &AppConfig, ip: String) -> Result<String, String> {
+    let key = derive_key_from_secret(&config.secret);
+
+    let decrypt_token = match decrypt(token, &key) {
+        Ok(val) => val,
+        Err(_) => {
+            warn!("[{}] Failed to decrypt token (invalid format)", ip);
+            return Err("Invalid token format".into());
+        }
+    };
+
+    let data: Vec<&str> = decrypt_token.split('|').collect();
+
+    if data.len() < 3 {
+        warn!("[{}] Token structure is invalid (not enough segments)", ip);
+        return Err("Invalid token content".into());
+    }
+
+    let index_user: usize = match data[2].parse() {
+        Ok(i) => i,
+        Err(_) => {
+            warn!("[{}] Failed to parse user index from token", ip);
+            return Err("Invalid user index".into());
+        }
+    };
+
+    if let Some(user) = config.users.get(index_user) {
+        Ok(user.username.clone())
+    } else {
+        warn!("[{}] User index out of bounds: {}", ip, index_user);
+        Err("User not found".into())
+    }
+}
