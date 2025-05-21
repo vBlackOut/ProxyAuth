@@ -9,7 +9,6 @@ use std::process;
 use std::env;
 
 fn main() {
-
     let version = env::var("CARGO_PKG_VERSION").expect("CARGO_PKG_VERSION not set");
 
     if is_yanked_version(&version) {
@@ -29,9 +28,12 @@ fn main() {
     .as_secs()
     .to_string();
 
+    let random_epoch: i64 = rng.gen_range(0..999_999_999_999);
+
     println!("cargo:rustc-env=BUILD_TIME={}", build_time);
     println!("cargo:rustc-env=BUILD_RAND={}", build_rand);
     println!("cargo:rustc-env=BUILD_SEED={}", build_seed);
+    println!("cargo:rustc-env=BUILD_EPOCH_DATE={}", random_epoch);
 
     // SHUFFLE BUILD
     let mut fields = vec![

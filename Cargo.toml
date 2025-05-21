@@ -1,6 +1,6 @@
 [package]
 name = "proxyauth"
-version = "0.6.19"
+version = "0.6.20"
 edition = "2024"
 authors = ["Vladimir S"]
 repository = "https://github.com/vBlackOut/ProxyAuth"
