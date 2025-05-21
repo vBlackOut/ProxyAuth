@@ -20,26 +20,41 @@ pub fn get_build_rand() -> u64 {
     env!("BUILD_RAND").parse().expect("Invalid build random")
 }
 
+pub fn get_build_epochdate() -> i64 {
+    env!("BUILD_EPOCH_DATE").parse().expect("Invalid build epoch date")
+}
+
+pub fn get_build_datetime() -> chrono::DateTime<chrono::Utc> {
+    let seconds = get_build_epochdate();
+    let naive = chrono::NaiveDateTime::from_timestamp_opt(seconds, 0)
+    .expect("Invalid timestamp");
+    chrono::DateTime::<chrono::Utc>::from_utc(naive, chrono::Utc)
+}
+
 static DERIVED_KEY: OnceLock<[u8; 32]> = OnceLock::new();
+
+fn format_long_date(seconds: u128) -> String {
+    let seconds_per_year = 31_557_600u128;
+    let year = seconds / seconds_per_year;
+    let remaining = seconds % seconds_per_year;
+
+    let days = remaining / 86400;
+    let hours = (remaining % 86400) / 3600;
+    let minutes = (remaining % 3600) / 60;
+    let seconds = remaining % 60;
+
+    format!("+{:0>8}-01-01T{:02}:{:02}:{:02}Z", year, hours, minutes, seconds)
+}
 
 pub fn init_derived_key(secret: &str) {
     let key = derive_key_from_secret(secret); // ta fonction custom
     DERIVED_KEY.set(key).expect("Key already initialized");
 }
 
-pub fn reset_time_to_midnight(datetime: chrono::DateTime<Utc>) -> chrono::DateTime<Utc> {
-    datetime
-        .with_hour(0)
-        .and_then(|dt| dt.with_minute(0))
-        .and_then(|dt| dt.with_second(0))
-        .and_then(|dt| dt.with_nanosecond(0))
-        .expect("Failed to reset time to midnight")
-}
-
-
 pub fn generate_secret(secret: &str, token_expiry_seconds: &i64) -> String {
-    let base = Utc.ymd_opt(0, 1, 1).unwrap().and_hms_opt(0, 0, 0).unwrap();
-
+    let base = get_build_datetime();
+    let fake_date = format_long_date(get_build_epochdate().try_into().unwrap());
+    println!("{:?}", fake_date);
     let next_reset_time = match *token_expiry_seconds {
         0..=86_400 => {
             base + Duration::seconds(*token_expiry_seconds)
