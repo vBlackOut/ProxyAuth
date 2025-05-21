@@ -53,8 +53,7 @@ pub fn init_derived_key(secret: &str) {
 
 pub fn generate_secret(secret: &str, token_expiry_seconds: &i64) -> String {
     let base = get_build_datetime();
-    let fake_date = format_long_date(get_build_epochdate().try_into().unwrap());
-    println!("{:?}", fake_date);
+
     let next_reset_time = match *token_expiry_seconds {
         0..=86_400 => {
             base + Duration::seconds(*token_expiry_seconds)
