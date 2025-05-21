@@ -3,7 +3,7 @@ use crate::AppState;
 use crate::crypto::{calcul_factorhash, decrypt, derive_key_from_secret};
 use crate::timezone::check_date_token;
 use actix_web::web;
-use chrono::{Datelike, Timelike, Utc, DateTime, Duration, TimeZone};
+use chrono::{Timelike, Utc, Duration, TimeZone};
 use hex;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -26,19 +26,19 @@ pub fn get_build_epochdate() -> i64 {
 
 pub fn get_build_datetime() -> chrono::DateTime<chrono::Utc> {
     let seconds = get_build_epochdate();
-    let naive = chrono::NaiveDateTime::from_timestamp_opt(seconds, 0)
-    .expect("Invalid timestamp");
-    chrono::DateTime::<chrono::Utc>::from_utc(naive, chrono::Utc)
+    let naive = Utc.timestamp_opt(seconds, 0).unwrap();
+    naive
 }
 
 static DERIVED_KEY: OnceLock<[u8; 32]> = OnceLock::new();
 
+#[allow(dead_code)]
 fn format_long_date(seconds: u128) -> String {
     let seconds_per_year = 31_557_600u128;
     let year = seconds / seconds_per_year;
     let remaining = seconds % seconds_per_year;
 
-    let days = remaining / 86400;
+    let _days = remaining / 86400;
     let hours = (remaining % 86400) / 3600;
     let minutes = (remaining % 3600) / 60;
     let seconds = remaining % 60;
@@ -81,18 +81,24 @@ pub fn generate_secret(secret: &str, token_expiry_seconds: &i64) -> String {
                 (year, month + 1)
             };
 
-            let first_of_next_month = Utc.ymd_opt(next_year, next_month, 1).unwrap();
+            let first_of_next_month = Utc
+            .with_ymd_and_hms(next_year as i32, next_month, 1, 0, 0, 0)
+            .unwrap();
+
             let last_day = first_of_next_month - Duration::days(1);
-            last_day.and_hms_opt(23, 59, 59).unwrap()
+            last_day
+            .with_hour(23).unwrap()
+            .with_minute(59).unwrap()
+            .with_second(59).unwrap()
         }
 
         31_104_001..=157_680_000 => {
             let years = (*token_expiry_seconds as f64 / (365.0 * 86400.0)).ceil() as i32;
-            Utc.ymd_opt(0 + years, 12, 31).unwrap().and_hms_opt(23, 59, 59).unwrap()
+            Utc.with_ymd_and_hms(0 + years, 12, 31, 23, 59, 59).unwrap()
         }
 
         _ => {
-            base + Duration::seconds(157680000)
+            base + Duration::seconds(157_680_000)
         }
     };
 
