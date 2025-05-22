@@ -57,7 +57,6 @@ impl KeyExtractor for UserToken {
 
         // key from path
         let path = req.path().to_string();
-        println!("{}:{}", path, user_or_ip);
         Ok(format!("{}:{}", path, user_or_ip))
     }
 
