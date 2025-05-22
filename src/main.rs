@@ -274,7 +274,7 @@ async fn main() -> std::io::Result<()> {
         "NO_RATELIMIT_AUTH" => {
 
             let governor_proxy_conf = GovernorConfigBuilder::default()
-                .requests_per_second(requests_per_second_proxy_config)
+                .seconds_per_request(requests_per_second_proxy_config)
                 .burst_size(burst_proxy_config)
                 .key_extractor(UserToken)
                 .period(std::time::Duration::from_millis(
@@ -300,7 +300,7 @@ async fn main() -> std::io::Result<()> {
         "NO_RATELIMIT_PROXY" => {
 
             let governor_auth_conf = GovernorConfigBuilder::default()
-                .requests_per_second(requests_per_second_auth_config)
+                .seconds_per_request(requests_per_second_auth_config)
                 .burst_size(burst_auth_config)
                 .use_headers()
                 .period(std::time::Duration::from_millis(delay_block_auth_config))
@@ -330,7 +330,7 @@ async fn main() -> std::io::Result<()> {
         "RATELIMIT_GLOBAL_ON" => {
 
             let governor_auth_conf = GovernorConfigBuilder::default()
-                .requests_per_second(requests_per_second_auth_config)
+                .seconds_per_request(requests_per_second_auth_config)
                 .burst_size(burst_auth_config)
                 .use_headers()
                 .period(std::time::Duration::from_millis(delay_block_auth_config))
@@ -338,7 +338,7 @@ async fn main() -> std::io::Result<()> {
                 .unwrap();
 
             let governor_proxy_conf = GovernorConfigBuilder::default()
-                .requests_per_second(requests_per_second_proxy_config)
+                .seconds_per_request(requests_per_second_proxy_config)
                 .burst_size(burst_proxy_config)
                 .key_extractor(UserToken)
                 .period(std::time::Duration::from_millis(

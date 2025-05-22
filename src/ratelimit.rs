@@ -47,17 +47,17 @@ impl KeyExtractor for UserToken {
                 .set_status_code(StatusCode::INTERNAL_SERVER_ERROR)
         })?;
 
-        if let Some(auth_header) = req.headers().get("Authorization") {
-            if let Ok(auth_str) = auth_header.to_str() {
-                if let Some(stripped) = auth_str.strip_prefix("Bearer ") {
-                    let user = extract_token_user(stripped, &app_data.config, ip)
-                        .map_err(|_| SimpleKeyExtractionError::new("invalid token"))?;
-                    return Ok(user);
-                }
-            }
-        }
+        // key from user
+         let user_or_ip = req.headers()
+        .get("Authorization")
+        .and_then(|h| h.to_str().ok())
+        .and_then(|s| s.strip_prefix("Bearer "))
+        .and_then(|token| extract_token_user(token, &app_data.config, ip.clone()).ok())
+        .unwrap_or_else(|| ip.clone());
 
-        Ok(ip)
+        // key from path
+        let path = req.path().to_string();
+        Ok(format!("{}:{}", path, user_or_ip))
     }
 
     fn exceed_rate_limit_response(
