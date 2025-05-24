@@ -29,7 +29,7 @@ The service is extremely fast, handling 100,000+ requests per second under load.
 ## ⚠️ Prepare migrate to <a href="https://hyper.rs/guides/1/upgrading/">hyper 1.0+</a> ⚠️
 I’m preparing a proxy using Hyper ≥ 1.0. Documentation will follow later.  
 Stable working version: <= 0.6.x (as of today), but migration is planned.   
-The new 0.7.x version is coming soon it will use Hyper 1.0+.
+The new 1.x.x version is coming soon it will use Hyper 1.0+.
 
 ## How do i delete my crate from crates.io?
 I'm not convinced that having multiple copies of my code publicly available, without full control over deployment versions, guarantees absolute security. That's why I've decided to stop using crates.io.  
