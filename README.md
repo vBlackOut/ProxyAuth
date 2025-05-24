@@ -6,8 +6,8 @@
 </div>
 <br>
 
-![Audit Status](https://github.com/vBlackOut/ProxyAuth/actions/workflows/audit.yml/badge.svg)
-[![Build Status](https://github.com/vBlackOut/ProxyAuth/actions/workflows/proxyauth.yml/badge.svg)](https://github.com/vBlackOut/ProxyAuth/actions/workflows/proxyauth.yml)
+![Audit Status](https://github.com/ProxyAuth/ProxyAuth/actions/workflows/audit.yml/badge.svg)
+[![Build Status](https://github.com/ProxyAuth/ProxyAuth/actions/workflows/proxyauth.yml/badge.svg)](https://github.com/vBlackOut/ProxyAuth/actions/workflows/proxyauth.yml)
 ![Dernier commit](https://img.shields.io/github/last-commit/ProxyAuth/ProxyAuth)
 
 ![Security Score](https://img.shields.io/badge/SECURITY%20SCORE-92%2F100-blue?style=for-the-badge&logo=rust)
