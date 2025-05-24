@@ -9,13 +9,13 @@
   "max_idle_per_host": 500,
   "ratelimit_auth": {
     "burst": 10,
-    "block_delay": 500,
-    "requests_per_second": 0
+    "block_delay": 5000,
+    "requests_per_second": 5
   },
   "ratelimit_proxy": {
-    "block_delay": 10,
-    "requests_per_second": 0,
-    "burst": 100000
+    "block_delay": 5000,
+    "requests_per_second": 5,
+    "burst": 10
   },
   "users": [
     {
