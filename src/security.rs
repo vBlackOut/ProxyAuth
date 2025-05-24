@@ -187,7 +187,7 @@ pub async fn validate_token(
     } else {
         info!(
             "[{}] user {} is logged token expire in {} seconds",
-            ip, user.username, time_expire, count
+            ip, user.username, time_expire
         );
     }
 
