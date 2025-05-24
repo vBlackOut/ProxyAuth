@@ -8,7 +8,7 @@
 
 ![Audit Status](https://github.com/vBlackOut/ProxyAuth/actions/workflows/audit.yml/badge.svg)
 [![Build Status](https://github.com/vBlackOut/ProxyAuth/actions/workflows/proxyauth.yml/badge.svg)](https://github.com/vBlackOut/ProxyAuth/actions/workflows/proxyauth.yml)
-![Dernier commit](https://img.shields.io/github/last-commit/vBlackOut/ProxyAuth)
+![Dernier commit](https://img.shields.io/github/last-commit/ProxyAuth/ProxyAuth)
 
 ![Security Score](https://img.shields.io/badge/SECURITY%20SCORE-92%2F100-blue?style=for-the-badge&logo=rust)
 [![Crates.io downloads](https://img.shields.io/crates/d/proxyauth?style=for-the-badge)](https://crates.io/crates/proxyauth)
@@ -91,7 +91,7 @@ routes:
   "secret": "supersecretvalue",
   "host": "127.0.0.1",
   "port": 8080,
-  log: {"type": "local"}, --> use for loki {"type": "loki", "host": "http://host_loki:port"} 
+  log: {"type": "local"}, --> use for loki {"type": "loki", "host": "http://host_loki:port"}
   "ratelimit_proxy": {
     "burst": 100,
     "block_delay": 500,
@@ -227,4 +227,3 @@ sequenceDiagram
 ```
 
 This application allows applying global authentication tokens to any application, removing the need for them to implement token validation themselves, which simplifies future development.
-
