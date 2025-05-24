@@ -55,7 +55,7 @@ impl KeyExtractor for UserToken {
         .and_then(|token| extract_token_user(token, &app_data.config, ip.clone()).ok())
         .unwrap_or_else(|| ip.clone());
 
-        // key from path
+        // key from path url
         let path = req.path().to_string();
         Ok(format!("{}:{}", path, user_or_ip))
     }
