@@ -47,7 +47,7 @@ impl KeyExtractor for UserToken {
                 .set_status_code(StatusCode::INTERNAL_SERVER_ERROR)
         })?;
 
-        // key user extract inside token
+        // key ratelimite: user extract inside the token
          let user_or_ip = req.headers()
         .get("Authorization")
         .and_then(|h| h.to_str().ok())
@@ -55,7 +55,7 @@ impl KeyExtractor for UserToken {
         .and_then(|token| extract_token_user(token, &app_data.config, ip.clone()).ok())
         .unwrap_or_else(|| ip.clone());
 
-        // key from path request
+        // key ratelimit: path request
         let path = req.path().to_string();
         Ok(format!("{}:{}", path, user_or_ip))
     }
