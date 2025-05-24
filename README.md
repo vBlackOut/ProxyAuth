@@ -26,6 +26,10 @@ The service is extremely fast, handling 100,000+ requests per second under load.
 <a href="http://proxyauth.app">Views the documentation</a>  
 <b>Possible to contribute the documentation: <a href="https://github.com/vBlackOut/ProxyAuth-Docs">ProxyAuth Docs</a> </b> :heart:
 
+## TODO
+- Initiate a load-balanced request with failover on target failure planned for version 0.7.x or 0.8.x.
+
+
 ## ⚠️ Prepare migrate to <a href="https://hyper.rs/guides/1/upgrading/">hyper 1.0+</a> ⚠️
 I’m preparing a proxy using Hyper ≥ 1.0. Documentation will follow later.  
 Stable working version: <= 0.6.x (as of today), but migration is planned.   
