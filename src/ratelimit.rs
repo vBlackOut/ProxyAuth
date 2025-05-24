@@ -47,7 +47,7 @@ impl KeyExtractor for UserToken {
                 .set_status_code(StatusCode::INTERNAL_SERVER_ERROR)
         })?;
 
-        // key from extract user inside token
+        // key user extract inside token
          let user_or_ip = req.headers()
         .get("Authorization")
         .and_then(|h| h.to_str().ok())
