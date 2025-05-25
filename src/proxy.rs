@@ -1,6 +1,5 @@
 use actix_web::{web, HttpRequest, HttpResponse, Error, error};
 use hyper::{Body, Request, Uri};
-use tracing::debug;
 use hyper::header::USER_AGENT;
 use std::net::IpAddr;
 use std::str::FromStr;
