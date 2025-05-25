@@ -4,11 +4,8 @@ use serde_json::json;
 use std::fs;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
-use reqwest::Client;
-use std::time::Duration;
 use proxyauth::{AppConfig, AppState, CounterToken, RouteConfig, auth as auth_handler};
-use proxyauth::shared_client::{build_hyper_client_proxy, build_hyper_client_normal, build_hyper_client_cert};
-use proxyauth::proxy::ClientOptions;
+use proxyauth::shared_client::{build_hyper_client_proxy, build_hyper_client_normal, build_hyper_client_cert, ClientOptions};
 
 fn load_config<T: DeserializeOwned>(path: &str) -> T {
     let data = fs::read_to_string(path).expect("Failed to read config file");

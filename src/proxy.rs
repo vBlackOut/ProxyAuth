@@ -1,62 +1,13 @@
 use actix_web::{web, HttpRequest, HttpResponse, Error, error};
-use hyper::{Client, Body, Request, Uri};
+use hyper::{Body, Request, Uri};
 use hyper::header::USER_AGENT;
 use std::net::IpAddr;
 use std::str::FromStr;
 use tokio::time::{timeout, Duration};
 use crate::AppState;
-use crate::AppConfig;
-use std::sync::Arc;
 use crate::security::validate_token;
-use once_cell::sync::Lazy;
-use dashmap::DashMap;
-use crate::shared_client::{build_hyper_client_normal, build_hyper_client_cert};
-
-static CLIENT_CACHE: Lazy<DashMap<ClientKey, Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>>> =
-Lazy::new(DashMap::new);
-
-#[derive(Clone, Hash, Eq, PartialEq, Debug)]
-pub struct ClientKey {
-    pub use_proxy: bool,
-    pub proxy_addr: Option<String>,
-    pub use_cert: bool,
-    pub cert_path: Option<String>,
-    pub key_path: Option<String>,
-}
-
-impl ClientKey {
-    pub fn from_options(opts: &ClientOptions) -> Self {
-        ClientKey {
-            use_proxy: opts.use_proxy,
-            proxy_addr: opts.proxy_addr.clone().map(|s| s.to_string()),
-            use_cert: opts.use_cert,
-            cert_path: opts.cert_path.clone().map(|s| s.to_string()),
-            key_path: opts.key_path.clone().map(|s| s.to_string()),
-        }
-    }
-}
-
-pub fn get_or_build_client(opts: ClientOptions, state: &Arc<AppConfig>) -> Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>> {
-    let key = ClientKey::from_options(&opts);
-
-    if let Some(client) = CLIENT_CACHE.get(&key) {
-        return client.clone();
-    }
-
-    let client = build_hyper_client_cert(opts.clone(), &state);
-
-    CLIENT_CACHE.insert(key, client.clone());
-    client
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub struct ClientOptions {
-    pub use_proxy: bool,
-    pub proxy_addr: Option<String>,
-    pub use_cert: bool,
-    pub cert_path: Option<String>,
-    pub key_path: Option<String>,
-}
+use crate::shared_client::{get_or_build_client, get_or_build_client_proxy,
+                           build_hyper_client_normal, ClientOptions};
 
 pub fn client_ip(req: &HttpRequest) -> Option<IpAddr> {
     req.headers()
@@ -109,13 +60,13 @@ pub async fn proxy_with_proxy(
             format!("http://{}", target_url)
         };
 
-        let client = get_or_build_client(ClientOptions {
+        let client = get_or_build_client_proxy(ClientOptions {
             use_proxy: true,
             proxy_addr: Some(rule.proxy_config.clone()),
-            use_cert: !rule.cert.is_empty(),
-            cert_path: rule.cert.get("file").cloned(),
-            key_path: rule.cert.get("key").cloned(),
-        }, &data.config.clone());
+            use_cert: false,
+            cert_path: Some("".to_string()),
+            key_path: Some("".to_string()),
+        }, data.config.clone());
 
         let uri = Uri::from_str(&full_url)
             .map_err(|e| error::ErrorBadRequest(format!("Invalid proxy URI: {}", e)))?;
@@ -143,6 +94,7 @@ pub async fn proxy_with_proxy(
         let mut request_builder = Request::builder()
             .method(method)
             .uri(&uri);
+
         for (key, value) in req.headers() {
             if key != "authorization" && key != "user-agent" {
                 request_builder = request_builder.header(key, value);
@@ -205,7 +157,7 @@ pub async fn proxy_without_proxy(
                 use_cert: true,
                 cert_path: rule.cert.get("file").cloned(),
                 key_path: rule.cert.get("key").cloned(),
-            }, &data.config.clone())
+            }, data.config.clone())
         } else {
             build_hyper_client_normal(&data.config.clone())
         };

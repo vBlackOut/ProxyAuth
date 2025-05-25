@@ -98,7 +98,7 @@ pub fn generate_secret(secret: &str, token_expiry_seconds: &i64) -> String {
         }
 
         _ => {
-            base + Duration::seconds(157_680_000)
+            base + Duration::seconds(86_400)
         }
     };
 
@@ -183,6 +183,11 @@ pub async fn validate_token(
         info!(
             "[{}] user {} is logged token expire in {} seconds [token used: {}]",
             ip, user.username, time_expire, count
+        );
+    } else {
+        info!(
+            "[{}] user {} is logged token expire in {} seconds",
+            ip, user.username, time_expire
         );
     }
 

@@ -6,9 +6,9 @@
 </div>
 <br>
 
-![Audit Status](https://github.com/vBlackOut/ProxyAuth/actions/workflows/audit.yml/badge.svg)
-[![Build Status](https://github.com/vBlackOut/ProxyAuth/actions/workflows/proxyauth.yml/badge.svg)](https://github.com/vBlackOut/ProxyAuth/actions/workflows/proxyauth.yml)
-![Dernier commit](https://img.shields.io/github/last-commit/vBlackOut/ProxyAuth)
+![Audit Status](https://github.com/ProxyAuth/ProxyAuth/actions/workflows/audit.yml/badge.svg)
+[![Build Status](https://github.com/ProxyAuth/ProxyAuth/actions/workflows/proxyauth.yml/badge.svg)](https://github.com/vBlackOut/ProxyAuth/actions/workflows/proxyauth.yml)
+![Last commit](https://img.shields.io/github/last-commit/ProxyAuth/ProxyAuth)
 
 ![Security Score](https://img.shields.io/badge/SECURITY%20SCORE-92%2F100-blue?style=for-the-badge&logo=rust)
 [![Crates.io downloads](https://img.shields.io/crates/d/proxyauth?style=for-the-badge)](https://crates.io/crates/proxyauth)
@@ -26,10 +26,14 @@ The service is extremely fast, handling 100,000+ requests per second under load.
 <a href="http://proxyauth.app">Views the documentation</a>  
 <b>Possible to contribute the documentation: <a href="https://github.com/vBlackOut/ProxyAuth-Docs">ProxyAuth Docs</a> </b> :heart:
 
+## TODO
+- Initiate a load-balanced request with failover on target failure planned for version 0.7.x or 0.8.x.
+
+
 ## ⚠️ Prepare migrate to <a href="https://hyper.rs/guides/1/upgrading/">hyper 1.0+</a> ⚠️
 I’m preparing a proxy using Hyper ≥ 1.0. Documentation will follow later.  
 Stable working version: <= 0.6.x (as of today), but migration is planned.   
-The new 0.7.x version is coming soon it will use Hyper 1.0+.
+The new 1.x.x version is coming soon it will use Hyper 1.0+.
 
 ## How do i delete my crate from crates.io?
 I'm not convinced that having multiple copies of my code publicly available, without full control over deployment versions, guarantees absolute security. That's why I've decided to stop using crates.io.  
@@ -91,7 +95,7 @@ routes:
   "secret": "supersecretvalue",
   "host": "127.0.0.1",
   "port": 8080,
-  log: {"type": "local"}, --> use for loki {"type": "loki", "host": "http://host_loki:port"} 
+  log: {"type": "local"}, --> use for loki {"type": "loki", "host": "http://host_loki:port"}
   "ratelimit_proxy": {
     "burst": 100,
     "block_delay": 500,
@@ -227,4 +231,3 @@ sequenceDiagram
 ```
 
 This application allows applying global authentication tokens to any application, removing the need for them to implement token validation themselves, which simplifies future development.
-
