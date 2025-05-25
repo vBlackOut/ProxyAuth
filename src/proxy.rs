@@ -12,7 +12,7 @@ use once_cell::sync::Lazy;
 use dashmap::DashMap;
 use crate::shared_client::{build_hyper_client_normal, build_hyper_client_cert};
 
-static CLIENT_CACHE: Lazy<DashMap<ClientKey, Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>>> =
+static CLIENT_CACHE: Lazy<DashMap<ClientKey, Client<hyper::client::connect::HttpConnector>>> = Lazy::new(DashMap::new);
 Lazy::new(DashMap::new);
 
 #[derive(Clone, Hash, Eq, PartialEq, Debug)]
@@ -36,14 +36,23 @@ impl ClientKey {
     }
 }
 
-pub fn get_or_build_client(opts: ClientOptions, state: &Arc<AppConfig>) -> Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>> {
+pub fn get_or_build_client(
+    opts: ClientOptions,
+    state: &Arc<AppConfig>
+) -> Client<hyper_rustls::HttpsConnector<HttpConnector>> {
     let key = ClientKey::from_options(&opts);
 
     if let Some(client) = CLIENT_CACHE.get(&key) {
         return client.clone();
     }
 
-    let client = build_hyper_client_cert(opts.clone(), &state);
+    let https_connector = HttpsConnectorBuilder::new()
+        .with_native_roots()
+        .https_or_http()
+        .enable_http1()
+        .build();
+
+    let client = Client::builder().build::<_, hyper::Body>(https_connector);
 
     CLIENT_CACHE.insert(key, client.clone());
     client
