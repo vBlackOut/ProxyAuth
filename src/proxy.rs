@@ -1,22 +1,14 @@
 use actix_web::{web, HttpRequest, HttpResponse, Error, error};
-use hyper::{Client, Body, Request, Uri};
+use hyper::{Body, Request, Uri};
 use tracing::debug;
 use hyper::header::USER_AGENT;
-use hyper::client::HttpConnector;
-use hyper_rustls::HttpsConnector;
-use hyper_rustls::HttpsConnectorBuilder;
 use std::net::IpAddr;
 use std::str::FromStr;
 use tokio::time::{timeout, Duration};
 use crate::AppState;
-use crate::AppConfig;
-use std::sync::Arc;
 use crate::security::validate_token;
-use once_cell::sync::Lazy;
-use dashmap::DashMap;
 use crate::shared_client::{get_or_build_client, get_or_build_client_proxy,
-                           build_hyper_client_normal, build_hyper_client_proxy,
-                           build_hyper_client_cert, ClientOptions};
+                           build_hyper_client_normal, ClientOptions};
 
 pub fn client_ip(req: &HttpRequest) -> Option<IpAddr> {
     req.headers()
