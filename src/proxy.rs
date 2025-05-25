@@ -112,9 +112,9 @@ pub async fn proxy_with_proxy(
         let client = get_or_build_client(ClientOptions {
             use_proxy: true,
             proxy_addr: Some(rule.proxy_config.clone()),
-            use_cert: !rule.cert.is_empty(),
-            cert_path: rule.cert.get("file").cloned(),
-            key_path: rule.cert.get("key").cloned(),
+            use_cert: false,
+            cert_path: Some("".to_string()),
+            key_path: Some("".to_string()),
         }, &data.config.clone());
 
         let uri = Uri::from_str(&full_url)
@@ -143,6 +143,7 @@ pub async fn proxy_with_proxy(
         let mut request_builder = Request::builder()
             .method(method)
             .uri(&uri);
+
         for (key, value) in req.headers() {
             if key != "authorization" && key != "user-agent" {
                 request_builder = request_builder.header(key, value);
