@@ -33,8 +33,6 @@ pub async fn global_proxy(
     let path = req.path();
     if let Some(rule) = data.routes.routes.iter().find(|r| path.starts_with(&r.prefix)) {
         if rule.proxy {
-            // debug proxy
-            debug!("{}", "Proxy use".to_string());
             proxy_with_proxy(req, body, data).await
         } else {
             proxy_without_proxy(req, body, data).await
@@ -70,9 +68,6 @@ pub async fn proxy_with_proxy(
             cert_path: Some("".to_string()),
             key_path: Some("".to_string()),
         }, data.config.clone());
-
-        // debug return client over proxy / normal http request
-        debug!("{:?}", client);
 
         let uri = Uri::from_str(&full_url)
             .map_err(|e| error::ErrorBadRequest(format!("Invalid proxy URI: {}", e)))?;
@@ -167,9 +162,6 @@ pub async fn proxy_without_proxy(
         } else {
             build_hyper_client_normal(&data.config.clone())
         };
-
-        // debug return client over proxy / normal http request
-        debug!("{:?}", client);
 
         let uri = Uri::from_str(&full_url)
             .map_err(|e| error::ErrorBadRequest(format!("Invalid URI: {}", e)))?;
