@@ -1,6 +1,9 @@
 use actix_web::{web, HttpRequest, HttpResponse, Error, error};
 use hyper::{Client, Body, Request, Uri};
 use hyper::header::USER_AGENT;
+use hyper::client::HttpConnector;
+use hyper_rustls::HttpsConnector;
+use hyper_rustls::HttpsConnectorBuilder;
 use std::net::IpAddr;
 use std::str::FromStr;
 use tokio::time::{timeout, Duration};
@@ -38,7 +41,7 @@ impl ClientKey {
 
 pub fn get_or_build_client(
     opts: ClientOptions,
-    state: &Arc<AppConfig>
+    _state: &Arc<AppConfig>
 ) -> Client<hyper_rustls::HttpsConnector<HttpConnector>> {
     let key = ClientKey::from_options(&opts);
 
