@@ -12,8 +12,8 @@ use once_cell::sync::Lazy;
 use dashmap::DashMap;
 use crate::shared_client::{build_hyper_client_normal, build_hyper_client_cert};
 
-static CLIENT_CACHE: Lazy<DashMap<ClientKey, Client<hyper::client::connect::HttpConnector>>> = Lazy::new(DashMap::new);
-Lazy::new(DashMap::new);
+static CLIENT_CACHE: Lazy<DashMap<ClientKey, Client<HttpsConnector<HttpConnector>>>> =
+Lazy::new(|| DashMap::new());
 
 #[derive(Clone, Hash, Eq, PartialEq, Debug)]
 pub struct ClientKey {
