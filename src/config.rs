@@ -30,6 +30,9 @@ pub struct RouteRule {
 
     #[serde(default = "default_cert")]
     pub cert: HashMap<String, String>,
+
+    #[serde(default = "default_backends")]
+    pub backends: Vec<String>,
 }
 
 #[derive(Default, Debug, Deserialize)]
@@ -136,6 +139,10 @@ fn default_port() -> u16 {
 }
 
 fn default_username() -> Vec<String> {
+    [].to_vec()
+}
+
+fn default_backends() -> Vec<String> {
     [].to_vec()
 }
 

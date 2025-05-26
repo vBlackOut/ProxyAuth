@@ -1,6 +1,6 @@
 [package]
 name = "proxyauth"
-version = "0.6.21"
+version = "0.7.0"
 edition = "2024"
 authors = ["Vladimir S"]
 repository = "https://github.com/ProxyAuth/ProxyAuth"
@@ -58,6 +58,8 @@ quanta = "0.12.5"
 hmac = "0.12"
 argon2 = "0.5"
 nix = "0.26"
+http = "1.0"
+thiserror = "1.0"
 clap = { version = "4", features = ["derive"] }
 signal-hook = "0.3"
 rand_chacha = "0.3"

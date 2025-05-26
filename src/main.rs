@@ -12,6 +12,7 @@ mod timezone;
 mod tokencount;
 mod tls;
 mod shared_client;
+mod loadbalancing;
 
 use actix_governor::{Governor, GovernorConfigBuilder};
 use actix_web::{App, HttpServer, web};
