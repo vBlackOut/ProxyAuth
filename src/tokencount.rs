@@ -57,7 +57,6 @@ impl CounterToken {
         let key = self.make_key(user, token_id);
         let now = Utc::now();
 
-        println!("{:?}", expire_at);
         let parsed_expire = expire_at.parse::<i64>()
             .expect("Invalid expire_at format");
 
