@@ -21,7 +21,7 @@ pub struct CounterToken {
 pub struct TokenUsage {
     pub token_id: String,
     pub count: AtomicU64,
-    pub delivry_at: DateTime<Utc>,
+    pub delivery_at: DateTime<Utc>,
     pub expire_at: DateTime<Utc>,
 }
 
@@ -71,7 +71,7 @@ impl CounterToken {
         let usage = self.counts.entry(key.clone()).or_insert_with(|| TokenUsage {
             token_id: token_id.to_string(),
             count: AtomicU64::new(0),
-            delivry_at: now,
+            delivery_at: now,
             expire_at: expire_at_datetime,
         });
 
@@ -104,7 +104,7 @@ impl CounterToken {
                     .push(TokenUsage {
                             token_id: token_id.to_string().clone(),
                             count: count.into(),
-                            delivry_at: usage.delivry_at,
+                            delivery_at: usage.delivery_at,
                             expire_at: usage.expire_at,
                     });
             }
