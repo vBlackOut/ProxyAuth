@@ -158,7 +158,7 @@ pub async fn validate_token(
         .get(index_user)
         .ok_or("User not found")?;
 
-    let time_expire = check_date_token(data[1], &user.username, ip)
+    let time_expire = check_date_token(data[1], &user.username, ip, &config.timezone)
         .map_err(|_| "Your token is expired")?;
 
     if (time_expire > (config.token_expiry_seconds as i64).try_into().unwrap()).try_into().unwrap() {

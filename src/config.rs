@@ -90,6 +90,9 @@ pub struct AppConfig {
 
     #[serde(default = "default_max_idle_per_host")]
     pub max_idle_per_host: u16,
+
+    #[serde(default = "default_timezone")]
+    pub timezone: String,
 }
 
 impl Serialize for AppConfig {
@@ -132,6 +135,10 @@ pub struct AuthRequest {
 
 fn default_host() -> String {
     "0.0.0.0".to_string()
+}
+
+fn default_timezone() -> String {
+    "Europe/Paris".to_string()
 }
 
 fn default_port() -> u16 {
