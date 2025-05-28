@@ -178,7 +178,7 @@ pub async fn validate_token(
     }
 
     if config.stats {
-        let count = data_app.counter.record_and_get(&user.username, data[3]);
+        let count = data_app.counter.record_and_get(&user.username, data[3], &time_expire.to_string());
 
         info!(
             "[{}] user {} is logged token expire in {} seconds [token used: {}]",
