@@ -264,7 +264,7 @@ async fn main() -> std::io::Result<()> {
 
     let socket = Socket::new(Domain::IPV4, Type::STREAM, Some(Protocol::TCP))?;
     socket.set_reuse_address(true)?;
-    socket.set_reuse_port(true)?; // <-- ici
+    socket.set_reuse_port(true)?;
     socket.bind(&sock_addr.into())?;
     socket.listen(1024)?;
 
@@ -292,7 +292,7 @@ async fn main() -> std::io::Result<()> {
                     .default_service(web::to(global_proxy).wrap(Governor::new(&governor_proxy_conf)))
             })
             .workers((config.worker as u8).into())
-            .listen_rustls_0_21(listener, load_rustls_config())? // <-- remplacement ici
+            .listen_rustls_0_21(listener, load_rustls_config())?
             .run()
             .await
         }
@@ -322,7 +322,7 @@ async fn main() -> std::io::Result<()> {
                     .default_service(web::to(global_proxy))
             })
             .workers((config.worker as u8).into())
-            .listen_rustls_0_21(listener, load_rustls_config())? // <-- remplacement ici
+            .listen_rustls_0_21(listener, load_rustls_config())?
             .run()
             .await
         }
@@ -365,7 +365,7 @@ async fn main() -> std::io::Result<()> {
                     .default_service(web::to(global_proxy).wrap(Governor::new(&governor_proxy_conf)))
             })
             .workers((config.worker as u8).into())
-            .listen_rustls_0_21(listener, load_rustls_config())? // <-- remplacement ici
+            .listen_rustls_0_21(listener, load_rustls_config())?
             .run()
             .await
         }
@@ -381,7 +381,7 @@ async fn main() -> std::io::Result<()> {
             })
             .workers((config.worker as u8).into())
             .keep_alive(Duration::from_secs(15))
-            .listen_rustls_0_21(listener, load_rustls_config())? // <-- remplacement ici
+            .listen_rustls_0_21(listener, load_rustls_config())?
             .run()
             .await
         }
@@ -399,7 +399,7 @@ async fn main() -> std::io::Result<()> {
                     .default_service(web::to(global_proxy))
             })
             .workers((config.worker as u8).into())
-            .listen_rustls_0_21(listener, load_rustls_config())? // <-- remplacement ici
+            .listen_rustls_0_21(listener, load_rustls_config())? 
             .run()
             .await
         }
