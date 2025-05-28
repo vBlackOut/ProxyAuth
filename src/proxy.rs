@@ -6,8 +6,8 @@ use std::str::FromStr;
 use tokio::time::{timeout, Duration};
 use crate::AppState;
 use crate::security::validate_token;
-use crate::shared_client::{get_or_build_client, get_or_build_client_proxy,
-                           build_hyper_client_normal, ClientOptions};
+use crate::loadbalancing::forward_failover;
+use crate::shared_client::{get_or_build_client, get_or_build_client_proxy, ClientOptions};
 
 pub fn client_ip(req: &HttpRequest) -> Option<IpAddr> {
     req.headers()
@@ -59,6 +59,7 @@ pub async fn proxy_with_proxy(
         } else {
             format!("http://{}", target_url)
         };
+
 
         let client = get_or_build_client_proxy(ClientOptions {
             use_proxy: true,
@@ -159,7 +160,14 @@ pub async fn proxy_without_proxy(
                 key_path: rule.cert.get("key").cloned(),
             }, data.config.clone())
         } else {
-            build_hyper_client_normal(&data.config.clone())
+            get_or_build_client(ClientOptions {
+                use_proxy: false,
+                proxy_addr: None,
+                use_cert: false,
+                cert_path: rule.cert.get("file").cloned(),
+                key_path: rule.cert.get("key").cloned(),
+            }, data.config.clone())
+            // build_hyper_client_normal(&data.config.clone())
         };
 
         let uri = Uri::from_str(&full_url)
@@ -185,7 +193,6 @@ pub async fn proxy_without_proxy(
             String::new()
         };
 
-        // Construction des en-têtes
         let mut request_builder = Request::builder()
             .method(method)
             .uri(&uri);
@@ -194,6 +201,7 @@ pub async fn proxy_without_proxy(
                 request_builder = request_builder.header(key, value);
             }
         }
+
         request_builder = request_builder
             .header(USER_AGENT, "ProxyAuth")
             .header("Host", uri.host().ok_or_else(|| error::ErrorInternalServerError("Missing host"))?);
@@ -202,14 +210,15 @@ pub async fn proxy_without_proxy(
             .body(Body::from(body))
             .map_err(|e| error::ErrorInternalServerError(format!("Failed to build request: {}", e)))?;
 
-        let response_result = timeout(Duration::from_secs(10), client.request(hyper_req)).await;
+        // let response_result = timeout(Duration::from_secs(10), client.request(hyper_req)).await;
+        let response_result = forward_failover(hyper_req, &rule.backends.clone(), &client).await;
 
         match response_result {
-            Ok(Ok(res)) => {
+            Ok(res) => {
                 let mut client_resp = HttpResponse::build(res.status());
                 for (key, value) in res.headers() {
                     if key != USER_AGENT && key.as_str() != "authorization" {
-                        client_resp.append_header((key, value));
+                        client_resp.append_header((key.clone(), value.clone()));
                     }
                 }
                 let body_bytes = hyper::body::to_bytes(res.into_body())
@@ -217,9 +226,9 @@ pub async fn proxy_without_proxy(
                     .map_err(|e| error::ErrorInternalServerError(format!("Failed to read response: {}", e)))?;
                 Ok(client_resp.body(body_bytes))
             }
-            Ok(Err(e)) => Ok(HttpResponse::BadGateway().body(format!("Request failed: {}", e))),
-            Err(_) => Ok(HttpResponse::GatewayTimeout().body("Target unreachable (timeout)")),
+            Err(e) => Ok(HttpResponse::BadGateway().body(format!("Request failed: {}", e))),
         }
+
     } else {
         Ok(HttpResponse::NotFound().body("404 Not Found"))
     }
