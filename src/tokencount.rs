@@ -4,7 +4,7 @@ use serde::Serialize;
 use std::collections::HashMap;
 use std::hash::BuildHasherDefault;
 use std::sync::atomic::{AtomicU64, Ordering};
-use chrono::Utc;
+use chrono::{Utc, Duration};
 use std::sync::Arc;
 use chrono::DateTime;
 use chrono::TimeZone;
@@ -61,8 +61,10 @@ impl CounterToken {
         let parsed_expire = expire_at.parse::<i64>()
             .expect("Invalid expire_at format");
 
+        let expire_timestamp = now + Duration::seconds(parsed_expire);
+
         let expire_at_datetime: DateTime<Utc> = Utc
-            .timestamp_opt(parsed_expire as i64, 0)
+            .timestamp_opt(expire_timestamp.timestamp(), 0)
             .single()
             .expect("timestamp is out of range");
 
