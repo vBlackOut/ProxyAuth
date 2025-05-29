@@ -117,6 +117,7 @@ pub async fn proxy_with_proxy(
             .map_err(|e| {
                 warn!(
                     error = %e,
+                    client_ip = %ip,
                     "Failed to read response body from backend"
                 );
                 error::ErrorInternalServerError(format!("{}", e))
@@ -137,6 +138,7 @@ pub async fn proxy_with_proxy(
                     .map_err(|e| {
                         warn!(
                             error = %e,
+                            client_ip = %ip,
                             "Failed to read response body from backend"
                         );
                         error::ErrorInternalServerError(format!("{}", e))
