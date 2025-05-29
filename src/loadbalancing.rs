@@ -2,12 +2,12 @@ use std::time::{Duration, Instant};
 
 use dashmap::DashMap;
 use fxhash::FxBuildHasher;
-use once_cell::sync::Lazy;
-use thiserror::Error;
 use hyper::{Body, Client, Request, Response, Uri};
 use hyper::body::to_bytes;
 use hyper::client::HttpConnector;
 use hyper_rustls::HttpsConnectorBuilder;
+use once_cell::sync::Lazy;
+use thiserror::Error;
 use tokio::time::timeout;
 
 #[derive(Debug, Error)]
@@ -24,9 +24,11 @@ type FxDashMap<K, V> = DashMap<K, V, FxBuildHasher>;
 
 static CLIENT_POOL: Lazy<FxDashMap<String, HttpsClient>> = Lazy::new(FxDashMap::default);
 static LAST_GOOD_BACKEND: Lazy<DashMap<&'static str, (String, Instant)>> = Lazy::new(DashMap::new);
+static BACKEND_COOLDOWN: Lazy<DashMap<String, Instant>> = Lazy::new(DashMap::new);
 
 const BACKEND_CACHE_KEY: &str = "service";
 const BACKEND_VALID_DURATION: Duration = Duration::from_secs(300);
+const COOLDOWN_DURATION: Duration = Duration::from_secs(120);
 
 fn get_or_build_client(backend: &str) -> HttpsClient {
     if let Some(client) = CLIENT_POOL.get(backend) {
@@ -40,7 +42,7 @@ fn get_or_build_client(backend: &str) -> HttpsClient {
     .build();
 
     let client = Client::builder()
-    .pool_max_idle_per_host(500)
+    .pool_max_idle_per_host(64)
     .build::<_, Body>(https);
 
     CLIENT_POOL.insert(backend.to_string(), client.clone());
@@ -56,6 +58,7 @@ pub async fn forward_failover(
     let headers = req.headers().clone();
     let body_bytes = to_bytes(req.into_body()).await?;
 
+    // 1. Essayer d'abord le backend en cache s'il est encore valide
     if let Some((cached_backend, timestamp)) = LAST_GOOD_BACKEND.get(BACKEND_CACHE_KEY).map(|e| e.clone()) {
         if timestamp.elapsed() <= BACKEND_VALID_DURATION {
             if let Ok(resp) = try_forward_to_backend(&cached_backend, &body_bytes, &method, &uri, &headers).await {
@@ -66,10 +69,20 @@ pub async fn forward_failover(
         }
     }
 
+    // 2. Essai normal avec filtre sur les backends en cooldown
     for backend in backends {
+        if let Some(ts) = BACKEND_COOLDOWN.get(backend) {
+            if ts.elapsed() < COOLDOWN_DURATION {
+                tracing::warn!("Skipping backend {} (cooldown active)", backend);
+                continue;
+            }
+        }
+
         if let Ok(resp) = try_forward_to_backend(backend, &body_bytes, &method, &uri, &headers).await {
             LAST_GOOD_BACKEND.insert(BACKEND_CACHE_KEY, (backend.clone(), Instant::now()));
             return Ok(resp);
+        } else {
+            BACKEND_COOLDOWN.insert(backend.clone(), Instant::now());
         }
     }
 
