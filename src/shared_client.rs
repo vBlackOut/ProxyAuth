@@ -14,9 +14,12 @@ use once_cell::sync::Lazy;
 use dashmap::DashMap;
 
 #[allow(dead_code)]
-static CLIENT_CACHE: Lazy<DashMap<ClientKey, Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>>> = Lazy::new(DashMap::new);
-static CLIENT_CACHE_PROXY: Lazy<DashMap<ClientKey, Client<ProxyConnector<HttpsConnector<HttpConnector>>>>> = Lazy::new(|| DashMap::new());
 const MAX_CLIENTS: usize = 200;
+static CLIENT_CACHE: Lazy<Mutex<CLruCache<ClientKey, Client<HttpsConnector<HttpConnector>>>>> =
+Lazy::new(|| Mutex::new(CLruCache::new(NonZeroUsize::new(MAX_CLIENTS).unwrap())));
+static CLIENT_CACHE_PROXY: Lazy<Mutex<CLruCache<ClientKey, Client<ProxyConnector<HttpsConnector<HttpConnector>>>>>> =
+Lazy::new(|| Mutex::new(CLruCache::new(NonZeroUsize::new(MAX_CLIENTS).unwrap())));
+
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct ClientOptions {
@@ -54,43 +57,36 @@ pub fn get_or_build_client(
     state: Arc<AppConfig>,
 ) -> Client<HttpsConnector<HttpConnector>> {
     let key = ClientKey::from_options(&opts);
+    let mut cache = CLIENT_CACHE.lock().unwrap();
 
-    if let Some(client) = CLIENT_CACHE.get(&key) {
+    if let Some(client) = cache.get(&key) {
         return client.clone();
     }
 
-    if CLIENT_CACHE.len() >= MAX_CLIENTS {
-        if let Some(entry) = CLIENT_CACHE.iter().next() {
-            CLIENT_CACHE.remove(entry.key());
-            tracing::warn!("Client cache full, removing one client: {:?}", entry.key());
-        }
-    }
-
-    let client = {
-        if opts.use_cert {
-            build_hyper_client_cert(opts.clone(), &state)
-        } else {
-            build_hyper_client_normal(&state)
-        }
+    let client = if opts.use_cert {
+        build_hyper_client_cert(opts.clone(), &state)
+    } else {
+        build_hyper_client_normal(&state)
     };
 
-    CLIENT_CACHE.insert(key, client.clone());
+    cache.put(key, client.clone());
     client
 }
+
 
 pub fn get_or_build_client_proxy(
     opts: ClientOptions,
     state: Arc<AppConfig>,
 ) -> Client<ProxyConnector<HttpsConnector<HttpConnector>>> {
     let key = ClientKey::from_options(&opts);
+    let mut cache = CLIENT_CACHE_PROXY.lock().unwrap();
 
-    if let Some(client) = CLIENT_CACHE_PROXY.get(&key) {
+    if let Some(client) = cache.get(&key) {
         return client.clone();
     }
 
     let client = build_hyper_client_proxy(opts.clone(), &state);
-
-    CLIENT_CACHE_PROXY.insert(key, client.clone());
+    cache.put(key, client.clone());
     client
 }
 
