@@ -76,7 +76,7 @@ pub async fn forward_failover(
         .body(Body::from(body_bytes.clone()))
         .expect("Error building request");
 
-        let response_result = client.request(new_req).await;
+        let response_result = timeout(Duration::from_millis(10000), client.request(new_req)).await;
 
         match response_result {
             Ok(Ok(resp)) => return Ok(resp),
