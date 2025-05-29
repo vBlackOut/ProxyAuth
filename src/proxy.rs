@@ -255,11 +255,19 @@ pub async fn proxy_without_proxy(
         } else {
             match timeout(Duration::from_secs(10), client.request(hyper_req)).await {
                 Ok(Ok(res)) => res,
-                Ok(Err(e)) | Err(e) => {
+                Ok(Err(e)) => {
                     warn!(
                         client_ip = %ip,
                         target = %full_url,
-                        "Route fallback reason: {} ", e
+                        "Route fallback reason (client error): {}", e
+                    );
+                    return Ok(HttpResponse::ServiceUnavailable().body("503 Service Unavailable"));
+                }
+                Err(e) => {
+                    warn!(
+                        client_ip = %ip,
+                        target = %full_url,
+                        "Route fallback reason (timeout): {}", e
                     );
                     return Ok(HttpResponse::ServiceUnavailable().body("503 Service Unavailable"));
                 }
