@@ -237,7 +237,14 @@ pub async fn proxy_without_proxy(
 
         let hyper_req = request_builder
             .body(Body::from(body))
-            .map_err(|e| error::ErrorInternalServerError(format!("{}", e)))?;
+            .map_err(|e| {
+                warn!(
+                    error = %e,
+                    client_ip = %ip,
+                    path = %forward_path,
+                    "Route fallback: 500 Internal error reason: {} ", e);
+                error::ErrorInternalServerError(format!("{}", e))
+            })?;
 
         // let response_result = timeout(Duration::from_secs(10), client.request(hyper_req)).await;
         let response_result = forward_failover(hyper_req, &rule.backends.clone(), &client).await;
