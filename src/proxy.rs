@@ -244,7 +244,7 @@ pub async fn proxy_without_proxy(
                     client_ip = %ip,
                     target = %full_url,
                     "Route fallback: 500 Internal error reason: {} ", e);
-                error::ErrorInternalServerError(format!("{}", e))
+                    error::ErrorInternalServerError(format!("{}", e))
             })?;
 
         // let response_result = timeout(Duration::from_secs(10), client.request(hyper_req)).await;
@@ -273,8 +273,8 @@ pub async fn proxy_without_proxy(
                 warn!(
                     client_ip = %ip,
                     target = %full_url,
-                    "Route fallback: 404 Not Found – reason: {}", e);
-                Ok(HttpResponse::NotFound().body("404 Not Found"))
+                    "Route fallback reason: {} ", e);
+                    Ok(HttpResponse::InternalServerError().body("500 Internal Server Error"))
             },
         }
 
