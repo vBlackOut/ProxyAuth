@@ -7,7 +7,7 @@ use rustls::{Certificate, PrivateKey};
 use rustls_pemfile::{certs, pkcs8_private_keys};
 use std::{fs::File, io::BufReader};
 use hyper_proxy::{Proxy, ProxyConnector, Intercept};
-use clru::CLruCache;
+use lru_time_cache::LruCache;
 use std::num::NonZeroUsize;
 use std::sync::Mutex;
 use crate::config::AppConfig;
@@ -16,12 +16,25 @@ use std::str::FromStr;
 use once_cell::sync::Lazy;
 
 #[allow(dead_code)]
-const MAX_CLIENTS: usize = 200;
-static CLIENT_CACHE: Lazy<Mutex<CLruCache<ClientKey, Client<HttpsConnector<HttpConnector>>>>> =
-Lazy::new(|| Mutex::new(CLruCache::new(NonZeroUsize::new(MAX_CLIENTS).unwrap())));
-static CLIENT_CACHE_PROXY: Lazy<Mutex<CLruCache<ClientKey, Client<ProxyConnector<HttpsConnector<HttpConnector>>>>>> =
-Lazy::new(|| Mutex::new(CLruCache::new(NonZeroUsize::new(MAX_CLIENTS).unwrap())));
+type HttpsClient = Client<HttpsConnector<HttpConnector>>;
+type ProxyClient = Client<ProxyConnector<HttpsConnector<HttpConnector>>>;
 
+const MAX_CLIENTS: usize = 200;
+const TTL_SECONDS: u64 = 300; // 5 minutes
+
+static CLIENT_CACHE: Lazy<Mutex<LruCache<ClientKey, HttpsClient>>> = Lazy::new(|| {
+    Mutex::new(LruCache::with_expiry_duration_and_capacity(
+        Duration::from_secs(TTL_SECONDS),
+        MAX_CLIENTS,
+    ))
+});
+
+static CLIENT_CACHE_PROXY: Lazy<Mutex<LruCache<ClientKey, ProxyClient>>> = Lazy::new(|| {
+    Mutex::new(LruCache::with_expiry_duration_and_capacity(
+        Duration::from_secs(TTL_SECONDS),
+        MAX_CLIENTS,
+    ))
+});
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct ClientOptions {
@@ -32,7 +45,7 @@ pub struct ClientOptions {
     pub key_path: Option<String>,
 }
 
-#[derive(Clone, Hash, Eq, PartialEq, Debug)]
+#[derive(Clone, Hash, Eq, PartialEq, Debug, Ord, PartialOrd)]
 pub struct ClientKey {
     pub use_proxy: bool,
     pub proxy_addr: Option<String>,
@@ -57,11 +70,11 @@ impl ClientKey {
 pub fn get_or_build_client(
     opts: ClientOptions,
     state: Arc<AppConfig>,
-) -> Client<HttpsConnector<HttpConnector>> {
+) -> HttpsClient {
     let key = ClientKey::from_options(&opts);
     let mut cache = CLIENT_CACHE.lock().unwrap();
 
-    if let Some(client) = cache.get(&key) {
+    if let Some(client) = cache.get_mut(&key) {
         return client.clone();
     }
 
@@ -71,24 +84,23 @@ pub fn get_or_build_client(
         build_hyper_client_normal(&state)
     };
 
-    cache.put(key, client.clone());
+    cache.insert(key, client.clone());
     client
 }
-
 
 pub fn get_or_build_client_proxy(
     opts: ClientOptions,
     state: Arc<AppConfig>,
-) -> Client<ProxyConnector<HttpsConnector<HttpConnector>>> {
+) -> ProxyClient {
     let key = ClientKey::from_options(&opts);
     let mut cache = CLIENT_CACHE_PROXY.lock().unwrap();
 
-    if let Some(client) = cache.get(&key) {
+    if let Some(client) = cache.get_mut(&key) {
         return client.clone();
     }
 
     let client = build_hyper_client_proxy(opts.clone(), &state);
-    cache.put(key, client.clone());
+    cache.insert(key, client.clone());
     client
 }
 
