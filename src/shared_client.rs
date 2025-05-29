@@ -18,7 +18,7 @@ use once_cell::sync::Lazy;
 type HttpsClient = Client<HttpsConnector<HttpConnector>>;
 type ProxyClient = Client<ProxyConnector<HttpsConnector<HttpConnector>>>;
 
-const MAX_CLIENTS: usize = 200;
+const MAX_CLIENTS: usize = 500;
 const TTL_SECONDS: u64 = 600; // 10 minutes per clients
 
 static CLIENT_CACHE: Lazy<Mutex<LruCache<ClientKey, HttpsClient>>> = Lazy::new(|| {
