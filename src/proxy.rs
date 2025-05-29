@@ -248,11 +248,13 @@ pub async fn proxy_without_proxy(
             })?;
 
         let response_result = if !rule.backends.is_empty() {
+            // Mode failover
             forward_failover(hyper_req, &rule.backends).await.map_err(|e| {
                 warn!(client_ip = %ip, target = %full_url, "Failover failed: {}", e);
                 error::ErrorServiceUnavailable("503 Service Unavailable")
             })?
         } else {
+            // Mode direct
             match timeout(Duration::from_millis(500), client.request(hyper_req)).await {
                 Ok(Ok(res)) => res,
                 Ok(Err(e)) => {
@@ -261,7 +263,7 @@ pub async fn proxy_without_proxy(
                         target = %full_url,
                         "Route fallback reason (client error): {}", e
                     );
-                    return Ok(HttpResponse::ServiceUnavailable().body("503 Service Unavailable"));
+                    return Ok(HttpResponse::ServiceUnavailable().finish());
                 }
                 Err(e) => {
                     warn!(
@@ -269,27 +271,37 @@ pub async fn proxy_without_proxy(
                         target = %full_url,
                         "Route fallback reason (timeout): {}", e
                     );
-                    return Ok(HttpResponse::ServiceUnavailable().body("503 Service Unavailable"));
+                    return Ok(HttpResponse::ServiceUnavailable().finish());
                 }
             }
         };
 
-        let mut client_resp = HttpResponse::build(response_result.status());
+        let status = response_result.status();
+
+        if status.is_server_error() {
+            warn!(
+                client_ip = %ip,
+                target = %full_url,
+                "Upstream returned server error: {}",
+                status
+            );
+            return Ok(HttpResponse::InternalServerError().finish());
+        }
+
+        let mut client_resp = HttpResponse::build(status);
         for (key, value) in response_result.headers() {
             if key != USER_AGENT && key.as_str() != "authorization" {
                 client_resp.append_header((key.clone(), value.clone()));
             }
         }
 
-        let body_bytes = hyper::body::to_bytes(response_result.into_body())
-        .await
-        .map_err(|e| {
+        let body_bytes = hyper::body::to_bytes(response_result.into_body()).await.map_err(|e| {
             warn!(
                 client_ip = %ip,
                 target = %full_url,
-                "Route fallback: 500 Internal error reason: {}", e
+                "Body read error: {}", e
             );
-            error::ErrorInternalServerError(format!("{}", e))
+            error::ErrorInternalServerError("500 Internal Server Error")
         })?;
 
         Ok(client_resp.body(body_bytes))
