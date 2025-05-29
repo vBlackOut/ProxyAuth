@@ -14,7 +14,6 @@ use crate::config::AppConfig;
 use std::time::Duration;
 use std::str::FromStr;
 use once_cell::sync::Lazy;
-use dashmap::DashMap;
 
 #[allow(dead_code)]
 const MAX_CLIENTS: usize = 200;
