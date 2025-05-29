@@ -8,7 +8,7 @@ use argon2::Argon2;
 use argon2::password_hash::{PasswordHash, PasswordVerifier};
 use chrono::{Duration, Utc, TimeZone};
 use chrono_tz::Tz;
-use rand::{rngs::OsRng, Rng};
+use rand::rngs::OsRng;
 use rand::seq::SliceRandom;
 use sha2::{Sha256, Digest};
 use crate::AppConfig;
