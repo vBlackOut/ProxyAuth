@@ -4,12 +4,13 @@ use crate::crypto::{calcul_cipher, derive_key_from_secret, encrypt};
 use crate::proxy::client_ip;
 use crate::security::generate_token;
 use actix_web::{HttpRequest, HttpResponse, Responder, web};
+use rand::rngs::OsRng;
+use rand::seq::SliceRandom;
 use argon2::Argon2;
+use sha2::{Sha256, Digest};
 use argon2::password_hash::{PasswordHash, PasswordVerifier};
 use chrono::{Duration, Utc, TimeZone};
 use chrono_tz::Tz;
-use rand::seq::SliceRandom;
-use rand::{Rng, thread_rng};
 use crate::AppConfig;
 use std::sync::Arc;
 use tracing::{info, warn};
@@ -23,16 +24,31 @@ pub fn verify_password(input: &str, stored_hash: &str) -> bool {
     }
 }
 
-pub fn generate_random_string(max_len: usize) -> String {
-    let mut rng = thread_rng();
-    let charset: &[u8] =
-        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^*()+-=";
-    let filtered: Vec<u8> = charset.iter().cloned().filter(|&c| c != b'|').collect();
+pub fn generate_random_string(len: usize) -> String {
+    let charset: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^*()+-=";
+    let mut rng = OsRng;
 
-    let len = rng.gen_range(max_len..=max_len);
-    (0..len)
-        .map(|_| *filtered.choose(&mut rng).unwrap() as char)
-        .collect()
+    let base: Vec<u8> = (0..len)
+        .map(|_| *charset.choose(&mut rng).unwrap())
+        .collect();
+
+    let now = Utc::now().timestamp() as u64;
+    let shift: u8 = (now ^ (now >> 3) ^ (now << 1)).wrapping_rem(97) as u8;
+
+    let randomly: Vec<u8> = base
+        .into_iter()
+        .map(|byte| {
+            let idx = charset.iter().position(|&c| c == byte).unwrap_or(0);
+            let new_idx = (idx as u8 + shift) as usize % charset.len();
+            charset[new_idx]
+        })
+        .collect();
+
+    let mut full_input = randomly.clone();
+    full_input.extend_from_slice(&now.to_le_bytes());
+
+    let hash = Sha256::digest(&full_input);
+    hex::encode(hash)
 }
 
 fn get_expiry_with_timezone(config: Arc<AppConfig>, optional_timestamp: Option<i64>) -> String {
