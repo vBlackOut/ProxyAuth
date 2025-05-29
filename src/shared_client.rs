@@ -17,7 +17,7 @@ use once_cell::sync::Lazy;
 type HttpsClient = Client<HttpsConnector<HttpConnector>>;
 type ProxyClient = Client<ProxyConnector<HttpsConnector<HttpConnector>>>;
 
-const MAX_CLIENTS: usize = 500;
+const MAX_CLIENTS: usize = 10000;
 const TTL: Duration = Duration::from_secs(10); // 10 seconds per client
 
 #[derive(Clone)]
