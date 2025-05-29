@@ -10,7 +10,8 @@ use chrono::{Duration, Utc, TimeZone};
 use chrono_tz::Tz;
 use rand::rngs::OsRng;
 use rand::seq::SliceRandom;
-use sha2::{Sha256, Digest};
+use blake3;
+use hex;
 use crate::AppConfig;
 use std::sync::Arc;
 use tracing::{info, warn};
@@ -29,27 +30,27 @@ pub fn generate_random_string(len: usize) -> String {
     let mut rng = OsRng;
 
     let base: Vec<u8> = (0..len)
-        .map(|_| *charset.choose(&mut rng).unwrap())
-        .collect();
+    .map(|_| *charset.choose(&mut rng).unwrap())
+    .collect();
 
     let now = Utc::now().timestamp() as u64;
     let shift: u8 = (now ^ (now >> 3) ^ (now << 1)).wrapping_rem(97) as u8;
 
     let random_char: Vec<u8> = base
-        .into_iter()
-        .map(|byte| {
-            let idx = charset.iter().position(|&c| c == byte).unwrap_or(0);
-            let new_idx = (idx as u8 + shift) as usize % charset.len();
-            charset[new_idx]
-        })
-        .collect();
+    .into_iter()
+    .map(|byte| {
+        let idx = charset.iter().position(|&c| c == byte).unwrap_or(0);
+        let new_idx = (idx as u8 + shift) as usize % charset.len();
+        charset[new_idx]
+    })
+    .collect();
 
     let mut full_input = random_char.clone();
     full_input.extend_from_slice(&now.to_le_bytes());
 
-    let hash = Sha256::digest(&full_input);
+    let hash = blake3::hash(&full_input);
 
-    hex::encode(hash)
+    hex::encode(hash.as_bytes())
 }
 
 fn get_expiry_with_timezone(config: Arc<AppConfig>, optional_timestamp: Option<i64>) -> String {
