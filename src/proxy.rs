@@ -90,6 +90,7 @@ pub async fn proxy_with_proxy(
                     client_ip = %ip,
                     username = %username,
                     path = %forward_path,
+                    target = %full_url,
                     "This username is not authorized to access"
                 );
                 return Ok(HttpResponse::Unauthorized().body("403 Forbidden"));
@@ -118,6 +119,7 @@ pub async fn proxy_with_proxy(
                 warn!(
                     error = %e,
                     client_ip = %ip,
+                    target = %full_url,
                     "Failed to read response body from backend"
                 );
                 error::ErrorInternalServerError(format!("{}", e))
@@ -139,6 +141,7 @@ pub async fn proxy_with_proxy(
                         warn!(
                             error = %e,
                             client_ip = %ip,
+                            target = %full_url,
                             "Failed to read response body from backend"
                         );
                         error::ErrorInternalServerError(format!("{}", e))
@@ -243,7 +246,7 @@ pub async fn proxy_without_proxy(
                 warn!(
                     error = %e,
                     client_ip = %ip,
-                    path = %full_url,
+                    target = %full_url,
                     "Route fallback: 500 Internal error reason: {} ", e);
                 error::ErrorInternalServerError(format!("{}", e))
             })?;
@@ -265,7 +268,7 @@ pub async fn proxy_without_proxy(
                         warn!(
                             error = %e,
                             client_ip = %ip,
-                            path = %full_url,
+                            target = %full_url,
                             "Route fallback: 500 Internal error reason: {} ", e);
                         error::ErrorInternalServerError(format!("{}", e))
                     } )?;
@@ -275,7 +278,7 @@ pub async fn proxy_without_proxy(
                 warn!(
                     error = %e,
                     client_ip = %ip,
-                    path = %full_url,
+                    target = %full_url,
                     "Route fallback: 404 Not Found – reason: {}", e);
                 Ok(HttpResponse::NotFound().body("404 Not Found"))
             },
