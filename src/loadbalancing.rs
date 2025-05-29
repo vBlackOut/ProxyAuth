@@ -6,7 +6,7 @@ use hyper::Error as HyperError;
 
 #[derive(Debug, Error)]
 pub enum ForwardError {
-    #[error("All backends failed")]
+    #[error("404 No found")]
     AllBackendsFailed,
 
     #[error(transparent)]

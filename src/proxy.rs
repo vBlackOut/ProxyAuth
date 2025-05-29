@@ -8,6 +8,7 @@ use crate::AppState;
 use crate::security::validate_token;
 use crate::loadbalancing::forward_failover;
 use crate::shared_client::{get_or_build_client, get_or_build_client_proxy, ClientOptions};
+use tracing::warn;
 
 pub fn client_ip(req: &HttpRequest) -> Option<IpAddr> {
     req.headers()
@@ -107,7 +108,7 @@ pub async fn proxy_with_proxy(
 
         let hyper_req = request_builder
             .body(Body::from(body))
-            .map_err(|e| error::ErrorInternalServerError(format!("Failed to build request: {}", e)))?;
+            .map_err(|e| error::ErrorInternalServerError(format!("{}", e)))?;
 
         let response_result = timeout(Duration::from_secs(5), client.request(hyper_req)).await;
 
@@ -121,10 +122,13 @@ pub async fn proxy_with_proxy(
                 }
                 let body_bytes = hyper::body::to_bytes(res.into_body())
                     .await
-                    .map_err(|e| error::ErrorInternalServerError(format!("Failed to read response: {}", e)))?;
+                    .map_err(|e| error::ErrorInternalServerError(format!("{}", e)))?;
                 Ok(client_resp.body(body_bytes))
             }
-            Ok(Err(e)) => Ok(HttpResponse::BadGateway().body(format!("Request failed: {}", e))),
+            Ok(Err(e)) => {
+                warn!("Route fallback: 404 Not Found – reason: {}", e);
+                Ok(HttpResponse::NotFound().body("404 Not Found"))
+            },
             Err(_) => Ok(HttpResponse::GatewayTimeout().body("Target unreachable (timeout)")),
         }
     } else {
@@ -208,7 +212,7 @@ pub async fn proxy_without_proxy(
 
         let hyper_req = request_builder
             .body(Body::from(body))
-            .map_err(|e| error::ErrorInternalServerError(format!("Failed to build request: {}", e)))?;
+            .map_err(|e| error::ErrorInternalServerError(format!("{}", e)))?;
 
         // let response_result = timeout(Duration::from_secs(10), client.request(hyper_req)).await;
         let response_result = forward_failover(hyper_req, &rule.backends.clone(), &client).await;
@@ -223,10 +227,13 @@ pub async fn proxy_without_proxy(
                 }
                 let body_bytes = hyper::body::to_bytes(res.into_body())
                     .await
-                    .map_err(|e| error::ErrorInternalServerError(format!("Failed to read response: {}", e)))?;
+                    .map_err(|e| error::ErrorInternalServerError(format!("{}", e)))?;
                 Ok(client_resp.body(body_bytes))
             }
-            Err(e) => Ok(HttpResponse::BadGateway().body(format!("Request failed: {}", e))),
+            Err(e) => {
+                warn!("Route fallback: 404 Not Found – reason: {}", e);
+                Ok(HttpResponse::NotFound().body("404 Not Found"))
+            },
         }
 
     } else {
