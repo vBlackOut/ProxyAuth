@@ -35,7 +35,7 @@ pub fn generate_random_string(len: usize) -> String {
     let now = Utc::now().timestamp() as u64;
     let shift: u8 = (now ^ (now >> 3) ^ (now << 1)).wrapping_rem(97) as u8;
 
-    let chaotic: Vec<u8> = base
+    let random_char: Vec<u8> = base
         .into_iter()
         .map(|byte| {
             let idx = charset.iter().position(|&c| c == byte).unwrap_or(0);
@@ -44,7 +44,7 @@ pub fn generate_random_string(len: usize) -> String {
         })
         .collect();
 
-    let mut full_input = chaotic.clone();
+    let mut full_input = random_char.clone();
     full_input.extend_from_slice(&now.to_le_bytes());
 
     let hash = Sha256::digest(&full_input);
