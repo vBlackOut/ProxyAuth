@@ -16,7 +16,7 @@ use dashmap::DashMap;
 #[allow(dead_code)]
 static CLIENT_CACHE: Lazy<DashMap<ClientKey, Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>>> = Lazy::new(DashMap::new);
 static CLIENT_CACHE_PROXY: Lazy<DashMap<ClientKey, Client<ProxyConnector<HttpsConnector<HttpConnector>>>>> = Lazy::new(|| DashMap::new());
-const MAX_CLIENTS: usize = 100;
+const MAX_CLIENTS: usize = 200;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct ClientOptions {
