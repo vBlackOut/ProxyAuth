@@ -292,6 +292,7 @@ async fn main() -> std::io::Result<()> {
                     .default_service(web::to(global_proxy).wrap(Governor::new(&governor_proxy_conf)))
             })
             .workers((config.worker as u8).into())
+            .keep_alive(Duration::from_secs(15))
             .listen_rustls_0_21(listener, load_rustls_config())?
             .run()
             .await
@@ -322,6 +323,7 @@ async fn main() -> std::io::Result<()> {
                     .default_service(web::to(global_proxy))
             })
             .workers((config.worker as u8).into())
+            .keep_alive(Duration::from_secs(15))
             .listen_rustls_0_21(listener, load_rustls_config())?
             .run()
             .await
@@ -365,6 +367,7 @@ async fn main() -> std::io::Result<()> {
                     .default_service(web::to(global_proxy).wrap(Governor::new(&governor_proxy_conf)))
             })
             .workers((config.worker as u8).into())
+            .keep_alive(Duration::from_secs(15))
             .listen_rustls_0_21(listener, load_rustls_config())?
             .run()
             .await
@@ -399,6 +402,7 @@ async fn main() -> std::io::Result<()> {
                     .default_service(web::to(global_proxy))
             })
             .workers((config.worker as u8).into())
+            .keep_alive(Duration::from_secs(15))
             .listen_rustls_0_21(listener, load_rustls_config())? 
             .run()
             .await

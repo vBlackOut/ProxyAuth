@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use dashmap::DashMap;
 use fxhash::FxBuildHasher;
 use once_cell::sync::Lazy;
@@ -6,8 +5,6 @@ use thiserror::Error;
 use hyper::{Body, Client, Request, Response, Uri};
 use hyper::body::to_bytes;
 use hyper::client::HttpConnector;
-use hyper_rustls::HttpsConnector;
-use hyper::client::connect::Connect;
 use hyper_rustls::HttpsConnectorBuilder;
 use tokio::time::{timeout, Duration};
 
