@@ -24,7 +24,7 @@ pub fn verify_password(input: &str, stored_hash: &str) -> bool {
     }
 }
 
-pub fn generate_token_sha256(len: usize) -> String {
+pub fn generate_random_string(len: usize) -> String {
     let charset: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^*()+-=";
     let mut rng = OsRng;
 
