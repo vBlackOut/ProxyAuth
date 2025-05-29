@@ -16,6 +16,7 @@ use dashmap::DashMap;
 #[allow(dead_code)]
 static CLIENT_CACHE: Lazy<DashMap<ClientKey, Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>>> = Lazy::new(DashMap::new);
 static CLIENT_CACHE_PROXY: Lazy<DashMap<ClientKey, Client<ProxyConnector<HttpsConnector<HttpConnector>>>>> = Lazy::new(|| DashMap::new());
+const MAX_CLIENTS: usize = 100;
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct ClientOptions {
@@ -56,6 +57,13 @@ pub fn get_or_build_client(
 
     if let Some(client) = CLIENT_CACHE.get(&key) {
         return client.clone();
+    }
+
+    if CLIENT_CACHE.len() >= MAX_CLIENTS {
+        if let Some(entry) = CLIENT_CACHE.iter().next() {
+            CLIENT_CACHE.remove(entry.key());
+            tracing::warn!("Client cache full, removing one client: {:?}", entry.key());
+        }
     }
 
     let client = {
