@@ -87,7 +87,7 @@ pub fn get_or_build_client_proxy(
 }
 
 pub fn build_hyper_client_cert(opts: ClientOptions, state: &Arc<AppConfig>) -> Client<HttpsConnector<HttpConnector>> {
-    let timeout_duration = Duration::from_millis(1000);
+    let timeout_duration = Duration::from_millis(10000);
 
     let mut root_store = RootCertStore::empty();
     root_store.add_trust_anchors(TLS_SERVER_ROOTS.iter().map(|ta| {
@@ -150,7 +150,7 @@ pub fn build_hyper_client_cert(opts: ClientOptions, state: &Arc<AppConfig>) -> C
 }
 
 pub fn build_hyper_client_proxy(opts: ClientOptions,  state: &Arc<AppConfig>) -> Client<ProxyConnector<HttpsConnector<HttpConnector>>> {
-    let timeout_duration = Duration::from_millis(500);
+    let timeout_duration = Duration::from_millis(10000);
 
     let mut root_store = RootCertStore::empty();
     root_store.add_trust_anchors(TLS_SERVER_ROOTS.iter().map(|ta| {
@@ -224,7 +224,7 @@ pub fn build_hyper_client_proxy(opts: ClientOptions,  state: &Arc<AppConfig>) ->
 }
 
 pub fn build_hyper_client_normal(state: &Arc<AppConfig>) -> Client<HttpsConnector<HttpConnector>> {
-    let timeout_duration = Duration::from_millis(500);
+    let timeout_duration = Duration::from_millis(10000);
 
     let mut root_store = RootCertStore::empty();
     root_store.add_trust_anchors(TLS_SERVER_ROOTS.iter().map(|ta| {
@@ -244,7 +244,7 @@ pub fn build_hyper_client_normal(state: &Arc<AppConfig>) -> Client<HttpsConnecto
     http_connector.set_connect_timeout(Some(timeout_duration));
     http_connector.enforce_http(false);
     http_connector.set_nodelay(true);
-    http_connector.set_keepalive(Some(Duration::from_secs(5)));
+    http_connector.set_keepalive(Some(Duration::from_secs(10)));
 
     let tls_config = Arc::new(config);
     let https_connector = HttpsConnector::from((http_connector, tls_config));
