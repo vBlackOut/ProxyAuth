@@ -8,7 +8,6 @@ use rustls_pemfile::{certs, pkcs8_private_keys};
 use std::{fs::File, io::BufReader};
 use hyper_proxy::{Proxy, ProxyConnector, Intercept};
 use lru_time_cache::LruCache;
-use std::num::NonZeroUsize;
 use std::sync::Mutex;
 use crate::config::AppConfig;
 use std::time::Duration;
