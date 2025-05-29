@@ -26,7 +26,7 @@ static CLIENT_POOL: Lazy<FxDashMap<String, HttpsClient>> = Lazy::new(FxDashMap::
 static LAST_GOOD_BACKEND: Lazy<DashMap<&'static str, (String, Instant)>> = Lazy::new(DashMap::new);
 
 const BACKEND_CACHE_KEY: &str = "service";
-const BACKEND_VALID_DURATION: Duration = Duration::from_secs(10);
+const BACKEND_VALID_DURATION: Duration = Duration::from_secs(300);
 
 fn get_or_build_client(backend: &str) -> HttpsClient {
     if let Some(client) = CLIENT_POOL.get(backend) {
