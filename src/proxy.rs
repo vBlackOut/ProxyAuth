@@ -274,7 +274,7 @@ pub async fn proxy_without_proxy(
                     client_ip = %ip,
                     target = %full_url,
                     "Route fallback reason: {} ", e);
-                    Ok(HttpResponse::InternalServerError().body("500 Internal Server Error"))
+                    Ok(HttpResponse::ServiceUnavailable().body("503 Service Unavailable"))
             },
         }
 
