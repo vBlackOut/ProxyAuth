@@ -18,7 +18,7 @@ type HttpsClient = Client<HttpsConnector<HttpConnector>>;
 type ProxyClient = Client<ProxyConnector<HttpsConnector<HttpConnector>>>;
 
 const MAX_CLIENTS: usize = 500;
-const TTL: Duration = Duration::from_secs(10000); // 10 seconds per client
+const TTL: Duration = Duration::from_secs(10); // 10 seconds per client
 
 #[derive(Clone)]
 struct TimedValue<T> {
