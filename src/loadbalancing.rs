@@ -40,7 +40,7 @@ fn get_or_build_client(backend: &str) -> HttpsClient {
     .build();
 
     let client = Client::builder()
-    .pool_max_idle_per_host(200)
+    .pool_max_idle_per_host(500)
     .build::<_, Body>(https);
 
     CLIENT_POOL.insert(backend.to_string(), client.clone());
