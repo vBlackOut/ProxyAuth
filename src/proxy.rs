@@ -86,6 +86,12 @@ pub async fn proxy_with_proxy(
                 .map_err(|err| error::ErrorUnauthorized(err))?;
 
             if !rule.username.contains(&username) {
+                warn!(
+                    client_ip = %ip,
+                    username = %username,
+                    path = %forward_path,
+                    "This username is not authorized to access"
+                );
                 return Ok(HttpResponse::Unauthorized().body("403 Forbidden"));
             }
             username
@@ -108,7 +114,13 @@ pub async fn proxy_with_proxy(
 
         let hyper_req = request_builder
             .body(Body::from(body))
-            .map_err(|e| error::ErrorInternalServerError(format!("{}", e)))?;
+            .map_err(|e| {
+                warn!(
+                    error = %e,
+                    "Failed to read response body from backend"
+                );
+                error::ErrorInternalServerError(format!("{}", e))
+            })?;
 
         let response_result = timeout(Duration::from_secs(5), client.request(hyper_req)).await;
 
@@ -122,7 +134,13 @@ pub async fn proxy_with_proxy(
                 }
                 let body_bytes = hyper::body::to_bytes(res.into_body())
                     .await
-                    .map_err(|e| error::ErrorInternalServerError(format!("{}", e)))?;
+                    .map_err(|e| {
+                        warn!(
+                            error = %e,
+                            "Failed to read response body from backend"
+                        );
+                        error::ErrorInternalServerError(format!("{}", e))
+                    })?;
                 Ok(client_resp.body(body_bytes))
             }
             Ok(Err(e)) => {
@@ -187,7 +205,14 @@ pub async fn proxy_without_proxy(
 
             let username = validate_token(token_header, &data, &data.config, &ip)
                 .await
-                .map_err(|err| error::ErrorUnauthorized(err))?;
+                .map_err(|err| {
+                    warn!(
+                        error = %err,
+                        client_ip = %ip,
+                        "Unauthorized token attempt"
+                    );
+                    error::ErrorUnauthorized(err)
+                })?;
 
             if !rule.username.contains(&username) {
                 return Ok(HttpResponse::Unauthorized().body("403 Forbidden"));
@@ -227,11 +252,22 @@ pub async fn proxy_without_proxy(
                 }
                 let body_bytes = hyper::body::to_bytes(res.into_body())
                     .await
-                    .map_err(|e| error::ErrorInternalServerError(format!("{}", e)))?;
+                    .map_err(|e| {
+                        warn!(
+                            error = %e,
+                            client_ip = %ip,
+                            path = %forward_path,
+                            "Route fallback: 500 Internal error reason: {} ", e);
+                        error::ErrorInternalServerError(format!("{}", e))
+                    } )?;
                 Ok(client_resp.body(body_bytes))
             }
             Err(e) => {
-                warn!("Route fallback: 404 Not Found – reason: {}", e);
+                warn!(
+                    error = %e,
+                    client_ip = %ip,
+                    path = %forward_path,
+                    "Route fallback: 404 Not Found – reason: {}", e);
                 Ok(HttpResponse::NotFound().body("404 Not Found"))
             },
         }
