@@ -1,10 +1,12 @@
 use std::sync::Arc;
 use dashmap::DashMap;
+use fxhash::FxBuildHasher;
 use once_cell::sync::Lazy;
 use thiserror::Error;
 use hyper::{Body, Client, Request, Response, Uri};
 use hyper::body::to_bytes;
 use hyper::client::HttpConnector;
+use hyper_rustls::HttpsConnector;
 use hyper::client::connect::Connect;
 use hyper_rustls::HttpsConnectorBuilder;
 use tokio::time::{timeout, Duration};
@@ -18,9 +20,13 @@ pub enum ForwardError {
     Hyper(#[from] hyper::Error),
 }
 
-type HttpsClient = Client<hyper_rustls::HttpsConnector<HttpConnector>>;
 
-static CLIENT_POOL: Lazy<DashMap<String, HttpsClient>> = Lazy::new(DashMap::new);
+
+type HttpsClient = Client<hyper_rustls::HttpsConnector<HttpConnector>>;
+type FxDashMap<K, V> = DashMap<K, V, FxBuildHasher>;
+
+static CLIENT_POOL: Lazy<FxDashMap<String, HttpsClient>> = Lazy::new(FxDashMap::default);
+
 
 fn get_or_build_client(backend: &str) -> HttpsClient {
     if let Some(client) = CLIENT_POOL.get(backend) {
