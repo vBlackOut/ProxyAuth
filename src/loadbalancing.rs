@@ -1,10 +1,13 @@
+use std::sync::Arc;
+use dashmap::DashMap;
+use once_cell::sync::Lazy;
 use thiserror::Error;
-use hyper::Error as HyperError;
-use hyper::body::to_bytes;
 use hyper::{Body, Client, Request, Response, Uri};
-use tokio::time::{timeout, Duration};
+use hyper::body::to_bytes;
+use hyper::client::HttpConnector;
 use hyper::client::connect::Connect;
-
+use hyper_rustls::HttpsConnectorBuilder;
+use tokio::time::{timeout, Duration};
 
 #[derive(Debug, Error)]
 pub enum ForwardError {
@@ -12,24 +15,43 @@ pub enum ForwardError {
     AllBackendsFailed,
 
     #[error(transparent)]
-    Hyper(#[from] HyperError),
+    Hyper(#[from] hyper::Error),
 }
 
-pub async fn forward_failover<C>(
+type HttpsClient = Client<hyper_rustls::HttpsConnector<HttpConnector>>;
+
+static CLIENT_POOL: Lazy<DashMap<String, HttpsClient>> = Lazy::new(DashMap::new);
+
+fn get_or_build_client(backend: &str) -> HttpsClient {
+    if let Some(client) = CLIENT_POOL.get(backend) {
+        return client.clone();
+    }
+
+    let https = HttpsConnectorBuilder::new()
+    .with_native_roots()
+    .https_or_http()
+    .enable_http1()
+    .build();
+
+    let client = Client::builder()
+    .pool_max_idle_per_host(64)
+    .build::<_, Body>(https);
+
+    CLIENT_POOL.insert(backend.to_string(), client.clone());
+    client
+}
+
+pub async fn forward_failover(
     req: Request<Body>,
     backends: &[String],
-    client: &Client<C>,
-) -> Result<Response<Body>, ForwardError>
-where
-    C: Connect + Clone + Send + Sync + 'static,
-{
+) -> Result<Response<Body>, ForwardError> {
     let method = req.method().clone();
     let uri = req.uri().clone();
     let headers = req.headers().clone();
-
     let body_bytes = to_bytes(req.into_body()).await?;
 
     for backend in backends {
+        let client = get_or_build_client(backend);
         let uri_backend: Uri = backend.parse().expect("Invalid backend URI");
 
         let mut parts = uri.clone().into_parts();

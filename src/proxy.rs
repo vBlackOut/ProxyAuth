@@ -248,7 +248,7 @@ pub async fn proxy_without_proxy(
             })?;
 
         // let response_result = timeout(Duration::from_secs(10), client.request(hyper_req)).await;
-        let response_result = forward_failover(hyper_req, &rule.backends.clone(), &client).await;
+        let response_result = forward_failover(hyper_req, &rule.backends.clone()).await;
 
         match response_result {
             Ok(res) => {
