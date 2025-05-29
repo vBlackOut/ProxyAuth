@@ -117,7 +117,6 @@ pub async fn proxy_with_proxy(
             .body(Body::from(body))
             .map_err(|e| {
                 warn!(
-                    error = %e,
                     client_ip = %ip,
                     target = %full_url,
                     "Failed to read response body from backend"
@@ -139,7 +138,6 @@ pub async fn proxy_with_proxy(
                     .await
                     .map_err(|e| {
                         warn!(
-                            error = %e,
                             client_ip = %ip,
                             target = %full_url,
                             "Failed to read response body from backend"
@@ -212,7 +210,6 @@ pub async fn proxy_without_proxy(
                 .await
                 .map_err(|err| {
                     warn!(
-                        error = %err,
                         client_ip = %ip,
                         "Unauthorized token attempt"
                     );
@@ -244,7 +241,6 @@ pub async fn proxy_without_proxy(
             .body(Body::from(body))
             .map_err(|e| {
                 warn!(
-                    error = %e,
                     client_ip = %ip,
                     target = %full_url,
                     "Route fallback: 500 Internal error reason: {} ", e);
@@ -266,7 +262,6 @@ pub async fn proxy_without_proxy(
                     .await
                     .map_err(|e| {
                         warn!(
-                            error = %e,
                             client_ip = %ip,
                             target = %full_url,
                             "Route fallback: 500 Internal error reason: {} ", e);
@@ -276,7 +271,6 @@ pub async fn proxy_without_proxy(
             }
             Err(e) => {
                 warn!(
-                    error = %e,
                     client_ip = %ip,
                     target = %full_url,
                     "Route fallback: 404 Not Found – reason: {}", e);
