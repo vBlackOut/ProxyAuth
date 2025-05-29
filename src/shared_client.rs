@@ -17,8 +17,8 @@ use once_cell::sync::Lazy;
 type HttpsClient = Client<HttpsConnector<HttpConnector>>;
 type ProxyClient = Client<ProxyConnector<HttpsConnector<HttpConnector>>>;
 
-const MAX_CLIENTS: usize = 10000;
-const TTL: Duration = Duration::from_secs(600); // 10 minutes per client
+const MAX_CLIENTS: usize = 500;
+const TTL: Duration = Duration::from_secs(10000); // 10 seconds per client
 
 #[derive(Clone)]
 struct TimedValue<T> {
