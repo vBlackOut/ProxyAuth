@@ -253,7 +253,7 @@ pub async fn proxy_without_proxy(
                 error::ErrorServiceUnavailable("503 Service Unavailable")
             })?
         } else {
-            match timeout(Duration::from_millis(10000), client.request(hyper_req)).await {
+            match timeout(Duration::from_millis(500), client.request(hyper_req)).await {
                 Ok(Ok(res)) => res,
                 Ok(Err(e)) => {
                     warn!(
