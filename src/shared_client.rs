@@ -17,7 +17,7 @@ use once_cell::sync::Lazy;
 type HttpsClient = Client<HttpsConnector<HttpConnector>>;
 type ProxyClient = Client<ProxyConnector<HttpsConnector<HttpConnector>>>;
 
-const MAX_CLIENTS: usize = 500;
+const MAX_CLIENTS: usize = 5000;
 const TTL: Duration = Duration::from_secs(600); // 10 minutes per client
 
 #[derive(Clone)]
@@ -274,7 +274,7 @@ pub fn build_hyper_client_normal(state: &Arc<AppConfig>) -> Client<HttpsConnecto
     http_connector.set_connect_timeout(Some(timeout_duration));
     http_connector.enforce_http(false);
     http_connector.set_nodelay(true);
-    http_connector.set_keepalive(Some(Duration::from_secs(10)));
+    http_connector.set_keepalive(Some(Duration::from_secs(30)));
 
     let tls_config = Arc::new(config);
     let https_connector = HttpsConnector::from((http_connector, tls_config));
