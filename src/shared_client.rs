@@ -9,6 +9,7 @@ use std::{fs::File, io::BufReader};
 use hyper_proxy::{Proxy, ProxyConnector, Intercept};
 use clru::CLruCache;
 use std::num::NonZeroUsize;
+use std::{num::NonZeroUsize, sync::Mutex};
 use crate::config::AppConfig;
 use std::time::Duration;
 use std::str::FromStr;
