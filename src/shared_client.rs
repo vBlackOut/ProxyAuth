@@ -17,7 +17,7 @@ use once_cell::sync::Lazy;
 type HttpsClient = Client<HttpsConnector<HttpConnector>>;
 type ProxyClient = Client<ProxyConnector<HttpsConnector<HttpConnector>>>;
 
-const MAX_CLIENTS: usize = 5000;
+const MAX_CLIENTS: usize = 10000;
 const TTL: Duration = Duration::from_secs(600); // 10 minutes per client
 
 #[derive(Clone)]
@@ -28,7 +28,6 @@ struct TimedValue<T> {
 
 static CLIENT_CACHE: Lazy<DashMap<ClientKey, TimedValue<HttpsClient>>> = Lazy::new(DashMap::new);
 static CLIENT_CACHE_PROXY: Lazy<DashMap<ClientKey, TimedValue<ProxyClient>>> = Lazy::new(DashMap::new);
-
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct ClientOptions {
