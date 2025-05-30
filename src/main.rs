@@ -43,7 +43,7 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use std::time::Duration;
 use tls::load_rustls_config;
-use crate::shared_client::{build_hyper_client_proxy, build_hyper_client_normal, build_hyper_client_cert, ClientOptions, spawn_client_cache_cleanup_task};
+use crate::shared_client::{build_hyper_client_proxy, build_hyper_client_normal, build_hyper_client_cert, ClientOptions};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -116,9 +116,6 @@ async fn main() -> std::io::Result<()> {
 
     // detect if program is running proxyauth user
     ensure_running_as_proxyauth();
-
-    // thread for delete client unused
-    spawn_client_cache_cleanup_task();
 
     // download default config from repository
     create_config(
