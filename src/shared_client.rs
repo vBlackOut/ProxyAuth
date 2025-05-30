@@ -9,31 +9,13 @@ use std::{fs::File, io::BufReader};
 use hyper_proxy::{Proxy, ProxyConnector, Intercept};
 use crate::config::AppConfig;
 use std::time::Duration;
+use crate::proxy::ClientOptions;
 use std::str::FromStr;
 use once_cell::sync::Lazy;
-use std::cell::RefCell;
-use std::collections::HashMap;
 use dashmap::DashMap;
-
-type HttpsClient = Client<HttpsConnector<HttpConnector>>;
-type ThreadCache = HashMap<ClientKey, HttpsClient>;
-
-thread_local! {
-    static THREAD_CLIENT_CACHE: RefCell<ThreadCache> = RefCell::new(HashMap::new());
-}
 
 #[allow(dead_code)]
 static CLIENT_CACHE: Lazy<DashMap<ClientKey, Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>>> = Lazy::new(DashMap::new);
-static CLIENT_CACHE_PROXY: Lazy<DashMap<ClientKey, Client<ProxyConnector<HttpsConnector<HttpConnector>>>>> = Lazy::new(|| DashMap::new());
-
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub struct ClientOptions {
-    pub use_proxy: bool,
-    pub proxy_addr: Option<String>,
-    pub use_cert: bool,
-    pub cert_path: Option<String>,
-    pub key_path: Option<String>,
-}
 
 #[derive(Clone, Hash, Eq, PartialEq, Debug)]
 pub struct ClientKey {
@@ -57,63 +39,16 @@ impl ClientKey {
     }
 }
 
-
-pub fn get_or_build_thread_client(opts: &ClientOptions, state: &Arc<AppConfig>) -> HttpsClient {
-    let key = ClientKey::from_options(opts);
-
-    THREAD_CLIENT_CACHE.with(|cache| {
-        let mut cache = cache.borrow_mut();
-
-        if let Some(client) = cache.get(&key) {
-            return client.clone();
-        }
-
-        let client = if opts.use_cert {
-            build_hyper_client_cert(opts.clone(), state)
-        } else {
-            build_hyper_client_normal(state)
-        };
-
-        cache.insert(key.clone(), client.clone());
-        client
-    })
-}
-
-pub fn get_or_build_client(
-    opts: ClientOptions,
-    state: Arc<AppConfig>,
-) -> Client<HttpsConnector<HttpConnector>> {
+#[allow(dead_code)]
+pub fn get_or_build_client(opts: ClientOptions, state: Arc<AppConfig>) -> Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>> {
     let key = ClientKey::from_options(&opts);
 
     if let Some(client) = CLIENT_CACHE.get(&key) {
         return client.clone();
     }
 
-    let client = {
-        if opts.use_cert {
-            build_hyper_client_cert(opts.clone(), &state)
-        } else {
-            build_hyper_client_normal(&state)
-        }
-    };
-
+    let client = build_hyper_client_cert(opts.clone(), &state);
     CLIENT_CACHE.insert(key, client.clone());
-    client
-}
-
-pub fn get_or_build_client_proxy(
-    opts: ClientOptions,
-    state: Arc<AppConfig>,
-) -> Client<ProxyConnector<HttpsConnector<HttpConnector>>> {
-    let key = ClientKey::from_options(&opts);
-
-    if let Some(client) = CLIENT_CACHE_PROXY.get(&key) {
-        return client.clone();
-    }
-
-    let client = build_hyper_client_proxy(opts.clone(), &state);
-
-    CLIENT_CACHE_PROXY.insert(key, client.clone());
     client
 }
 
