@@ -48,7 +48,7 @@ fn cleanup_expired_clients() {
     })
     .collect();
 
-    for key in expired_proxy {
+    for key in &expired_proxy {
         CLIENT_CACHE_PROXY.remove(&key);
     }
 
