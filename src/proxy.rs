@@ -7,7 +7,7 @@ use tokio::time::{timeout, Duration};
 use crate::AppState;
 use crate::security::validate_token;
 use crate::loadbalancing::forward_failover;
-use crate::shared_client::{get_or_build_client, get_or_build_client_proxy, ClientOptions};
+use crate::shared_client::{get_or_build_thread_client, get_or_build_client_proxy, ClientOptions};
 use tracing::warn;
 
 pub fn client_ip(req: &HttpRequest) -> Option<IpAddr> {
@@ -177,21 +177,21 @@ pub async fn proxy_without_proxy(
         };
 
         let client = if !rule.cert.is_empty() {
-            get_or_build_client(ClientOptions {
+            get_or_build_thread_client(&ClientOptions {
                 use_proxy: false,
                 proxy_addr: None,
                 use_cert: true,
                 cert_path: rule.cert.get("file").cloned(),
                 key_path: rule.cert.get("key").cloned(),
-            }, data.config.clone())
+            }, &data.config.clone())
         } else {
-            get_or_build_client(ClientOptions {
+            get_or_build_thread_client(&ClientOptions {
                 use_proxy: false,
                 proxy_addr: None,
                 use_cert: false,
                 cert_path: rule.cert.get("file").cloned(),
                 key_path: rule.cert.get("key").cloned(),
-            }, data.config.clone())
+            }, &data.config.clone())
             // build_hyper_client_normal(&data.config.clone())
         };
 
