@@ -17,23 +17,32 @@ use fxhash::FxBuildHasher;
 type FastDashMap<K, V> = DashMap<K, V, FxBuildHasher>;
 
 
-fn cleanup_expired_clients() {
-    let now = Instant::now();
-
-    CLIENT_CACHE.retain(|_, v| now.duration_since(v.inserted) < TTL);
-    CLIENT_CACHE_PROXY.retain(|_, v| now.duration_since(v.inserted) < TTL);
-}
-
 pub fn spawn_client_cache_cleanup_task() {
     tokio::spawn(async {
-        let mut interval = tokio::time::interval(Duration::from_secs(60));
+        let mut interval = interval(Duration::from_secs(60));
         loop {
             interval.tick().await;
-            cleanup_expired_clients();
-            tracing::debug!("Client cache cleanup ran");
+            let now = Instant::now();
+
+            let old_clients = CLIENT_CACHE.len();
+            CLIENT_CACHE.retain(|_, v| now.duration_since(v.inserted) < TTL);
+            let new_clients = CLIENT_CACHE.len();
+
+            let old_proxy = CLIENT_CACHE_PROXY.len();
+            CLIENT_CACHE_PROXY.retain(|_, v| now.duration_since(v.inserted) < TTL);
+            let new_proxy = CLIENT_CACHE_PROXY.len();
+
+            tracing::debug!(
+                "Client cache cleanup ran: {} -> {}, proxy: {} -> {}",
+                old_clients,
+                new_clients,
+                old_proxy,
+                new_proxy
+            );
         }
     });
 }
+
 
 #[allow(dead_code)]
 type HttpsClient = Client<HttpsConnector<HttpConnector>>;
