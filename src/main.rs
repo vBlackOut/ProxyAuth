@@ -8,6 +8,7 @@ mod ratelimit;
 mod security;
 mod start_actix;
 mod stats;
+mod build_infos;
 mod timezone;
 mod tokencount;
 mod tls;
@@ -53,6 +54,7 @@ async fn main() -> std::io::Result<()> {
 
     if let Some(command) = &cli.command {
         match command {
+
             Commands::Prepare => {
                 let _ = ensure_user_proxyauth_exists();
                 let _ = setup_proxyauth_directory();
@@ -402,8 +404,12 @@ async fn main() -> std::io::Result<()> {
                     .default_service(web::to(global_proxy))
             })
             .workers((config.worker as u8).into())
+<<<<<<< HEAD
             .keep_alive(Duration::from_secs(5))
             .listen_rustls_0_21(listener, load_rustls_config())? 
+=======
+            .listen_rustls_0_21(listener, load_rustls_config())?
+>>>>>>> 096d03c (Prepare version 0.7.3)
             .run()
             .await
         }
