@@ -30,9 +30,6 @@ pub struct RouteRule {
 
     #[serde(default = "default_cert")]
     pub cert: HashMap<String, String>,
-
-    #[serde(default = "default_backends")]
-    pub backends: Vec<String>,
 }
 
 #[derive(Default, Debug, Deserialize)]
@@ -90,9 +87,6 @@ pub struct AppConfig {
 
     #[serde(default = "default_max_idle_per_host")]
     pub max_idle_per_host: u16,
-
-    #[serde(default = "default_timezone")]
-    pub timezone: String,
 }
 
 impl Serialize for AppConfig {
@@ -137,19 +131,11 @@ fn default_host() -> String {
     "0.0.0.0".to_string()
 }
 
-fn default_timezone() -> String {
-    "Europe/Paris".to_string()
-}
-
 fn default_port() -> u16 {
     8080
 }
 
 fn default_username() -> Vec<String> {
-    [].to_vec()
-}
-
-fn default_backends() -> Vec<String> {
     [].to_vec()
 }
 

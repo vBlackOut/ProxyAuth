@@ -7,7 +7,6 @@ pub mod security;
 pub mod timezone;
 pub mod tokencount;
 pub mod shared_client;
-pub mod loadbalancing;
 
 pub use auth::auth;
 pub use config::{AppConfig, AppState, RouteConfig};

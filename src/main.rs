@@ -12,7 +12,6 @@ mod timezone;
 mod tokencount;
 mod tls;
 mod shared_client;
-mod loadbalancing;
 
 use actix_governor::{Governor, GovernorConfigBuilder};
 use actix_web::{App, HttpServer, web};
@@ -43,7 +42,8 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use std::time::Duration;
 use tls::load_rustls_config;
-use crate::shared_client::{build_hyper_client_proxy, build_hyper_client_normal, build_hyper_client_cert, ClientOptions};
+use crate::shared_client::{build_hyper_client_proxy, build_hyper_client_normal, build_hyper_client_cert};
+use crate::proxy::ClientOptions;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -264,7 +264,7 @@ async fn main() -> std::io::Result<()> {
 
     let socket = Socket::new(Domain::IPV4, Type::STREAM, Some(Protocol::TCP))?;
     socket.set_reuse_address(true)?;
-    socket.set_reuse_port(true)?;
+    socket.set_reuse_port(true)?; // <-- ici
     socket.bind(&sock_addr.into())?;
     socket.listen(1024)?;
 
@@ -274,7 +274,7 @@ async fn main() -> std::io::Result<()> {
         "NO_RATELIMIT_AUTH" => {
 
             let governor_proxy_conf = GovernorConfigBuilder::default()
-                .seconds_per_request(requests_per_second_proxy_config)
+                .requests_per_second(requests_per_second_proxy_config)
                 .burst_size(burst_proxy_config)
                 .key_extractor(UserToken)
                 .period(std::time::Duration::from_millis(
@@ -292,7 +292,7 @@ async fn main() -> std::io::Result<()> {
                     .default_service(web::to(global_proxy).wrap(Governor::new(&governor_proxy_conf)))
             })
             .workers((config.worker as u8).into())
-            .listen_rustls_0_21(listener, load_rustls_config())?
+            .listen_rustls_0_21(listener, load_rustls_config())? // <-- remplacement ici
             .run()
             .await
         }
@@ -300,7 +300,7 @@ async fn main() -> std::io::Result<()> {
         "NO_RATELIMIT_PROXY" => {
 
             let governor_auth_conf = GovernorConfigBuilder::default()
-                .seconds_per_request(requests_per_second_auth_config)
+                .requests_per_second(requests_per_second_auth_config)
                 .burst_size(burst_auth_config)
                 .use_headers()
                 .period(std::time::Duration::from_millis(delay_block_auth_config))
@@ -322,7 +322,7 @@ async fn main() -> std::io::Result<()> {
                     .default_service(web::to(global_proxy))
             })
             .workers((config.worker as u8).into())
-            .listen_rustls_0_21(listener, load_rustls_config())?
+            .listen_rustls_0_21(listener, load_rustls_config())? // <-- remplacement ici
             .run()
             .await
         }
@@ -330,7 +330,7 @@ async fn main() -> std::io::Result<()> {
         "RATELIMIT_GLOBAL_ON" => {
 
             let governor_auth_conf = GovernorConfigBuilder::default()
-                .seconds_per_request(requests_per_second_auth_config)
+                .requests_per_second(requests_per_second_auth_config)
                 .burst_size(burst_auth_config)
                 .use_headers()
                 .period(std::time::Duration::from_millis(delay_block_auth_config))
@@ -338,7 +338,7 @@ async fn main() -> std::io::Result<()> {
                 .unwrap();
 
             let governor_proxy_conf = GovernorConfigBuilder::default()
-                .seconds_per_request(requests_per_second_proxy_config)
+                .requests_per_second(requests_per_second_proxy_config)
                 .burst_size(burst_proxy_config)
                 .key_extractor(UserToken)
                 .period(std::time::Duration::from_millis(
@@ -365,7 +365,7 @@ async fn main() -> std::io::Result<()> {
                     .default_service(web::to(global_proxy).wrap(Governor::new(&governor_proxy_conf)))
             })
             .workers((config.worker as u8).into())
-            .listen_rustls_0_21(listener, load_rustls_config())?
+            .listen_rustls_0_21(listener, load_rustls_config())? // <-- remplacement ici
             .run()
             .await
         }
@@ -381,7 +381,7 @@ async fn main() -> std::io::Result<()> {
             })
             .workers((config.worker as u8).into())
             .keep_alive(Duration::from_secs(15))
-            .listen_rustls_0_21(listener, load_rustls_config())?
+            .listen_rustls_0_21(listener, load_rustls_config())? // <-- remplacement ici
             .run()
             .await
         }
@@ -399,7 +399,7 @@ async fn main() -> std::io::Result<()> {
                     .default_service(web::to(global_proxy))
             })
             .workers((config.worker as u8).into())
-            .listen_rustls_0_21(listener, load_rustls_config())? 
+            .listen_rustls_0_21(listener, load_rustls_config())? // <-- remplacement ici
             .run()
             .await
         }
