@@ -43,8 +43,7 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 use std::time::Duration;
 use tls::load_rustls_config;
-use crate::shared_client::{build_hyper_client_proxy, build_hyper_client_normal, build_hyper_client_cert};
-use crate::proxy::ClientOptions;
+use crate::shared_client::{build_hyper_client_proxy, build_hyper_client_normal, build_hyper_client_cert, ClientOptions};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
