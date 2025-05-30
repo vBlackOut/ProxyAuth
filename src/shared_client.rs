@@ -78,7 +78,7 @@ pub fn get_or_build_client(
     }
 
     if CLIENT_CACHE.len() >= MAX_CLIENTS {
-        for entry in CLIENT_CACHE.raw_iter() {
+        for entry in CLIENT_CACHE.iter() {
             CLIENT_CACHE.remove(entry.key());
             break;
         }
@@ -117,7 +117,7 @@ pub fn get_or_build_client_proxy(
     }
 
     if CLIENT_CACHE_PROXY.len() >= MAX_CLIENTS {
-        for entry in CLIENT_CACHE_PROXY.raw_iter() {
+        for entry in CLIENT_CACHE_PROXY.iter() {
             CLIENT_CACHE_PROXY.remove(entry.key());
             break;
         }
