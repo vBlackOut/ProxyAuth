@@ -17,33 +17,57 @@ use fxhash::FxBuildHasher;
 
 type FastDashMap<K, V> = DashMap<K, V, FxBuildHasher>;
 
+fn cleanup_expired_clients() {
+    let now = Instant::now();
+
+    // Nettoyage CLIENT_CACHE
+    let expired: Vec<_> = CLIENT_CACHE
+    .iter()
+    .filter_map(|entry| {
+        if now.duration_since(entry.inserted) >= TTL {
+            Some(entry.key().clone())
+        } else {
+            None
+        }
+    })
+    .collect();
+
+    for key in expired {
+        CLIENT_CACHE.remove(&key);
+    }
+
+    // Nettoyage CLIENT_CACHE_PROXY
+    let expired_proxy: Vec<_> = CLIENT_CACHE_PROXY
+    .iter()
+    .filter_map(|entry| {
+        if now.duration_since(entry.inserted) >= TTL {
+            Some(entry.key().clone())
+        } else {
+            None
+        }
+    })
+    .collect();
+
+    for key in expired_proxy {
+        CLIENT_CACHE_PROXY.remove(&key);
+    }
+
+    tracing::debug!(
+        "Cleaned expired clients: {} (normal) + {} (proxy)",
+                    expired.len(),
+                    expired_proxy.len()
+    );
+}
 
 pub fn spawn_client_cache_cleanup_task() {
     tokio::spawn(async {
-        let mut interval = interval(Duration::from_secs(60));
+        let mut interval = tokio::time::interval(Duration::from_secs(60));
         loop {
             interval.tick().await;
-            let now = Instant::now();
-
-            let old_clients = CLIENT_CACHE.len();
-            CLIENT_CACHE.retain(|_, v| now.duration_since(v.inserted) < TTL);
-            let new_clients = CLIENT_CACHE.len();
-
-            let old_proxy = CLIENT_CACHE_PROXY.len();
-            CLIENT_CACHE_PROXY.retain(|_, v| now.duration_since(v.inserted) < TTL);
-            let new_proxy = CLIENT_CACHE_PROXY.len();
-
-            tracing::debug!(
-                "Client cache cleanup ran: {} -> {}, proxy: {} -> {}",
-                old_clients,
-                new_clients,
-                old_proxy,
-                new_proxy
-            );
+            cleanup_expired_clients();
         }
     });
 }
-
 
 #[allow(dead_code)]
 type HttpsClient = Client<HttpsConnector<HttpConnector>>;
