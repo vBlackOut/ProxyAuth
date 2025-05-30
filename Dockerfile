@@ -1,7 +1,7 @@
 FROM rust:alpine
 
 # Install required system dependencies
-RUN apk add --no-cache openssl openssl-libs-static openssl-dev musl-dev build-base pkgconf alpine-sdk sudo
+RUN apk add --no-cache openssl openssl-libs-static openssl-dev musl-dev build-base pkgconf alpine-sdk sudo nettle-dev
 
 # Create non-root user
 RUN addgroup -g 1000 proxyauth && \

@@ -8,30 +8,27 @@ mod ratelimit;
 mod security;
 mod start_actix;
 mod stats;
-mod build_infos;
 mod timezone;
 mod tokencount;
 mod tls;
 mod shared_client;
 mod loadbalancing;
+mod build_info;
+mod prompt;
+mod export;
 
 use actix_governor::{Governor, GovernorConfigBuilder};
 use actix_web::{App, HttpServer, web};
 use security::init_derived_key;
 use auth::auth;
-use clap::Parser;
-use command::{Cli, Commands};
 use config::{AppConfig, AppState, RouteConfig, load_config};
 use def_config::{
-    create_config, ensure_running_as_proxyauth, ensure_user_proxyauth_exists,
-    setup_proxyauth_directory, switch_to_user,
+    create_config, ensure_running_as_proxyauth, switch_to_user,
 };
 use std::net::TcpListener;
 use socket2::{Socket, Domain, Type, Protocol};
 use proxy::global_proxy;
 use ratelimit::UserToken;
-use reqwest::ClientBuilder;
-use reqwest::header::{HeaderMap, HeaderValue};
 use start_actix::mode_actix_web;
 use stats::stats as metric_stats;
 use std::{fs, sync::Arc};
@@ -45,73 +42,14 @@ use tracing_subscriber::util::SubscriberInitExt;
 use std::time::Duration;
 use tls::load_rustls_config;
 use crate::shared_client::{build_hyper_client_proxy, build_hyper_client_normal, build_hyper_client_cert, ClientOptions};
+use crate::prompt::prompt;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let cli = Cli::parse();
 
-    if let Some(command) = &cli.command {
-        match command {
-
-            Commands::Prepare => {
-                let _ = ensure_user_proxyauth_exists();
-                let _ = setup_proxyauth_directory();
-                return Ok(());
-            }
-
-            Commands::Stats => {
-                // launch as user proxyauth
-                let _ = switch_to_user("proxyauth");
-
-                // detect if program is running proxyauth user
-                ensure_running_as_proxyauth();
-
-                let config: Arc<AppConfig> = load_config("/etc/proxyauth/config/config.json");
-
-                let mut headers = HeaderMap::new();
-                headers.insert(
-                    "X-Auth-Token",
-                    HeaderValue::from_str(&config.token_admin).expect("invalid token string"),
-                );
-
-                let client = ClientBuilder::new()
-                    .danger_accept_invalid_certs(true)
-                    .build()
-                    .expect("Failed to build reqwest client");
-
-                match client
-                    .get("https://127.0.0.1:8080/adm/stats")
-                    .headers(headers)
-                    .send()
-                    .await
-                {
-                    Ok(response) => {
-                        if response.status().is_success() {
-                            match response.text().await {
-                                Ok(body) => {
-                                    println!("{}", body);
-                                    std::process::exit(0);
-                                }
-                                Err(err) => {
-                                    eprintln!("Failed to read response body: {}", err);
-                                    std::process::exit(1);
-                                }
-                            }
-                        } else {
-                            eprintln!("Server responded with error status: {}", response.status());
-                            std::process::exit(1);
-                        }
-                    }
-                    Err(err) => {
-                        eprintln!("Failed to connect to proxyauth: {}", err);
-                        std::process::exit(1);
-                    }
-                }
-            }
-        }
-    }
+    let _ = prompt().await;
 
     // launch as user proxyauth
     let _ = switch_to_user("proxyauth");
@@ -404,12 +342,8 @@ async fn main() -> std::io::Result<()> {
                     .default_service(web::to(global_proxy))
             })
             .workers((config.worker as u8).into())
-<<<<<<< HEAD
             .keep_alive(Duration::from_secs(5))
-            .listen_rustls_0_21(listener, load_rustls_config())? 
-=======
             .listen_rustls_0_21(listener, load_rustls_config())?
->>>>>>> 096d03c (Prepare version 0.7.3)
             .run()
             .await
         }

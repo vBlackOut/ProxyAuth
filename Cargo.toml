@@ -1,10 +1,6 @@
 [package]
 name = "proxyauth"
-<<<<<<< HEAD
-version = "0.7.2"
-=======
 version = "0.7.3-beta0"
->>>>>>> 096d03c (Prepare version 0.7.3)
 edition = "2024"
 authors = ["Vladimir S"]
 repository = "https://github.com/ProxyAuth/ProxyAuth"
@@ -82,3 +78,5 @@ socket2 = "0.5"
 blake3 = "1"
 http = "1"
 fxhash = "0.2"
+sequoia-openpgp = "2.0"
+anyhow = "1.0"
