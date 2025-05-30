@@ -26,8 +26,8 @@ struct TimedValue<T> {
     value: T,
 }
 
-static CLIENT_CACHE: Lazy<DashMap<ClientKey, TimedValue<HttpsClient>>> = Lazy::new(DashMap::new);
-static CLIENT_CACHE_PROXY: Lazy<DashMap<ClientKey, TimedValue<ProxyClient>>> = Lazy::new(DashMap::new);
+static CLIENT_CACHE: Lazy<FxDashMap<ClientKey, TimedValue<HttpsClient>>> = Lazy::new(FxDashMap::default);
+static CLIENT_CACHE_PROXY: Lazy<FxDashMap<ClientKey, TimedValue<ProxyClient>>> = Lazy::new(FxDashMap::default);
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct ClientOptions {
@@ -75,8 +75,9 @@ pub fn get_or_build_client(
     }
 
     if CLIENT_CACHE.len() >= MAX_CLIENTS {
-        if let Some(oldest_key) = CLIENT_CACHE.iter().next().map(|e| e.key().clone()) {
-            CLIENT_CACHE.remove(&oldest_key);
+        for entry in CLIENT_CACHE.raw_iter() {
+            CLIENT_CACHE.remove(entry.key());
+            break;
         }
     }
 
@@ -86,9 +87,17 @@ pub fn get_or_build_client(
         build_hyper_client_normal(&state)
     };
 
-    CLIENT_CACHE.insert(key, TimedValue { inserted: Instant::now(), value: client.clone() });
+    CLIENT_CACHE.insert(
+        key,
+        TimedValue {
+            inserted: Instant::now(),
+            value: client.clone(),
+        },
+    );
+
     client
 }
+
 
 pub fn get_or_build_client_proxy(
     opts: ClientOptions,
@@ -105,13 +114,22 @@ pub fn get_or_build_client_proxy(
     }
 
     if CLIENT_CACHE_PROXY.len() >= MAX_CLIENTS {
-        if let Some(oldest_key) = CLIENT_CACHE_PROXY.iter().next().map(|e| e.key().clone()) {
-            CLIENT_CACHE_PROXY.remove(&oldest_key);
+        for entry in CLIENT_CACHE_PROXY.raw_iter() {
+            CLIENT_CACHE_PROXY.remove(entry.key());
+            break;
         }
     }
 
     let client = build_hyper_client_proxy(opts.clone(), &state);
-    CLIENT_CACHE_PROXY.insert(key, TimedValue { inserted: Instant::now(), value: client.clone() });
+
+    CLIENT_CACHE_PROXY.insert(
+        key,
+        TimedValue {
+            inserted: Instant::now(),
+            value: client.clone(),
+        },
+    );
+
     client
 }
 
