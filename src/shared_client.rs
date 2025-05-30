@@ -7,11 +7,14 @@ use rustls::{Certificate, PrivateKey};
 use rustls_pemfile::{certs, pkcs8_private_keys};
 use std::{fs::File, io::BufReader};
 use hyper_proxy::{Proxy, ProxyConnector, Intercept};
+use dashmap::DashMap;
 use crate::config::AppConfig;
 use std::time::{Duration, Instant};
 use std::str::FromStr;
-use fxdashmap::FxDashMap;
 use once_cell::sync::Lazy;
+use fxhash::FxBuildHasher;
+
+type FastDashMap<K, V> = DashMap<K, V, FxBuildHasher>;
 
 #[allow(dead_code)]
 type HttpsClient = Client<HttpsConnector<HttpConnector>>;
@@ -26,8 +29,8 @@ struct TimedValue<T> {
     value: T,
 }
 
-static CLIENT_CACHE: Lazy<FxDashMap<ClientKey, TimedValue<HttpsClient>>> = Lazy::new(FxDashMap::default);
-static CLIENT_CACHE_PROXY: Lazy<FxDashMap<ClientKey, TimedValue<ProxyClient>>> = Lazy::new(FxDashMap::default);
+static CLIENT_CACHE: Lazy<FastDashMap<ClientKey, TimedValue<HttpsClient>>> = Lazy::new(FastDashMap::default);
+static CLIENT_CACHE_PROXY: Lazy<FastDashMap<ClientKey, TimedValue<ProxyClient>>> = Lazy::new(FastDashMap::default);
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct ClientOptions {
