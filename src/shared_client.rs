@@ -32,7 +32,7 @@ fn cleanup_expired_clients() {
     })
     .collect();
 
-    for key in expired {
+    for key in &expired {
         CLIENT_CACHE.remove(&key);
     }
 
@@ -54,8 +54,8 @@ fn cleanup_expired_clients() {
 
     tracing::debug!(
         "Cleaned expired clients: {} (normal) + {} (proxy)",
-                    expired.len(),
-                    expired_proxy.len()
+                    &expired.len(),
+                    &expired_proxy.len()
     );
 }
 
