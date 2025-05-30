@@ -20,7 +20,7 @@ type FastDashMap<K, V> = DashMap<K, V, FxBuildHasher>;
 type HttpsClient = Client<HttpsConnector<HttpConnector>>;
 type ProxyClient = Client<ProxyConnector<HttpsConnector<HttpConnector>>>;
 
-const MAX_CLIENTS: usize = 10000;
+const MAX_CLIENTS: usize = 500;
 const TTL: Duration = Duration::from_secs(60); // 10 seconds per client
 
 #[derive(Clone)]
