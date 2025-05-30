@@ -7,82 +7,15 @@ use rustls::{Certificate, PrivateKey};
 use rustls_pemfile::{certs, pkcs8_private_keys};
 use std::{fs::File, io::BufReader};
 use hyper_proxy::{Proxy, ProxyConnector, Intercept};
-use dashmap::DashMap;
 use crate::config::AppConfig;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use std::str::FromStr;
 use once_cell::sync::Lazy;
-use fxhash::FxBuildHasher;
-
-type FastDashMap<K, V> = DashMap<K, V, FxBuildHasher>;
-
-fn cleanup_expired_clients() {
-    let now = Instant::now();
-
-    // Nettoyage CLIENT_CACHE
-    let expired: Vec<_> = CLIENT_CACHE
-    .iter()
-    .filter_map(|entry| {
-        if now.duration_since(entry.inserted) >= TTL {
-            Some(entry.key().clone())
-        } else {
-            None
-        }
-    })
-    .collect();
-
-    for key in &expired {
-        CLIENT_CACHE.remove(&key);
-    }
-
-    // Nettoyage CLIENT_CACHE_PROXY
-    let expired_proxy: Vec<_> = CLIENT_CACHE_PROXY
-    .iter()
-    .filter_map(|entry| {
-        if now.duration_since(entry.inserted) >= TTL {
-            Some(entry.key().clone())
-        } else {
-            None
-        }
-    })
-    .collect();
-
-    for key in &expired_proxy {
-        CLIENT_CACHE_PROXY.remove(&key);
-    }
-
-    tracing::debug!(
-        "Cleaned expired clients: {} (normal) + {} (proxy)",
-                    &expired.len(),
-                    &expired_proxy.len()
-    );
-}
-
-pub fn spawn_client_cache_cleanup_task() {
-    tokio::spawn(async {
-        let mut interval = tokio::time::interval(Duration::from_secs(60));
-        loop {
-            interval.tick().await;
-            cleanup_expired_clients();
-        }
-    });
-}
+use dashmap::DashMap;
 
 #[allow(dead_code)]
-type HttpsClient = Client<HttpsConnector<HttpConnector>>;
-type ProxyClient = Client<ProxyConnector<HttpsConnector<HttpConnector>>>;
-
-const MAX_CLIENTS: usize = 10000;
-const TTL: Duration = Duration::from_secs(60); // 10 seconds per client
-
-#[derive(Clone)]
-struct TimedValue<T> {
-    inserted: Instant,
-    value: T,
-}
-
-static CLIENT_CACHE: Lazy<FastDashMap<ClientKey, TimedValue<HttpsClient>>> = Lazy::new(FastDashMap::default);
-static CLIENT_CACHE_PROXY: Lazy<FastDashMap<ClientKey, TimedValue<ProxyClient>>> = Lazy::new(FastDashMap::default);
+static CLIENT_CACHE: Lazy<DashMap<ClientKey, Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>>> = Lazy::new(DashMap::new);
+static CLIENT_CACHE_PROXY: Lazy<DashMap<ClientKey, Client<ProxyConnector<HttpsConnector<HttpConnector>>>>> = Lazy::new(|| DashMap::new());
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct ClientOptions {
@@ -93,7 +26,7 @@ pub struct ClientOptions {
     pub key_path: Option<String>,
 }
 
-#[derive(Clone, Hash, Eq, PartialEq, Debug, Ord, PartialOrd)]
+#[derive(Clone, Hash, Eq, PartialEq, Debug)]
 pub struct ClientKey {
     pub use_proxy: bool,
     pub proxy_addr: Option<String>,
@@ -118,78 +51,43 @@ impl ClientKey {
 pub fn get_or_build_client(
     opts: ClientOptions,
     state: Arc<AppConfig>,
-) -> HttpsClient {
+) -> Client<HttpsConnector<HttpConnector>> {
     let key = ClientKey::from_options(&opts);
 
-    if let Some(entry) = CLIENT_CACHE.get(&key) {
-        if entry.inserted.elapsed() < TTL {
-            return entry.value.clone();
+    if let Some(client) = CLIENT_CACHE.get(&key) {
+        return client.clone();
+    }
+
+    let client = {
+        if opts.use_cert {
+            build_hyper_client_cert(opts.clone(), &state)
         } else {
-            CLIENT_CACHE.remove(&key);
+            build_hyper_client_normal(&state)
         }
-    }
-
-    if CLIENT_CACHE.len() >= MAX_CLIENTS {
-        for entry in CLIENT_CACHE.iter() {
-            CLIENT_CACHE.remove(entry.key());
-            break;
-        }
-    }
-
-    let client = if opts.use_cert {
-        build_hyper_client_cert(opts.clone(), &state)
-    } else {
-        build_hyper_client_normal(&state)
     };
 
-    CLIENT_CACHE.insert(
-        key,
-        TimedValue {
-            inserted: Instant::now(),
-            value: client.clone(),
-        },
-    );
-
+    CLIENT_CACHE.insert(key, client.clone());
     client
 }
-
 
 pub fn get_or_build_client_proxy(
     opts: ClientOptions,
     state: Arc<AppConfig>,
-) -> ProxyClient {
+) -> Client<ProxyConnector<HttpsConnector<HttpConnector>>> {
     let key = ClientKey::from_options(&opts);
 
-    if let Some(entry) = CLIENT_CACHE_PROXY.get(&key) {
-        if entry.inserted.elapsed() < TTL {
-            return entry.value.clone();
-        } else {
-            CLIENT_CACHE_PROXY.remove(&key);
-        }
-    }
-
-    if CLIENT_CACHE_PROXY.len() >= MAX_CLIENTS {
-        for entry in CLIENT_CACHE_PROXY.iter() {
-            CLIENT_CACHE_PROXY.remove(entry.key());
-            break;
-        }
+    if let Some(client) = CLIENT_CACHE_PROXY.get(&key) {
+        return client.clone();
     }
 
     let client = build_hyper_client_proxy(opts.clone(), &state);
 
-    CLIENT_CACHE_PROXY.insert(
-        key,
-        TimedValue {
-            inserted: Instant::now(),
-            value: client.clone(),
-        },
-    );
-
+    CLIENT_CACHE_PROXY.insert(key, client.clone());
     client
 }
 
 pub fn build_hyper_client_cert(opts: ClientOptions, state: &Arc<AppConfig>) -> Client<HttpsConnector<HttpConnector>> {
-    let timeout_duration = Duration::from_millis(10000);
+    let timeout_duration = Duration::from_millis(1000);
 
     let mut root_store = RootCertStore::empty();
     root_store.add_trust_anchors(TLS_SERVER_ROOTS.iter().map(|ta| {
@@ -252,7 +150,7 @@ pub fn build_hyper_client_cert(opts: ClientOptions, state: &Arc<AppConfig>) -> C
 }
 
 pub fn build_hyper_client_proxy(opts: ClientOptions,  state: &Arc<AppConfig>) -> Client<ProxyConnector<HttpsConnector<HttpConnector>>> {
-    let timeout_duration = Duration::from_millis(10000);
+    let timeout_duration = Duration::from_millis(1000);
 
     let mut root_store = RootCertStore::empty();
     root_store.add_trust_anchors(TLS_SERVER_ROOTS.iter().map(|ta| {
@@ -326,7 +224,7 @@ pub fn build_hyper_client_proxy(opts: ClientOptions,  state: &Arc<AppConfig>) ->
 }
 
 pub fn build_hyper_client_normal(state: &Arc<AppConfig>) -> Client<HttpsConnector<HttpConnector>> {
-    let timeout_duration = Duration::from_millis(10000);
+    let timeout_duration = Duration::from_millis(1000);
 
     let mut root_store = RootCertStore::empty();
     root_store.add_trust_anchors(TLS_SERVER_ROOTS.iter().map(|ta| {
@@ -346,7 +244,7 @@ pub fn build_hyper_client_normal(state: &Arc<AppConfig>) -> Client<HttpsConnecto
     http_connector.set_connect_timeout(Some(timeout_duration));
     http_connector.enforce_http(false);
     http_connector.set_nodelay(true);
-    http_connector.set_keepalive(Some(Duration::from_secs(30)));
+    http_connector.set_keepalive(Some(Duration::from_secs(10)));
 
     let tls_config = Arc::new(config);
     let https_connector = HttpsConnector::from((http_connector, tls_config));
