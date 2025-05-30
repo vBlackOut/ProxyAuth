@@ -11,7 +11,16 @@ use crate::config::AppConfig;
 use std::time::Duration;
 use std::str::FromStr;
 use once_cell::sync::Lazy;
+use std::cell::RefCell;
+use std::collections::HashMap;
 use dashmap::DashMap;
+
+type HttpsClient = Client<HttpsConnector<HttpConnector>>;
+type ThreadCache = HashMap<ClientKey, HttpsClient>;
+
+thread_local! {
+    static THREAD_CLIENT_CACHE: RefCell<ThreadCache> = RefCell::new(HashMap::new());
+}
 
 #[allow(dead_code)]
 static CLIENT_CACHE: Lazy<DashMap<ClientKey, Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>>> = Lazy::new(DashMap::new);
@@ -46,6 +55,28 @@ impl ClientKey {
             key_path: opts.key_path.clone().map(|s| s.to_string()),
         }
     }
+}
+
+
+pub fn get_or_build_thread_client(opts: &ClientOptions, state: &Arc<AppConfig>) -> HttpsClient {
+    let key = ClientKey::from_options(opts);
+
+    THREAD_CLIENT_CACHE.with(|cache| {
+        let mut cache = cache.borrow_mut();
+
+        if let Some(client) = cache.get(&key) {
+            return client.clone();
+        }
+
+        let client = if opts.use_cert {
+            build_hyper_client_cert(opts.clone(), state)
+        } else {
+            build_hyper_client_normal(state)
+        };
+
+        cache.insert(key.clone(), client.clone());
+        client
+    })
 }
 
 pub fn get_or_build_client(

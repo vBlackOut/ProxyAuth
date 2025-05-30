@@ -7,7 +7,8 @@ use tokio::time::{timeout, Duration};
 use crate::AppState;
 use crate::security::validate_token;
 use crate::loadbalancing::forward_failover;
-use crate::shared_client::{get_or_build_client, get_or_build_client_proxy, ClientOptions};
+use crate::shared_client::{get_or_build_thread_client, get_or_build_client_proxy, ClientOptions};
+use tracing::warn;
 
 pub fn client_ip(req: &HttpRequest) -> Option<IpAddr> {
     req.headers()
@@ -85,6 +86,13 @@ pub async fn proxy_with_proxy(
                 .map_err(|err| error::ErrorUnauthorized(err))?;
 
             if !rule.username.contains(&username) {
+                warn!(
+                    client_ip = %ip,
+                    username = %username,
+                    path = %forward_path,
+                    target = %full_url,
+                    "This username is not authorized to access"
+                );
                 return Ok(HttpResponse::Unauthorized().body("403 Forbidden"));
             }
             username
@@ -107,9 +115,16 @@ pub async fn proxy_with_proxy(
 
         let hyper_req = request_builder
             .body(Body::from(body))
-            .map_err(|e| error::ErrorInternalServerError(format!("Failed to build request: {}", e)))?;
+            .map_err(|e| {
+                warn!(
+                    client_ip = %ip,
+                    target = %full_url,
+                    "Failed to read response body from backend"
+                );
+                error::ErrorInternalServerError(format!("{}", e))
+            })?;
 
-        let response_result = timeout(Duration::from_secs(5), client.request(hyper_req)).await;
+        let response_result = timeout(Duration::from_secs(10), client.request(hyper_req)).await;
 
         match response_result {
             Ok(Ok(res)) => {
@@ -121,10 +136,20 @@ pub async fn proxy_with_proxy(
                 }
                 let body_bytes = hyper::body::to_bytes(res.into_body())
                     .await
-                    .map_err(|e| error::ErrorInternalServerError(format!("Failed to read response: {}", e)))?;
+                    .map_err(|e| {
+                        warn!(
+                            client_ip = %ip,
+                            target = %full_url,
+                            "Failed to read response body from backend"
+                        );
+                        error::ErrorInternalServerError(format!("{}", e))
+                    })?;
                 Ok(client_resp.body(body_bytes))
             }
-            Ok(Err(e)) => Ok(HttpResponse::BadGateway().body(format!("Request failed: {}", e))),
+            Ok(Err(e)) => {
+                warn!("Route fallback: 404 Not Found – reason: {}", e);
+                Ok(HttpResponse::NotFound().body("404 Not Found"))
+            },
             Err(_) => Ok(HttpResponse::GatewayTimeout().body("Target unreachable (timeout)")),
         }
     } else {
@@ -152,21 +177,21 @@ pub async fn proxy_without_proxy(
         };
 
         let client = if !rule.cert.is_empty() {
-            get_or_build_client(ClientOptions {
+            get_or_build_thread_client(&ClientOptions {
                 use_proxy: false,
                 proxy_addr: None,
                 use_cert: true,
                 cert_path: rule.cert.get("file").cloned(),
                 key_path: rule.cert.get("key").cloned(),
-            }, data.config.clone())
+            }, &data.config.clone())
         } else {
-            get_or_build_client(ClientOptions {
+            get_or_build_thread_client(&ClientOptions {
                 use_proxy: false,
                 proxy_addr: None,
                 use_cert: false,
                 cert_path: rule.cert.get("file").cloned(),
                 key_path: rule.cert.get("key").cloned(),
-            }, data.config.clone())
+            }, &data.config.clone())
             // build_hyper_client_normal(&data.config.clone())
         };
 
@@ -183,7 +208,13 @@ pub async fn proxy_without_proxy(
 
             let username = validate_token(token_header, &data, &data.config, &ip)
                 .await
-                .map_err(|err| error::ErrorUnauthorized(err))?;
+                .map_err(|err| {
+                    warn!(
+                        client_ip = %ip,
+                        "Unauthorized token attempt"
+                    );
+                    error::ErrorUnauthorized(err)
+                })?;
 
             if !rule.username.contains(&username) {
                 return Ok(HttpResponse::Unauthorized().body("403 Forbidden"));
@@ -208,26 +239,72 @@ pub async fn proxy_without_proxy(
 
         let hyper_req = request_builder
             .body(Body::from(body))
-            .map_err(|e| error::ErrorInternalServerError(format!("Failed to build request: {}", e)))?;
+            .map_err(|e| {
+                warn!(
+                    client_ip = %ip,
+                    target = %full_url,
+                    "Route fallback: 500 Internal error reason: {} ", e);
+                    error::ErrorInternalServerError(format!("{}", e))
+            })?;
 
-        // let response_result = timeout(Duration::from_secs(10), client.request(hyper_req)).await;
-        let response_result = forward_failover(hyper_req, &rule.backends.clone(), &client).await;
-
-        match response_result {
-            Ok(res) => {
-                let mut client_resp = HttpResponse::build(res.status());
-                for (key, value) in res.headers() {
-                    if key != USER_AGENT && key.as_str() != "authorization" {
-                        client_resp.append_header((key.clone(), value.clone()));
-                    }
+        let response_result = if !rule.backends.is_empty() {
+            // Mode failover
+            forward_failover(hyper_req, &rule.backends).await.map_err(|e| {
+                warn!(client_ip = %ip, target = %full_url, "Failover failed: {}", e);
+                error::ErrorServiceUnavailable("503 Service Unavailable")
+            })?
+        } else {
+            // Mode direct
+            match timeout(Duration::from_millis(500), client.request(hyper_req)).await {
+                Ok(Ok(res)) => res,
+                Ok(Err(e)) => {
+                    warn!(
+                        client_ip = %ip,
+                        target = %full_url,
+                        "Route fallback reason (client error): {}", e
+                    );
+                    return Ok(HttpResponse::ServiceUnavailable().finish());
                 }
-                let body_bytes = hyper::body::to_bytes(res.into_body())
-                    .await
-                    .map_err(|e| error::ErrorInternalServerError(format!("Failed to read response: {}", e)))?;
-                Ok(client_resp.body(body_bytes))
+                Err(e) => {
+                    warn!(
+                        client_ip = %ip,
+                        target = %full_url,
+                        "Route fallback reason (timeout): {}", e
+                    );
+                    return Ok(HttpResponse::ServiceUnavailable().finish());
+                }
             }
-            Err(e) => Ok(HttpResponse::BadGateway().body(format!("Request failed: {}", e))),
+        };
+
+        let status = response_result.status();
+
+        if status.is_server_error() {
+            warn!(
+                client_ip = %ip,
+                target = %full_url,
+                "Upstream returned server error: {}",
+                status
+            );
+            return Ok(HttpResponse::InternalServerError().finish());
         }
+
+        let mut client_resp = HttpResponse::build(status);
+        for (key, value) in response_result.headers() {
+            if key != USER_AGENT && key.as_str() != "authorization" {
+                client_resp.append_header((key.clone(), value.clone()));
+            }
+        }
+
+        let body_bytes = hyper::body::to_bytes(response_result.into_body()).await.map_err(|e| {
+            warn!(
+                client_ip = %ip,
+                target = %full_url,
+                "Body read error: {}", e
+            );
+            error::ErrorInternalServerError("500 Internal Server Error")
+        })?;
+
+        Ok(client_resp.body(body_bytes))
 
     } else {
         Ok(HttpResponse::NotFound().body("404 Not Found"))
