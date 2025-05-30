@@ -8,9 +8,9 @@ use rustls_pemfile::{certs, pkcs8_private_keys};
 use std::{fs::File, io::BufReader};
 use hyper_proxy::{Proxy, ProxyConnector, Intercept};
 use crate::config::AppConfig;
-use dashmap::DashMap;
 use std::time::{Duration, Instant};
 use std::str::FromStr;
+use fxdashmap::FxDashMap;
 use once_cell::sync::Lazy;
 
 #[allow(dead_code)]
