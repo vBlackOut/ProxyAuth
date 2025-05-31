@@ -8,7 +8,6 @@ mod ratelimit;
 mod security;
 mod start_actix;
 mod stats;
-mod build_infos;
 mod timezone;
 mod tokencount;
 mod tls;
@@ -406,7 +405,7 @@ async fn main() -> std::io::Result<()> {
             .workers((config.worker as u8).into())
 <<<<<<< HEAD
             .keep_alive(Duration::from_secs(5))
-            .listen_rustls_0_21(listener, load_rustls_config())? 
+            .listen_rustls_0_21(listener, load_rustls_config())?
 =======
             .listen_rustls_0_21(listener, load_rustls_config())?
 >>>>>>> 096d03c (Prepare version 0.7.3)
