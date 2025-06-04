@@ -133,12 +133,12 @@ pub async fn auth(
             "[{}] new token generated for user {} expirated at {}",
             ip, user.username, expires_at_str
         );
-        HttpResponse::Ok().json(serde_json::json!({
+        HttpResponse::Ok().append_header(("server", "ProxyAuth")).json(serde_json::json!({
             "token": token_encrypt,
             "expires_at": expires_at_str,
         }))
     } else {
         warn!("Invalid credential for enter user {}.", auth.username);
-        return HttpResponse::Unauthorized().body("Invalid credentials");
+        return HttpResponse::Unauthorized().append_header(("server", "ProxyAuth")).body("Invalid credentials");
     }
 }

@@ -17,6 +17,8 @@ pub async fn prompt() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         Some(Commands::Prepare) => {
+            switch_to_user("root")?;
+            ensure_running_as_root();
             ensure_user_proxyauth_exists()?;
             setup_proxyauth_directory()?;
             std::process::exit(0);

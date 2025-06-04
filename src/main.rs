@@ -16,6 +16,7 @@ mod loadbalancing;
 mod build_info;
 mod prompt;
 mod export;
+mod import;
 
 use actix_governor::{Governor, GovernorConfigBuilder};
 use actix_web::{App, HttpServer, web};
@@ -43,6 +44,10 @@ use std::time::Duration;
 use tls::load_rustls_config;
 use crate::shared_client::{build_hyper_client_proxy, build_hyper_client_normal, build_hyper_client_cert, ClientOptions};
 use crate::prompt::prompt;
+use crate::import::decrypt_keystore;
+use crate::build_info::{update_build_info, get};
+use tracing::{info, warn};
+
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -145,6 +150,16 @@ async fn main() -> std::io::Result<()> {
             // .with_writer(|| std::io::sink())
             // .init();
         }
+    }
+
+    // check keystore if exist
+    match decrypt_keystore() {
+        Ok(Some(message)) => {
+            let _ = update_build_info(&message);
+            info!("Load keystore successfull from /etc/proxyauth/import/data.gpg");
+        }
+        Ok(None) => {},
+        Err(err) => warn!("Failed to decrypt keystore: {:?}", err),
     }
 
     // configuration proxy ratelimit

@@ -38,7 +38,7 @@ pub async fn global_proxy(
             proxy_without_proxy(req, body, data).await
         }
     } else {
-        Ok(HttpResponse::NotFound().body("404 Not Found"))
+        Ok(HttpResponse::NotFound().append_header(("server", "ProxyAuth")).body("404 Not Found"))
     }
 }
 
@@ -93,7 +93,7 @@ pub async fn proxy_with_proxy(
                     target = %full_url,
                     "This username is not authorized to access"
                 );
-                return Ok(HttpResponse::Unauthorized().body("403 Forbidden"));
+                return Ok(HttpResponse::Unauthorized().append_header(("server", "ProxyAuth")).body("403 Forbidden"));
             }
             username
         } else {
@@ -150,10 +150,10 @@ pub async fn proxy_with_proxy(
                 warn!("Route fallback: 404 Not Found – reason: {}", e);
                 Ok(HttpResponse::NotFound().body("404 Not Found"))
             },
-            Err(_) => Ok(HttpResponse::GatewayTimeout().body("Target unreachable (timeout)")),
+            Err(_) => Ok(HttpResponse::GatewayTimeout().append_header(("server", "ProxyAuth")).body("Target unreachable (timeout)")),
         }
     } else {
-        Ok(HttpResponse::NotFound().body("404 Not Found"))
+        Ok(HttpResponse::NotFound().append_header(("server", "ProxyAuth")).body("404 Not Found"))
     }
 }
 
@@ -217,7 +217,7 @@ pub async fn proxy_without_proxy(
                 })?;
 
             if !rule.username.contains(&username) {
-                return Ok(HttpResponse::Unauthorized().body("403 Forbidden"));
+                return Ok(HttpResponse::Unauthorized().append_header(("server", "ProxyAuth")).body("403 Forbidden"));
             }
             username
         } else {
@@ -263,7 +263,7 @@ pub async fn proxy_without_proxy(
                         target = %full_url,
                         "Route fallback reason (client error): {}", e
                     );
-                    return Ok(HttpResponse::ServiceUnavailable().finish());
+                    return Ok(HttpResponse::ServiceUnavailable().append_header(("server", "ProxyAuth")).finish());
                 }
                 Err(e) => {
                     warn!(
@@ -271,7 +271,7 @@ pub async fn proxy_without_proxy(
                         target = %full_url,
                         "Route fallback reason (timeout): {}", e
                     );
-                    return Ok(HttpResponse::ServiceUnavailable().finish());
+                    return Ok(HttpResponse::ServiceUnavailable().append_header(("server", "ProxyAuth")).finish());
                 }
             }
         };
@@ -285,7 +285,7 @@ pub async fn proxy_without_proxy(
                 "Upstream returned server error: {}",
                 status
             );
-            return Ok(HttpResponse::InternalServerError().finish());
+            return Ok(HttpResponse::InternalServerError().append_header(("server", "ProxyAuth")).finish());
         }
 
         let mut client_resp = HttpResponse::build(status);
@@ -304,9 +304,9 @@ pub async fn proxy_without_proxy(
             error::ErrorInternalServerError("500 Internal Server Error")
         })?;
 
-        Ok(client_resp.body(body_bytes))
+        Ok(client_resp.append_header(("server", "ProxyAuth")).body(body_bytes))
 
     } else {
-        Ok(HttpResponse::NotFound().body("404 Not Found"))
+        Ok(HttpResponse::NotFound().append_header(("server", "ProxyAuth")).body("404 Not Found"))
     }
 }

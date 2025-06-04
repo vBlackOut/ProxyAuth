@@ -39,6 +39,27 @@ pub fn update(new_info: BuildInfo) {
     *info = new_info;
 }
 
+pub fn update_build_info(input: &str) -> Result<(), String> {
+    let parts: Vec<&str> = input.split('|').collect();
+
+    if parts.len() != 6 {
+        return Err("Invalid input shuffle format. Expected 6 fields.".into());
+    }
+
+    let build_info = BuildInfo {
+        version: parts[0].to_string(),
+        build_time: parts[1].parse().map_err(|_| "Invalid build_time")?,
+        build_rand: parts[2].parse().map_err(|_| "Invalid build_rand")?,
+        build_seed: parts[3].parse().map_err(|_| "Invalid build_seed")?,
+        build_epoch: parts[4].parse().map_err(|_| "Invalid build_epoch")?,
+        shuffled_order: parts[5].to_string(),
+    };
+
+    update(build_info);
+    Ok(())
+}
+
+
 impl BuildInfo {
     pub fn to_string(&self) -> String {
         format!(
@@ -50,5 +71,12 @@ impl BuildInfo {
             self.build_epoch,
             self.shuffled_order
         )
+    }
+
+    pub fn shuffled_order_list(&self) -> Vec<String> {
+        self.shuffled_order
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .collect()
     }
 }
