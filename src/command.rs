@@ -12,4 +12,7 @@ pub struct Cli {
 pub enum Commands {
     Prepare,
     Stats,
+    Sync {
+        target: Option<String>,
+    },
 }

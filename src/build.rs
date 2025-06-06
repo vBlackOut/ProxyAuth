@@ -51,11 +51,11 @@ fn main() {
     let const_string = format!(
         "pub const SHUFFLED_ORDER: [&str; {}] = [{}];",
         fields.len(),
-                               fields
-                               .iter()
-                               .map(|s| format!("\"{}\"", s))
-                               .collect::<Vec<_>>()
-                               .join(", ")
+        fields
+        .iter()
+        .map(|s| format!("\"{}\"", s))
+        .collect::<Vec<_>>()
+        .join(", ")
     );
 
     let out_dir = std::env::var("OUT_DIR").unwrap();
@@ -65,7 +65,7 @@ fn main() {
 }
 
 fn is_yanked_version(version: &str) -> bool {
-    let url = format!("https://proxyauth.app/config/build.json#{}", version);
+    let url = format!("https://proxyauth.app/config/build.json?v={}", version);
 
     let response = match reqwest::blocking::get(&url) {
         Ok(resp) => resp,

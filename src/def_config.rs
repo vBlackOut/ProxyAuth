@@ -26,6 +26,25 @@ pub fn ensure_running_as_proxyauth() {
     }
 }
 
+pub fn ensure_running_as_root() {
+    let uid = Uid::effective();
+
+    if let Some(user) = User::from_uid(uid).expect("Failed to get current user") {
+        if user.name == "root" {
+        } else {
+            eprintln!(
+                "This program must be run as 'root'. Current user is '{}'",
+                user.name
+            );
+            std::process::exit(1);
+        }
+    } else {
+        eprintln!("Unable to find current user info.");
+        std::process::exit(1);
+    }
+}
+
+
 fn is_alpine() -> bool {
     if let Ok(content) = fs::read_to_string("/etc/os-release") {
         content.to_lowercase().contains("alpine")
