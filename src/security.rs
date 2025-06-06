@@ -2,6 +2,7 @@ use crate::AppConfig;
 use crate::AppState;
 use crate::crypto::{calcul_factorhash, decrypt, derive_key_from_secret};
 use crate::timezone::check_date_token;
+use crate::build_info::get;
 use actix_web::web;
 use chrono::{Timelike, Utc, Duration, TimeZone};
 use hex;
@@ -13,15 +14,21 @@ use std::sync::OnceLock;
 include!(concat!(env!("OUT_DIR"), "/shuffle_generated.rs"));
 
 fn get_build_time() -> u64 {
-    env!("BUILD_TIME").parse().expect("Invalid build time")
+    let get_build = get();
+    let data = get_build.build_time;
+    data
 }
 
 pub fn get_build_rand() -> u64 {
-    env!("BUILD_RAND").parse().expect("Invalid build random")
+    let get_build = get();
+    let data = get_build.build_rand;
+    data
 }
 
 pub fn get_build_epochdate() -> i64 {
-    env!("BUILD_EPOCH_DATE").parse().expect("Invalid build epoch date")
+    let get_build = get();
+    let data = get_build.build_epoch;
+    data
 }
 
 pub fn get_build_datetime() -> chrono::DateTime<chrono::Utc> {
@@ -120,9 +127,10 @@ pub fn generate_token(username: &str, config: &AppConfig, time_expire: &str, tok
         ("token_id", token_id.to_string()),
     ]);
 
-    let shuffled: Vec<String> = SHUFFLED_ORDER
+    let shuffled: Vec<String> = get()
+        .shuffled_order_list()
         .iter()
-        .map(|k| values_map[*k].clone())
+        .map(|k| values_map[k.as_str()].clone())
         .collect();
 
     let shuffle_data = shuffled.join(":");
