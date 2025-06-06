@@ -78,5 +78,5 @@ socket2 = "0.5"
 blake3 = "1"
 http = "1"
 fxhash = "0.2"
-sequoia-openpgp = "2.0"
 anyhow = "1.0"
+sequoia-openpgp = { version = "2.0", default-features = false, features = ["crypto-openssl"] }
