@@ -130,7 +130,7 @@ pub async fn proxy_with_proxy(
             Ok(Ok(res)) => {
                 let mut client_resp = HttpResponse::build(res.status());
                 for (key, value) in res.headers() {
-                    if key != USER_AGENT && key.as_str() != "authorization" {
+                    if key != USER_AGENT && key.as_str() != "authorization" && key.as_str() != "server" {
                         client_resp.append_header((key, value));
                     }
                 }
@@ -290,7 +290,7 @@ pub async fn proxy_without_proxy(
 
         let mut client_resp = HttpResponse::build(status);
         for (key, value) in response_result.headers() {
-            if key != USER_AGENT && key.as_str() != "authorization" {
+            if key != USER_AGENT && key.as_str() != "authorization"  && key.as_str() != "server" {
                 client_resp.append_header((key.clone(), value.clone()));
             }
         }

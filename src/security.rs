@@ -11,8 +11,6 @@ use std::collections::HashMap;
 use tracing::{error, info, warn};
 use std::sync::OnceLock;
 
-include!(concat!(env!("OUT_DIR"), "/shuffle_generated.rs"));
-
 fn get_build_time() -> u64 {
     let get_build = get();
     let data = get_build.build_time;
