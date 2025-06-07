@@ -148,7 +148,7 @@ pub async fn proxy_with_proxy(
             }
             Ok(Err(e)) => {
                 warn!("Route fallback: 404 Not Found – reason: {}", e);
-                Ok(HttpResponse::NotFound().body("404 Not Found"))
+                Ok(HttpResponse::NotFound().append_header(("server", "ProxyAuth")).body("404 Not Found"))
             },
             Err(_) => Ok(HttpResponse::GatewayTimeout().append_header(("server", "ProxyAuth")).body("Target unreachable (timeout)")),
         }
