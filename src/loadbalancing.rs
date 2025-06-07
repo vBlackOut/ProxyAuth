@@ -1,10 +1,11 @@
+use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 use dashmap::DashMap;
 use fxhash::FxBuildHasher;
 use hyper::{Body, Client, Request, Response, Uri};
 use hyper::body::to_bytes;
-use hyper::client::HttpConnector;
+use hyper_proxy::{Proxy, ProxyConnector, Intercept};
 use hyper_rustls::HttpsConnectorBuilder;
 use once_cell::sync::Lazy;
 use thiserror::Error;
@@ -19,26 +20,29 @@ pub enum ForwardError {
     Hyper(#[from] hyper::Error),
 }
 
-type HttpsClient = Client<hyper_rustls::HttpsConnector<HttpConnector>>;
 type FxDashMap<K, V> = DashMap<K, V, FxBuildHasher>;
+type DefaultClient = Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>, Body>;
+type ProxyClient = Client<ProxyConnector<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>, Body>;
 
-static CLIENT_POOL: Lazy<FxDashMap<String, HttpsClient>> = Lazy::new(FxDashMap::default);
+static CLIENT_POOL: Lazy<tokio::sync::Mutex<HashMap<String, DefaultClient>>> = Lazy::new(|| tokio::sync::Mutex::new(HashMap::new()));
+static PROXY_CLIENT_POOL: Lazy<tokio::sync::Mutex<HashMap<(String, String), ProxyClient>>> = Lazy::new(|| tokio::sync::Mutex::new(HashMap::new()));
 static LAST_GOOD_BACKEND: Lazy<DashMap<&'static str, (String, Instant)>> = Lazy::new(DashMap::new);
+static BACKEND_COOLDOWN: Lazy<DashMap<String, CooldownEntry>> = Lazy::new(DashMap::new);
 
 struct CooldownEntry {
     last_failed: Instant,
     failures: u32,
 }
 
-static BACKEND_COOLDOWN: Lazy<DashMap<String, CooldownEntry>> = Lazy::new(DashMap::new);
-
 const BACKEND_CACHE_KEY: &str = "service";
 const BACKEND_VALID_DURATION: Duration = Duration::from_secs(60);
 const COOLDOWN_BASE: Duration = Duration::from_secs(30);
 const COOLDOWN_MAX: Duration = Duration::from_secs(300);
 
-fn get_or_build_client(backend: &str) -> HttpsClient {
-    if let Some(client) = CLIENT_POOL.get(backend) {
+async fn get_or_build_client(backend: &str) -> DefaultClient {
+    let mut pool = CLIENT_POOL.lock().await;
+
+    if let Some(client) = pool.get(backend) {
         return client.clone();
     }
 
@@ -52,13 +56,41 @@ fn get_or_build_client(backend: &str) -> HttpsClient {
     .pool_max_idle_per_host(200)
     .build::<_, Body>(https);
 
-    CLIENT_POOL.insert(backend.to_string(), client.clone());
+    pool.insert(backend.to_string(), client.clone());
+    client
+}
+
+async fn get_or_build_client_with_proxy(proxy_addr: &str, backend: &str) -> ProxyClient {
+    let mut pool = PROXY_CLIENT_POOL.lock().await;
+
+    if let Some(client) = pool.get(&(proxy_addr.to_string(), backend.to_string())) {
+        return client.clone();
+    }
+
+    let proxy_uri: Uri = proxy_addr.parse().expect("Invalid proxy URI");
+    let proxy = Proxy::new(Intercept::All, proxy_uri);
+
+    let https = HttpsConnectorBuilder::new()
+    .with_native_roots()
+    .https_or_http()
+    .enable_http1()
+    .build();
+
+    let proxy_connector = ProxyConnector::from_proxy(https, proxy)
+    .expect("Failed to create proxy connector");
+
+    let client = Client::builder()
+    .pool_max_idle_per_host(200)
+    .build(proxy_connector);
+
+    pool.insert((proxy_addr.to_string(), backend.to_string()), client.clone());
     client
 }
 
 pub async fn forward_failover(
     req: Request<Body>,
     backends: &[String],
+    proxy_addr: Option<&str>,
 ) -> Result<Response<Body>, ForwardError> {
     let method = req.method().clone();
     let uri = req.uri().clone();
@@ -67,7 +99,7 @@ pub async fn forward_failover(
 
     if let Some((cached_backend, timestamp)) = LAST_GOOD_BACKEND.get(BACKEND_CACHE_KEY).map(|e| e.clone()) {
         if timestamp.elapsed() <= BACKEND_VALID_DURATION {
-            if let Ok(resp) = try_forward_to_backend(&cached_backend, &body_bytes, &method, &uri, &headers).await {
+            if let Ok(resp) = try_forward_to_backend(&cached_backend, proxy_addr, &body_bytes, &method, &uri, &headers).await {
                 return Ok(resp);
             } else {
                 tracing::warn!("Cached backend {} failed, falling back to full failover", cached_backend);
@@ -93,7 +125,7 @@ pub async fn forward_failover(
             }
         }
 
-        if let Ok(resp) = try_forward_to_backend(backend, &body_bytes, &method, &uri, &headers).await {
+        if let Ok(resp) = try_forward_to_backend(backend, proxy_addr, &body_bytes, &method, &uri, &headers).await {
             LAST_GOOD_BACKEND.insert(BACKEND_CACHE_KEY, (backend.clone(), Instant::now()));
             BACKEND_COOLDOWN.remove(backend);
             return Ok(resp);
@@ -116,12 +148,12 @@ pub async fn forward_failover(
 
 async fn try_forward_to_backend(
     backend: &str,
+    proxy_addr: Option<&str>,
     body_bytes: &[u8],
     method: &hyper::Method,
     uri: &Uri,
     headers: &hyper::HeaderMap,
 ) -> Result<Response<Body>, ForwardError> {
-    let client = get_or_build_client(backend);
     let uri_backend: Uri = backend.parse().map_err(|_| ForwardError::AllBackendsFailed)?;
 
     let mut parts = uri.clone().into_parts();
@@ -143,7 +175,16 @@ async fn try_forward_to_backend(
     .body(Body::from(body_bytes.to_vec()))
     .expect("Error building request");
 
-    let response_result = timeout(Duration::from_secs(10), client.request(new_req)).await;
+    let response_result = match proxy_addr {
+        Some(proxy) => {
+            let client = get_or_build_client_with_proxy(proxy, backend).await;
+            timeout(Duration::from_secs(10), client.request(new_req)).await
+        },
+        None => {
+            let client = get_or_build_client(backend).await;
+            timeout(Duration::from_secs(10), client.request(new_req)).await
+        }
+    };
 
     match response_result {
         Ok(Ok(resp)) => Ok(resp),

@@ -61,7 +61,6 @@ pub async fn proxy_with_proxy(
             format!("http://{}", target_url)
         };
 
-
         let client = get_or_build_client_proxy(ClientOptions {
             use_proxy: true,
             proxy_addr: Some(rule.proxy_config.clone()),
@@ -124,34 +123,65 @@ pub async fn proxy_with_proxy(
                 error::ErrorInternalServerError(format!("{}", e))
             })?;
 
-        let response_result = timeout(Duration::from_secs(10), client.request(hyper_req)).await;
-
-        match response_result {
-            Ok(Ok(res)) => {
-                let mut client_resp = HttpResponse::build(res.status());
-                for (key, value) in res.headers() {
-                    if key != USER_AGENT && key.as_str() != "authorization" && key.as_str() != "server" {
-                        client_resp.append_header((key, value));
-                    }
+        let response_result = if !rule.backends.is_empty() {
+            // Mode failover
+            forward_failover(hyper_req, &rule.backends, Some(&rule.proxy_config)).await.map_err(|e| {
+                warn!(client_ip = %ip, target = %full_url, "Failover failed: {}", e);
+                error::ErrorServiceUnavailable("503 Service Unavailable")
+            })?
+        } else {
+            // Mode direct
+            match timeout(Duration::from_millis(500), client.request(hyper_req)).await {
+                Ok(Ok(res)) => res,
+                Ok(Err(e)) => {
+                    warn!(
+                        client_ip = %ip,
+                        target = %full_url,
+                        "Route fallback reason (client error): {}", e
+                    );
+                    return Ok(HttpResponse::ServiceUnavailable().append_header(("server", "ProxyAuth")).finish());
                 }
-                let body_bytes = hyper::body::to_bytes(res.into_body())
-                    .await
-                    .map_err(|e| {
-                        warn!(
-                            client_ip = %ip,
-                            target = %full_url,
-                            "Failed to read response body from backend"
-                        );
-                        error::ErrorInternalServerError(format!("{}", e))
-                    })?;
-                Ok(client_resp.body(body_bytes))
+                Err(e) => {
+                    warn!(
+                        client_ip = %ip,
+                        target = %full_url,
+                        "Route fallback reason (timeout): {}", e
+                    );
+                    return Ok(HttpResponse::ServiceUnavailable().append_header(("server", "ProxyAuth")).finish());
+                }
             }
-            Ok(Err(e)) => {
-                warn!("Route fallback: 404 Not Found – reason: {}", e);
-                Ok(HttpResponse::NotFound().append_header(("server", "ProxyAuth")).body("404 Not Found"))
-            },
-            Err(_) => Ok(HttpResponse::GatewayTimeout().append_header(("server", "ProxyAuth")).body("Target unreachable (timeout)")),
+        };
+
+        let status = response_result.status();
+
+        if status.is_server_error() {
+            warn!(
+                client_ip = %ip,
+                target = %full_url,
+                "Upstream returned server error: {}",
+                status
+            );
+            return Ok(HttpResponse::InternalServerError().append_header(("server", "ProxyAuth")).finish());
         }
+
+        let mut client_resp = HttpResponse::build(status);
+        for (key, value) in response_result.headers() {
+            if key != USER_AGENT && key.as_str() != "authorization"  && key.as_str() != "server" {
+                client_resp.append_header((key.clone(), value.clone()));
+            }
+        }
+
+        let body_bytes = hyper::body::to_bytes(response_result.into_body()).await.map_err(|e| {
+            warn!(
+                client_ip = %ip,
+                target = %full_url,
+                "Body read error: {}", e
+            );
+            error::ErrorInternalServerError("500 Internal Server Error")
+        })?;
+
+        Ok(client_resp.append_header(("server", "ProxyAuth")).body(body_bytes))
+
     } else {
         Ok(HttpResponse::NotFound().append_header(("server", "ProxyAuth")).body("404 Not Found"))
     }
@@ -249,7 +279,7 @@ pub async fn proxy_without_proxy(
 
         let response_result = if !rule.backends.is_empty() {
             // Mode failover
-            forward_failover(hyper_req, &rule.backends).await.map_err(|e| {
+            forward_failover(hyper_req, &rule.backends, None).await.map_err(|e| {
                 warn!(client_ip = %ip, target = %full_url, "Failover failed: {}", e);
                 error::ErrorServiceUnavailable("503 Service Unavailable")
             })?
