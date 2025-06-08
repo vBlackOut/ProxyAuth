@@ -164,9 +164,7 @@ docker compose restart
   This method is used in Django for password hashing via PBKDF2:
   https://docs.djangoproject.com/en/5.1/ref/settings/#std-setting-SECRET_KEY
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
+
 # Failover
 <details>
 <summary>Failover normal mode (click for open)</summary>
@@ -178,20 +176,7 @@ docker compose restart
 <img height="500px" height="500px" src="https://proxyauth.app/static/images/fail_over__proxy.png">
 </details>
 
->>>>>>> f8b97e1 (Update README.md)
-=======
-# Failover
-<details>
-<summary>Failover normal mode</summary>
-<img height="300px" height="300px" src="https://proxyauth.app/static/images/fail_over.png">
-<details>
 
-<details>
-<summary>Failover over mode proxy</summary>
-<img height="300px" height="300px" src="https://proxyauth.app/static/images/fail_over__proxy.png">
-</details>
-
->>>>>>> 38641cd (Minimalize readme)
 ## ProxyAuth Structure
 The server behaves like an authentication proxy.
 

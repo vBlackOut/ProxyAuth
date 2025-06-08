@@ -1,14 +1,6 @@
 [package]
 name = "proxyauth"
-<<<<<<< HEAD
-<<<<<<< HEAD
-version = "0.7.5-beta0"
-=======
 version = "0.7.6"
->>>>>>> 6ba7b96 (FIX localtime over logs)
-=======
-version = "0.7.5"
->>>>>>> dc58ade (Update)
 edition = "2024"
 authors = ["Vladimir S"]
 repository = "https://github.com/ProxyAuth/ProxyAuth"
