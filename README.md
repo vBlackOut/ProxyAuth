@@ -176,7 +176,6 @@ docker compose restart
 <img height="500px" height="500px" src="https://proxyauth.app/static/images/fail_over__proxy.png">
 </details>
 
-
 ## ProxyAuth Structure
 The server behaves like an authentication proxy.
 
