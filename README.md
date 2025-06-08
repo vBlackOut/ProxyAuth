@@ -164,6 +164,7 @@ docker compose restart
   This method is used in Django for password hashing via PBKDF2:
   https://docs.djangoproject.com/en/5.1/ref/settings/#std-setting-SECRET_KEY
 
+
 # Failover
 <details>
 <summary>Failover normal mode (click for open)</summary>
