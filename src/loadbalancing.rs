@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 
 use dashmap::DashMap;
 use fxhash::FxBuildHasher;
-use hyper::{Body, Client, Request, Response, Uri};
+use hyper::{Body, Client, Request, Response, Uri, Method};
 use hyper::body::to_bytes;
 use hyper_proxy::{Proxy, ProxyConnector, Intercept};
 use hyper_rustls::HttpsConnectorBuilder;
@@ -92,6 +92,7 @@ pub async fn forward_failover(
     backends: &[String],
     proxy_addr: Option<&str>,
 ) -> Result<Response<Body>, ForwardError> {
+
     let method = req.method().clone();
     let uri = req.uri().clone();
     let headers = req.headers().clone();
@@ -159,7 +160,7 @@ async fn try_forward_to_backend(
     let mut parts = uri.clone().into_parts();
     parts.scheme = uri_backend.scheme().cloned();
     parts.authority = uri_backend.authority().cloned();
-    parts.path_and_query = uri_backend.path_and_query().cloned();
+    parts.path_and_query = uri.path_and_query().cloned();
 
     let full_uri = Uri::from_parts(parts).map_err(|_| ForwardError::AllBackendsFailed)?;
 
@@ -168,12 +169,18 @@ async fn try_forward_to_backend(
     .uri(full_uri);
 
     for (key, value) in headers.iter() {
-        builder = builder.header(key, value);
+        if key.as_str().to_ascii_lowercase() != "host" {
+            builder = builder.header(key, value);
+        }
     }
 
-    let new_req = builder
-    .body(Body::from(body_bytes.to_vec()))
-    .expect("Error building request");
+    builder = builder.header("Host", uri_backend.authority().map(|a| a.as_str()).unwrap_or("127.0.0.1"));
+
+    let new_req = if *method == Method::GET || *method == Method::HEAD {
+        builder.body(Body::empty()).expect("Failed to build GET/HEAD request")
+    } else {
+        builder.body(Body::from(body_bytes.to_vec())).expect("Failed to build request with body")
+    };
 
     let response_result = match proxy_addr {
         Some(proxy) => {
@@ -187,7 +194,18 @@ async fn try_forward_to_backend(
     };
 
     match response_result {
-        Ok(Ok(resp)) => Ok(resp),
+        Ok(Ok(resp)) => {
+            if resp.status().is_success() {
+                Ok(resp)
+            } else {
+                tracing::warn!(
+                    "Failover: backend {} returned non-success status {}",
+                    backend,
+                    resp.status()
+                );
+                Err(ForwardError::AllBackendsFailed) // Forcer le failover
+            }
+        }
         Ok(Err(e)) => {
             tracing::warn!("Failover: backend {} failed: {}", backend, e);
             Err(ForwardError::Hyper(e))
@@ -197,4 +215,5 @@ async fn try_forward_to_backend(
             Err(ForwardError::AllBackendsFailed)
         }
     }
+
 }
