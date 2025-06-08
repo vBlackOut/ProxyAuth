@@ -40,6 +40,7 @@ use tracing_subscriber::Layer;
 use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::fmt::time::FormatTime;
 use std::time::Duration;
 use tls::load_rustls_config;
 use crate::shared_client::{build_hyper_client_proxy, build_hyper_client_normal, build_hyper_client_cert, ClientOptions};
@@ -47,9 +48,17 @@ use crate::prompt::prompt;
 use crate::import::decrypt_keystore;
 use crate::build_info::update_build_info;
 use tracing::{info, warn};
-
+use chrono::Local;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+struct LocalTime;
+
+impl FormatTime for LocalTime {
+    fn format_time(&self, w: &mut tracing_subscriber::fmt::format::Writer<'_>) -> std::fmt::Result {
+        write!(w, "{}", Local::now().format("%Y-%m-%d %H:%M:%S"))
+    }
+}
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -138,14 +147,16 @@ async fn main() -> std::io::Result<()> {
             // We need to register our layer with `tracing`.
             tracing_subscriber::registry()
                 .with(layer.with_filter(LevelFilter::INFO))
-                .with(tracing_subscriber::fmt::Layer::new().with_filter(LevelFilter::INFO))
+                .with(tracing_subscriber::fmt::Layer::new().with_timer(LocalTime).with_filter(LevelFilter::INFO))
                 .init();
 
             tokio::spawn(task);
         }
 
         if logs == "local" {
-            tracing_subscriber::fmt::init();
+            tracing_subscriber::fmt()
+            .with_timer(LocalTime)
+            .init();
             // tracing_subscriber::fmt()
             // .with_writer(|| std::io::sink())
             // .init();
