@@ -26,28 +26,6 @@ The service is extremely fast, handling 100,000+ requests per second under load.
 <a href="http://proxyauth.app">Views the documentation</a>  
 <b>Possible to contribute the documentation: <a href="https://github.com/vBlackOut/ProxyAuth-Docs">ProxyAuth Docs</a> </b> :heart:
 
-## TODO
-- Initiate a load-balanced request with failover on target failure planned for version 0.7.x or 0.8.x.
-
-
-## ⚠️ Prepare migrate to <a href="https://hyper.rs/guides/1/upgrading/">hyper 1.0+</a> ⚠️
-I’m preparing a proxy using Hyper ≥ 1.0. Documentation will follow later.  
-Stable working version: <= 0.6.x (as of today), but migration is planned.   
-The new 1.x.x version is coming soon it will use Hyper 1.0+.
-
-## How do i delete my crate from crates.io?
-I'm not convinced that having multiple copies of my code publicly available, without full control over deployment versions, guarantees absolute security. That's why I've decided to stop using crates.io.  
-i use now <a href="https://crates.proxyauth.app/crates">crates.proxyauth.app</a> (it's kellnr fork)
-
-## new in 0.6.18
-- possible to extend max_time_token for <= 5 years.
-
-## Automatic `config/` Setup [v0.5.4]
-If the required configuration files are missing, they will be automatically downloaded from this repository during initialization.
-
-### By default, the config is now in /etc/proxyauth, owned by the proxyauth user [v0.5.6].
-Execute `proxyauth prepare` to create the system user and set up the configuration directory.
-
 ## Auto Salt config.json password for argon2
 Please enter your password in config.json. The application will automatically generate the Argon2 salt on first startup and rewrite the file with the hashed password.
 
@@ -185,6 +163,17 @@ docker compose restart
   This is why you must define a secure secret (over 64 characters!) in the config.
   This method is used in Django for password hashing via PBKDF2:
   https://docs.djangoproject.com/en/5.1/ref/settings/#std-setting-SECRET_KEY
+
+# Failover
+<details>
+<summary>Failover normal mode</summary>
+<img height="300px" height="300px" src="https://proxyauth.app/static/images/fail_over.png">
+<details>
+
+<details>
+<summary>Failover over mode proxy</summary>
+<img height="300px" height="300px" src="https://proxyauth.app/static/images/fail_over__proxy.png">
+</details>
 
 ## ProxyAuth Structure
 The server behaves like an authentication proxy.
