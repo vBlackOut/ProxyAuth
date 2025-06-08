@@ -166,13 +166,13 @@ docker compose restart
 
 # Failover
 <details>
-<summary>Failover normal mode</summary>
+<summary>Failover normal mode (click for open)</summary>
 <img height="300px" height="300px" src="https://proxyauth.app/static/images/fail_over.png">
-<details>
+</details>
 
 <details>
-<summary>Failover over mode proxy</summary>
-<img height="300px" height="300px" src="https://proxyauth.app/static/images/fail_over__proxy.png">
+<summary>Failover over mode proxy (click for open)</summary>
+<img height="500px" height="500px" src="https://proxyauth.app/static/images/fail_over__proxy.png">
 </details>
 
 ## ProxyAuth Structure
