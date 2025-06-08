@@ -79,6 +79,7 @@ pub fn get_or_build_thread_client(opts: &ClientOptions, state: &Arc<AppConfig>) 
     })
 }
 
+#[allow(dead_code)]
 pub fn get_or_build_client(
     opts: ClientOptions,
     state: Arc<AppConfig>,

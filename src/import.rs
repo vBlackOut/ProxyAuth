@@ -12,7 +12,6 @@ use openpgp::packet::{PKESK, SKESK};
 use openpgp::policy::{Policy, StandardPolicy};
 use openpgp::types::SymmetricAlgorithm;
 use openpgp::parse::stream::{DecryptorBuilder, DecryptionHelper, VerificationHelper, MessageStructure};
-use crate::build_info::BuildInfo;
 
 pub fn decrypt_keystore() -> Result<Option<String>> {
     let import_dir = "/etc/proxyauth/import";

@@ -45,7 +45,7 @@ use tls::load_rustls_config;
 use crate::shared_client::{build_hyper_client_proxy, build_hyper_client_normal, build_hyper_client_cert, ClientOptions};
 use crate::prompt::prompt;
 use crate::import::decrypt_keystore;
-use crate::build_info::{update_build_info, get};
+use crate::build_info::update_build_info;
 use tracing::{info, warn};
 
 
