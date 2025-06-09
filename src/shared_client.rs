@@ -14,7 +14,9 @@ use once_cell::sync::Lazy;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use dashmap::DashMap;
+use fxhash::FxBuildHasher;
 
+type FxDashMap<K, V> = DashMap<K, V, FxBuildHasher>;
 type HttpsClient = Client<HttpsConnector<HttpConnector>>;
 type ThreadCache = HashMap<ClientKey, HttpsClient>;
 
@@ -23,8 +25,8 @@ thread_local! {
 }
 
 #[allow(dead_code)]
-static CLIENT_CACHE: Lazy<DashMap<ClientKey, Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>>> = Lazy::new(DashMap::new);
-static CLIENT_CACHE_PROXY: Lazy<DashMap<ClientKey, Client<ProxyConnector<HttpsConnector<HttpConnector>>>>> = Lazy::new(|| DashMap::new());
+static CLIENT_CACHE: Lazy<FxDashMap<ClientKey, Client<HttpsConnector<HttpConnector>>>> = Lazy::new(FxDashMap::default);
+static CLIENT_CACHE_PROXY: Lazy<FxDashMap<ClientKey, Client<ProxyConnector<HttpsConnector<HttpConnector>>>>> = Lazy::new(FxDashMap::default);
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct ClientOptions {
