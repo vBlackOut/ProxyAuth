@@ -7,7 +7,7 @@ use rustls::{Certificate, PrivateKey};
 use rustls_pemfile::{certs, pkcs8_private_keys};
 use std::{fs::File, io::BufReader};
 use hyper_proxy::{Proxy, ProxyConnector, Intercept};
-use crate::config::AppConfig;
+use crate::config::config::AppConfig;
 use std::time::Duration;
 use std::str::FromStr;
 use once_cell::sync::Lazy;

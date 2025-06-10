@@ -1,6 +1,6 @@
 use crate::AppConfig;
 use crate::AppState;
-use crate::crypto::{calcul_factorhash, decrypt, derive_key_from_secret};
+use crate::protect::crypto::{calcul_factorhash, decrypt, derive_key_from_secret};
 use crate::timezone::check_date_token;
 use crate::build_info::get;
 use actix_web::web;
