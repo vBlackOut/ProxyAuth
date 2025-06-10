@@ -9,8 +9,6 @@ mod timezone;
 mod tls;
 mod build_info;
 
-
-
 use actix_governor::{Governor, GovernorConfigBuilder};
 use actix_web::{App, HttpServer, web};
 use protect::security::init_derived_key;
@@ -25,20 +23,19 @@ use network::proxy::global_proxy;
 use network::ratelimit::UserToken;
 use start_actix::mode_actix_web;
 use stats::stats::stats as metric_stats;
-use std::{fs, sync::Arc};
-use std::{io, process};
+use std::{fs, sync::Arc, io, process, time::Duration};
 pub use stats::tokencount::CounterToken;
 use tracing_loki::url::Url;
-use tracing_subscriber::Layer;
-use tracing_subscriber::filter;
-use tracing_subscriber::EnvFilter;
-use tracing_subscriber::filter::LevelFilter;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::fmt::time::FormatTime;
-use std::time::Duration;
+use tracing_subscriber::{
+    Layer, filter, EnvFilter, filter::LevelFilter,
+    layer::SubscriberExt, util::SubscriberInitExt,
+    fmt::time::FormatTime
+};
 use tls::load_rustls_config;
-use network::shared_client::{build_hyper_client_proxy, build_hyper_client_normal, build_hyper_client_cert, ClientOptions};
+use network::shared_client::{
+    build_hyper_client_proxy, build_hyper_client_normal,
+    build_hyper_client_cert, ClientOptions
+};
 use crate::cmd::prompt::prompt;
 use crate::keystore::import::decrypt_keystore;
 use crate::build_info::update_build_info;
