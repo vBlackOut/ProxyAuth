@@ -41,11 +41,11 @@ impl<'a> MakeWriter<'a> for ChannelLogWriter {
     }
 }
 
-pub async fn log_collector(mut rx: UnboundedReceiver<String>) {
+pub async fn log_collector(mut rx: UnboundedReceiver<String>, max_logs: usize) {
     while let Some(log) = rx.recv().await {
         let mut logs = LOG_BUFFER.lock().unwrap();
         logs.push(log);
-        if logs.len() > 1000 {
+        if logs.len() > max_logs {
             logs.remove(0);
         }
     }

@@ -28,7 +28,7 @@ use std::{fs, sync::Arc, io, process, time::Duration};
 pub use stats::tokencount::CounterToken;
 use tracing_loki::url::Url;
 use logs::{log_collector, ChannelLogWriter, get_logs};
-use tokio::sync::mpsc::{UnboundedSender, UnboundedReceiver, unbounded_channel};
+use tokio::sync::mpsc::unbounded_channel;
 use tracing_subscriber::{
     Layer, filter, EnvFilter, filter::LevelFilter,
     layer::SubscriberExt, util::SubscriberInitExt,
@@ -170,7 +170,16 @@ async fn main() -> std::io::Result<()> {
             .with_max_level(tracing::Level::INFO)
             .init();
 
-            tokio::spawn(log_collector(rx));
+            let max_logs = config.log.get("max_logs")
+            .and_then(|v| v.parse::<usize>().ok())
+            .expect("Error value write_max_logs");
+
+            if max_logs <= 100000 {
+                println!("Error write_max_logs limit <= 100000");
+                std::process::exit(0);
+            }
+
+            tokio::spawn(log_collector(rx, max_logs));
             // tracing_subscriber::fmt()
             // .with_writer(|| std::io::sink())
             // .init();
