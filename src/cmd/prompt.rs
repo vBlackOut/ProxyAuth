@@ -1,12 +1,12 @@
 use std::sync::Arc;
 use clap::Parser;
-use crate::config::{AppConfig, load_config};
+use crate::config::config::{AppConfig, load_config};
 use reqwest::{ClientBuilder, header::{HeaderMap, HeaderValue}};
-use crate::command::{Cli, Commands};
-use crate::def_config::{ensure_running_as_proxyauth, ensure_running_as_root, ensure_user_proxyauth_exists,
+use crate::cmd::command::{Cli, Commands};
+use crate::config::def_config::{ensure_running_as_proxyauth, ensure_running_as_root, ensure_user_proxyauth_exists,
     setup_proxyauth_directory, switch_to_user,
 };
-use crate::export::export_as_file;
+use crate::keystore::export::export_as_file;
 
 pub async fn prompt() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();

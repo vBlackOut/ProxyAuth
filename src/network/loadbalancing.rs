@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 use dashmap::DashMap;
@@ -24,10 +23,10 @@ type FxDashMap<K, V> = DashMap<K, V, FxBuildHasher>;
 type DefaultClient = Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>, Body>;
 type ProxyClient = Client<ProxyConnector<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>, Body>;
 
-static CLIENT_POOL: Lazy<tokio::sync::Mutex<HashMap<String, DefaultClient>>> = Lazy::new(|| tokio::sync::Mutex::new(HashMap::new()));
-static PROXY_CLIENT_POOL: Lazy<tokio::sync::Mutex<HashMap<(String, String), ProxyClient>>> = Lazy::new(|| tokio::sync::Mutex::new(HashMap::new()));
-static LAST_GOOD_BACKEND: Lazy<DashMap<&'static str, (String, Instant)>> = Lazy::new(DashMap::new);
-static BACKEND_COOLDOWN: Lazy<DashMap<String, CooldownEntry>> = Lazy::new(DashMap::new);
+static CLIENT_POOL: Lazy<FxDashMap<String, DefaultClient>> = Lazy::new(FxDashMap::default);
+static PROXY_CLIENT_POOL: Lazy<FxDashMap<(String, String), ProxyClient>> = Lazy::new(FxDashMap::default);
+static LAST_GOOD_BACKEND: Lazy<FxDashMap<&'static str, (String, Instant)>> = Lazy::new(FxDashMap::default);
+static BACKEND_COOLDOWN: Lazy<FxDashMap<String, CooldownEntry>> = Lazy::new(FxDashMap::default);
 
 struct CooldownEntry {
     last_failed: Instant,
@@ -40,30 +39,28 @@ const COOLDOWN_BASE: Duration = Duration::from_secs(30);
 const COOLDOWN_MAX: Duration = Duration::from_secs(300);
 
 async fn get_or_build_client(backend: &str) -> DefaultClient {
-    let mut pool = CLIENT_POOL.lock().await;
-
-    if let Some(client) = pool.get(backend) {
+    if let Some(client) = CLIENT_POOL.get(backend) {
         return client.clone();
     }
 
     let https = HttpsConnectorBuilder::new()
-    .with_native_roots()
-    .https_or_http()
-    .enable_http1()
-    .build();
+        .with_native_roots()
+        .https_or_http()
+        .enable_http1()
+        .build();
 
     let client = Client::builder()
-    .pool_max_idle_per_host(200)
-    .build::<_, Body>(https);
+        .pool_max_idle_per_host(200)
+        .build::<_, Body>(https);
 
-    pool.insert(backend.to_string(), client.clone());
+    CLIENT_POOL.insert(backend.to_string(), client.clone());
     client
 }
 
 async fn get_or_build_client_with_proxy(proxy_addr: &str, backend: &str) -> ProxyClient {
-    let mut pool = PROXY_CLIENT_POOL.lock().await;
+    let key = (proxy_addr.to_string(), backend.to_string());
 
-    if let Some(client) = pool.get(&(proxy_addr.to_string(), backend.to_string())) {
+    if let Some(client) = PROXY_CLIENT_POOL.get(&key) {
         return client.clone();
     }
 
@@ -71,19 +68,19 @@ async fn get_or_build_client_with_proxy(proxy_addr: &str, backend: &str) -> Prox
     let proxy = Proxy::new(Intercept::All, proxy_uri);
 
     let https = HttpsConnectorBuilder::new()
-    .with_native_roots()
-    .https_or_http()
-    .enable_http1()
-    .build();
+        .with_native_roots()
+        .https_or_http()
+        .enable_http1()
+        .build();
 
     let proxy_connector = ProxyConnector::from_proxy(https, proxy)
-    .expect("Failed to create proxy connector");
+        .expect("Failed to create proxy connector");
 
     let client = Client::builder()
-    .pool_max_idle_per_host(200)
-    .build(proxy_connector);
+        .pool_max_idle_per_host(200)
+        .build(proxy_connector);
 
-    pool.insert((proxy_addr.to_string(), backend.to_string()), client.clone());
+    PROXY_CLIENT_POOL.insert(key, client.clone());
     client
 }
 

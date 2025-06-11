@@ -1,5 +1,5 @@
-use crate::auth::generate_random_string;
-use crate::tokencount::CounterToken;
+use crate::protect::auth::generate_random_string;
+use crate::stats::tokencount::CounterToken;
 use argon2::password_hash::{SaltString, rand_core::OsRng};
 use argon2::{Argon2, PasswordHasher};
 use serde::{Deserialize, Serialize, Serializer, ser::SerializeStruct};

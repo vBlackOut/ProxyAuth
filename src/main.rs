@@ -1,51 +1,43 @@
-mod auth;
-mod command;
 mod config;
-mod crypto;
-mod def_config;
-mod proxy;
-mod ratelimit;
-mod security;
+mod protect;
+mod network;
+mod keystore;
+mod cmd;
 mod start_actix;
 mod stats;
 mod timezone;
-mod tokencount;
 mod tls;
-mod shared_client;
-mod loadbalancing;
 mod build_info;
-mod prompt;
-mod export;
-mod import;
 
 use actix_governor::{Governor, GovernorConfigBuilder};
 use actix_web::{App, HttpServer, web};
-use security::init_derived_key;
-use auth::auth;
-use config::{AppConfig, AppState, RouteConfig, load_config};
-use def_config::{
+use protect::security::init_derived_key;
+use protect::auth::auth;
+use config::config::{AppConfig, AppState, RouteConfig, load_config};
+use config::def_config::{
     create_config, ensure_running_as_proxyauth, switch_to_user,
 };
 use std::net::TcpListener;
 use socket2::{Socket, Domain, Type, Protocol};
-use proxy::global_proxy;
-use ratelimit::UserToken;
+use network::proxy::global_proxy;
+use network::ratelimit::UserToken;
 use start_actix::mode_actix_web;
-use stats::stats as metric_stats;
-use std::{fs, sync::Arc};
-use std::{io, process};
-pub use tokencount::CounterToken;
+use stats::stats::stats as metric_stats;
+use std::{fs, sync::Arc, io, process, time::Duration};
+pub use stats::tokencount::CounterToken;
 use tracing_loki::url::Url;
-use tracing_subscriber::Layer;
-use tracing_subscriber::filter::LevelFilter;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::fmt::time::FormatTime;
-use std::time::Duration;
+use tracing_subscriber::{
+    Layer, filter, EnvFilter, filter::LevelFilter,
+    layer::SubscriberExt, util::SubscriberInitExt,
+    fmt::time::FormatTime
+};
 use tls::load_rustls_config;
-use crate::shared_client::{build_hyper_client_proxy, build_hyper_client_normal, build_hyper_client_cert, ClientOptions};
-use crate::prompt::prompt;
-use crate::import::decrypt_keystore;
+use network::shared_client::{
+    build_hyper_client_proxy, build_hyper_client_normal,
+    build_hyper_client_cert, ClientOptions
+};
+use crate::cmd::prompt::prompt;
+use crate::keystore::import::decrypt_keystore;
 use crate::build_info::update_build_info;
 use tracing::{info, warn};
 use chrono::Local;
@@ -56,7 +48,7 @@ struct LocalTime;
 
 impl FormatTime for LocalTime {
     fn format_time(&self, w: &mut tracing_subscriber::fmt::format::Writer<'_>) -> std::fmt::Result {
-        write!(w, "{}", Local::now().format("%Y-%m-%d %H:%M:%S"))
+        write!(w, "{}", Local::now().format("%Y-%m-%d %H:%M:%S %:z"))
     }
 }
 
@@ -144,10 +136,14 @@ async fn main() -> std::io::Result<()> {
                 todo!()
             };
 
+            let target_filter = filter::filter_fn(|meta| {
+                meta.target().starts_with("proxyauth")
+            });
+
             // We need to register our layer with `tracing`.
             tracing_subscriber::registry()
                 .with(layer.with_filter(LevelFilter::INFO))
-                .with(tracing_subscriber::fmt::Layer::new().with_timer(LocalTime).with_filter(LevelFilter::INFO))
+                .with(tracing_subscriber::fmt::Layer::new().with_timer(LocalTime).with_filter(target_filter))
                 .init();
 
             tokio::spawn(task);
@@ -155,7 +151,9 @@ async fn main() -> std::io::Result<()> {
 
         if logs == "local" {
             tracing_subscriber::fmt()
+            .with_env_filter(EnvFilter::new("proxyauth=trace"))
             .with_timer(LocalTime)
+            .with_ansi(true)
             .init();
             // tracing_subscriber::fmt()
             // .with_writer(|| std::io::sink())
@@ -249,7 +247,7 @@ async fn main() -> std::io::Result<()> {
                 .finish()
                 .unwrap();
 
-            println!("\nlaunch ProxyAuth v{} \nratelimit On, (Proxy)", VERSION);
+            println!("\nlaunch ProxyAuth v{} \nratelimit On, (Proxy)\nstarting service: \"proxyauth-service\" worker: {} listening on {}", VERSION, config.worker, addr);
             HttpServer::new(move || {
                 App::new()
                     .app_data(state.clone())
@@ -274,7 +272,7 @@ async fn main() -> std::io::Result<()> {
                 .finish()
                 .unwrap();
 
-            println!("\nlaunch ProxyAuth v{} \nratelimit On (Auth)", VERSION);
+            println!("\nlaunch ProxyAuth v{} \nratelimit On (Auth)\nstarting service: \"proxyauth-service\" worker: {} listening on {}", VERSION, config.worker, addr);
             HttpServer::new(move || {
                 App::new()
                     .app_data(state.clone())
@@ -316,8 +314,8 @@ async fn main() -> std::io::Result<()> {
                 .unwrap();
 
             println!(
-                "\nlaunch ProxyAuth v{} \nratelimit On, (Proxy, Auth)",
-                VERSION
+                "\nlaunch ProxyAuth v{} \nratelimit On, (Proxy, Auth)\nstarting service: \"proxyauth-service\" worker: {} listening on {}",
+                 VERSION, config.worker, addr
             );
             HttpServer::new(move || {
                 App::new()
@@ -340,7 +338,7 @@ async fn main() -> std::io::Result<()> {
         }
 
         "RATELIMIT_GLOBAL_OFF" => {
-            println!("\nlaunch ProxyAuth v{} \nratelimit Off", VERSION);
+            println!("\nlaunch ProxyAuth v{} \nratelimit Off\nstarting service: \"proxyauth-service\" worker: {} listening on {}", VERSION, config.worker, addr);
             HttpServer::new(move || {
                 App::new()
                     .app_data(state.clone())
@@ -357,8 +355,8 @@ async fn main() -> std::io::Result<()> {
 
         _ => {
             println!(
-                "\nlaunch ProxyAuth v{} \nratelimit Off (No config)",
-                VERSION
+                "\nlaunch ProxyAuth v{} \nratelimit Off (No config)\nstarting service: \"proxyauth-service\" worker: {} listening on {}",
+                VERSION, config.worker, addr
             );
             HttpServer::new(move || {
                 App::new()

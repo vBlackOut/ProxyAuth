@@ -1,4 +1,4 @@
-use crate::security::get_build_rand;
+use crate::protect::security::get_build_rand;
 use base64::{Engine as _, engine::general_purpose};
 use chacha20poly1305::aead::generic_array::GenericArray;
 use chacha20poly1305::aead::generic_array::typenum::Unsigned;

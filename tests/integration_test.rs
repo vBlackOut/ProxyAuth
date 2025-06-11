@@ -5,7 +5,7 @@ use std::fs;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use proxyauth::{AppConfig, AppState, CounterToken, RouteConfig, auth as auth_handler};
-use proxyauth::shared_client::{build_hyper_client_proxy, build_hyper_client_normal, build_hyper_client_cert, ClientOptions};
+use proxyauth::network::shared_client::{build_hyper_client_proxy, build_hyper_client_normal, build_hyper_client_cert, ClientOptions};
 
 fn load_config<T: DeserializeOwned>(path: &str) -> T {
     let data = fs::read_to_string(path).expect("Failed to read config file");
