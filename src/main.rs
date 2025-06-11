@@ -8,6 +8,7 @@ mod stats;
 mod timezone;
 mod tls;
 mod build_info;
+mod logs;
 
 use actix_governor::{Governor, GovernorConfigBuilder};
 use actix_web::{App, HttpServer, web};
@@ -26,6 +27,8 @@ use stats::stats::stats as metric_stats;
 use std::{fs, sync::Arc, io, process, time::Duration};
 pub use stats::tokencount::CounterToken;
 use tracing_loki::url::Url;
+use logs::{log_collector, ChannelLogWriter, get_logs};
+use tokio::sync::mpsc::{UnboundedSender, UnboundedReceiver, unbounded_channel};
 use tracing_subscriber::{
     Layer, filter, EnvFilter, filter::LevelFilter,
     layer::SubscriberExt, util::SubscriberInitExt,
@@ -153,8 +156,21 @@ async fn main() -> std::io::Result<()> {
             tracing_subscriber::fmt()
             .with_env_filter(EnvFilter::new("proxyauth=trace"))
             .with_timer(LocalTime)
-            .with_ansi(true)
+            .with_max_level(tracing::Level::INFO)
             .init();
+        }
+
+        if logs == "http" {
+            let (tx, rx) = unbounded_channel::<String>();
+
+            tracing_subscriber::fmt()
+            .with_env_filter(EnvFilter::new("proxyauth=trace"))
+            .with_timer(LocalTime)
+            .with_writer(ChannelLogWriter { sender: tx.clone().into() })
+            .with_max_level(tracing::Level::INFO)
+            .init();
+
+            tokio::spawn(log_collector(rx));
             // tracing_subscriber::fmt()
             // .with_writer(|| std::io::sink())
             // .init();
@@ -253,6 +269,7 @@ async fn main() -> std::io::Result<()> {
                     .app_data(state.clone())
                     .service(web::resource("/auth").route(web::post().to(auth)))
                     .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
+                    .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
                     .default_service(web::to(global_proxy).wrap(Governor::new(&governor_proxy_conf)))
             })
             .workers((config.worker as u8).into())
@@ -284,6 +301,7 @@ async fn main() -> std::io::Result<()> {
                         ),
                     )
                     .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
+                    .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
                     .default_service(web::to(global_proxy))
             })
             .workers((config.worker as u8).into())
@@ -328,6 +346,7 @@ async fn main() -> std::io::Result<()> {
                         ),
                     )
                     .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
+                    .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
                     .default_service(web::to(global_proxy).wrap(Governor::new(&governor_proxy_conf)))
             })
             .workers((config.worker as u8).into())
@@ -344,6 +363,7 @@ async fn main() -> std::io::Result<()> {
                     .app_data(state.clone())
                     .service(web::resource("/auth").route(web::post().to(auth)))
                     .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
+                    .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
                     .default_service(web::to(global_proxy))
             })
             .workers((config.worker as u8).into())
@@ -363,6 +383,7 @@ async fn main() -> std::io::Result<()> {
                     .app_data(state.clone())
                     .service(web::resource("/auth").route(web::post().to(auth)))
                     .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
+                    .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
                     .default_service(web::to(global_proxy))
             })
             .workers((config.worker as u8).into())
