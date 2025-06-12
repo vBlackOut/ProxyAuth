@@ -170,11 +170,11 @@ async fn main() -> std::io::Result<()> {
             .with_max_level(tracing::Level::INFO)
             .init();
 
-            let max_logs = config.log.get("max_logs")
+            let max_logs = config.log.get("write_max_logs")
             .and_then(|v| v.parse::<usize>().ok())
             .expect("Error value write_max_logs");
 
-            if max_logs <= 100000 {
+            if max_logs >= 100000 {
                 println!("Error write_max_logs limit <= 100000");
                 std::process::exit(0);
             }
