@@ -116,7 +116,7 @@ async fn main() -> std::io::Result<()> {
 
     init_derived_key(&config.secret);
 
-    if let Some(logs) = config.log.get("type") {
+    if let Some(logs) = config.log.get("type").map(|v| v.trim_matches('"')) {
         if logs == "loki" {
             let host = config.log.get("host").ok_or_else(|| {
                 io::Error::new(io::ErrorKind::InvalidInput, "Missing Loki host config")
