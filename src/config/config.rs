@@ -10,6 +10,10 @@ use hyper::Client;
 use hyper::client::HttpConnector;
 use hyper_rustls::HttpsConnector;
 use hyper_proxy::ProxyConnector;
+use serde::Deserializer;
+use std::fmt;
+use serde::de::MapAccess;
+use serde::de::Visitor;
 
 #[derive(Debug, Deserialize)]
 pub struct RouteRule {
@@ -82,7 +86,7 @@ pub struct AppConfig {
     #[serde(default = "default_ratelimit_auth")]
     pub ratelimit_auth: HashMap<String, u64>,
 
-    #[serde(default = "default_log")]
+    #[serde(deserialize_with = "deserialize_log_map")]
     pub log: HashMap<String, String>,
 
     #[serde(default = "default_stats")]
@@ -180,6 +184,7 @@ fn default_max_idle_per_host() -> u16 {
 fn default_log() -> HashMap<String, String> {
     let mut log = HashMap::new();
     log.insert("type".to_string(), "local".to_string());
+    log.insert("write_max_logs".to_string(), "1000".into());
     log
 }
 
@@ -238,4 +243,38 @@ pub fn load_config(path: &str) -> Arc<AppConfig> {
     }
 
     Arc::new(config)
+}
+
+fn deserialize_log_map<'de, D>(
+    deserializer: D,
+) -> Result<HashMap<String, String>, D::Error>
+where
+D: Deserializer<'de>,
+{
+    struct LogMapVisitor;
+
+    impl<'de> Visitor<'de> for LogMapVisitor {
+        type Value = HashMap<String, String>;
+
+        fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            write!(f, "a map with string keys and string/int/bool values")
+        }
+
+        fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
+        where
+        M: MapAccess<'de>,
+        {
+            let mut map = HashMap::new();
+            while let Some((k, v)) = access.next_entry::<String, serde_json::Value>()? {
+                map.insert(k, v.to_string());
+            }
+            Ok(map)
+        }
+    }
+
+    let value = deserializer.deserialize_map(LogMapVisitor);
+    match value {
+        Ok(v) => Ok(v),
+        Err(_) => Ok(default_log()),
+    }
 }
