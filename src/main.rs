@@ -24,16 +24,15 @@ use network::proxy::global_proxy;
 use network::ratelimit::UserToken;
 use start_actix::mode_actix_web;
 use stats::stats::stats as metric_stats;
-use std::{fs, sync::Arc, io, process, time::Duration};
+use std::{fs, sync::Arc, process, time::Duration};
 pub use stats::tokencount::CounterToken;
 use tracing_loki::url::Url;
 use logs::{log_collector, ChannelLogWriter, get_logs};
 use tokio::sync::mpsc::unbounded_channel;
-use tracing_subscriber::{
-    Layer, filter, EnvFilter, filter::LevelFilter,
-    layer::SubscriberExt, util::SubscriberInitExt,
-    fmt::time::FormatTime
-};
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
+use tracing_subscriber::filter::LevelFilter;
+use tracing_subscriber::Layer;
+use tracing_subscriber::fmt::time::FormatTime;
 use tls::load_rustls_config;
 use network::shared_client::{
     build_hyper_client_proxy, build_hyper_client_normal,
@@ -116,75 +115,79 @@ async fn main() -> std::io::Result<()> {
 
     init_derived_key(&config.secret);
 
-    if let Some(logs) = config.log.get("type").map(|v| v.trim_matches('"')) {
-        if logs == "loki" {
-            let host = config.log.get("host").ok_or_else(|| {
-                io::Error::new(io::ErrorKind::InvalidInput, "Missing Loki host config")
-            })?;
+    // logs
+    fn init_logging(config: &AppConfig) {
+        let logs = config.log.get("type").map(|v| v.trim_matches('"')).unwrap_or("local");
 
-            let url = Url::parse(host).map_err(|e| {
-                io::Error::new(
-                    io::ErrorKind::InvalidInput,
-                    format!("Invalid Loki URL: {}", e),
-                )
-            })?;
+        let env_filter = EnvFilter::new("proxyauth=trace")
+            .add_directive("actix_web=warn".parse().unwrap())
+            .add_directive("actix_server=warn".parse().unwrap());
 
-            let Ok((layer, task)) = tracing_loki::builder()
-                .label("app", "proxyauth")
-                .expect("REASON")
-                .extra_field("pid", format!("{}", process::id()))
-                .expect("REASON")
-                .build_url(url)
-            else {
-                todo!()
-            };
+        let base_registry = Registry::default().with(env_filter);
 
-            let target_filter = filter::filter_fn(|meta| {
-                meta.target().starts_with("proxyauth")
-            });
+        match logs {
+            "loki" => {
+                let host = config.log.get("host").expect("Missing Loki host config");
+                let url = Url::parse(host).expect("Invalid Loki URL");
 
-            // We need to register our layer with `tracing`.
-            tracing_subscriber::registry()
-                .with(layer.with_filter(LevelFilter::INFO))
-                .with(tracing_subscriber::fmt::Layer::new().with_timer(LocalTime).with_filter(target_filter))
-                .init();
+                let (loki_layer, task) = tracing_loki::builder()
+                    .label("app", "proxyauth")
+                    .expect("builder failed")
+                    .extra_field("pid", format!("{}", process::id()))
+                    .expect("extra_field failed")
+                    .build_url(url)
+                    .expect("build_url failed");
 
-            tokio::spawn(task);
-        }
+                let loki_filter = tracing_subscriber::filter::filter_fn(|meta| {
+                    meta.target().starts_with("proxyauth")
+                });
 
-        if logs == "local" {
-            tracing_subscriber::fmt()
-            .with_env_filter(EnvFilter::new("proxyauth=trace"))
-            .with_timer(LocalTime)
-            .with_max_level(tracing::Level::INFO)
-            .init();
-        }
+                let fmt_layer = fmt::Layer::new()
+                    .with_timer(LocalTime)
+                    .with_filter(loki_filter);
 
-        if logs == "http" {
-            let (tx, rx) = unbounded_channel::<String>();
+                base_registry
+                    .with(loki_layer.with_filter(LevelFilter::INFO))
+                    .with(fmt_layer)
+                    .init();
 
-            tracing_subscriber::fmt()
-            .with_env_filter(EnvFilter::new("proxyauth=trace"))
-            .with_timer(LocalTime)
-            .with_writer(ChannelLogWriter { sender: tx.clone().into() })
-            .with_max_level(tracing::Level::INFO)
-            .init();
-
-            let max_logs = config.log.get("write_max_logs")
-            .and_then(|v| v.parse::<usize>().ok())
-            .expect("Error value write_max_logs");
-
-            if max_logs >= 100000 {
-                println!("Error write_max_logs limit <= 100000");
-                std::process::exit(0);
+                tokio::spawn(task);
             }
 
-            tokio::spawn(log_collector(rx, max_logs));
-            // tracing_subscriber::fmt()
-            // .with_writer(|| std::io::sink())
-            // .init();
+            "http" => {
+                let (tx, rx) = unbounded_channel::<String>();
+
+                let max_logs = config.log.get("write_max_logs")
+                    .and_then(|v| v.parse::<usize>().ok())
+                    .expect("Invalid write_max_logs");
+
+                if max_logs >= 100_000 {
+                    eprintln!("write_max_logs must be < 100000");
+                    process::exit(1);
+                }
+
+                let fmt_layer = fmt::Layer::new()
+                    .with_timer(LocalTime)
+                    .with_writer(ChannelLogWriter { sender: tx.clone().into() });
+
+                base_registry
+                    .with(fmt_layer)
+                    .init();
+
+                tokio::spawn(log_collector(rx, max_logs));
+            }
+
+            _ => {
+                let fmt_layer = fmt::Layer::new().with_timer(LocalTime);
+
+                base_registry
+                    .with(fmt_layer)
+                    .init();
+            }
         }
     }
+
+    init_logging(&config);
 
     // check keystore if exist
     match decrypt_keystore() {

@@ -142,7 +142,7 @@ pub async fn validate_token(
     data_app: &web::Data<AppState>,
     config: &AppConfig,
     ip: &str,
-) -> Result<String, String> {
+) -> Result<(String, String), String> {
     let key = derive_key_from_secret(&config.secret);
 
     let decrypt_token = decrypt(token, &key).map_err(|_| "Invalid token format")?;
@@ -197,7 +197,7 @@ pub async fn validate_token(
         );
     }
 
-    Ok(user.username.to_string())
+    Ok((user.username.to_string(), data[3].to_string()))
 }
 
 pub fn extract_token_user(token: &str, config: &AppConfig, ip: String) -> Result<String, String> {
