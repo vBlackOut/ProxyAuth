@@ -8,7 +8,7 @@ use crate::AppState;
 use crate::protect::security::validate_token;
 use crate::network::loadbalancing::forward_failover;
 use crate::network::shared_client::{get_or_build_thread_client, get_or_build_client_proxy, ClientOptions};
-use tracing::warn;
+use tracing::{warn, info};
 
 pub fn client_ip(req: &HttpRequest) -> Option<IpAddr> {
     req.headers()
@@ -62,6 +62,8 @@ pub async fn proxy_with_proxy(
             format!("/{}", raw_forward)
         };
 
+        let mut user_agent = "";
+
         let mut target_url = format!(
             "{}{}",
             rule.target.trim_end_matches('/'),
@@ -74,7 +76,7 @@ pub async fn proxy_with_proxy(
         }
 
         let full_url = if target_url.starts_with("http") {
-            target_url
+            target_url.clone()
         } else {
             format!("http://{}", target_url)
         };
@@ -90,7 +92,7 @@ pub async fn proxy_with_proxy(
         let uri = Uri::from_str(&full_url)
         .map_err(|e| error::ErrorBadRequest(format!("Invalid proxy URI: {}", e)))?;
 
-        let _username = if rule.secure {
+        let username = if rule.secure {
             let token_header = req
             .headers()
             .get("Authorization")
@@ -122,6 +124,9 @@ pub async fn proxy_with_proxy(
         .uri(&uri);
 
         for (key, value) in req.headers() {
+            if key == "user-agent" {
+                user_agent = value.to_str().unwrap_or("");
+            }
             if key != "authorization" && key != "user-agent" {
                 request_builder = request_builder.header(key, value);
             }
@@ -186,10 +191,13 @@ pub async fn proxy_with_proxy(
             error::ErrorInternalServerError("500 Internal Server Error")
         })?;
 
+        info!("{} - {} {} {} {} {} {}", ip, target_url, method, status.as_u16(), body_bytes.len(), username, user_agent);
         Ok(client_resp.append_header(("server", "ProxyAuth")).body(body_bytes))
+
     } else {
         Ok(HttpResponse::NotFound().append_header(("server", "ProxyAuth")).body("404 Not Found"))
     }
+
 }
 
 pub async fn proxy_without_proxy(
@@ -225,7 +233,7 @@ pub async fn proxy_without_proxy(
         }
 
         let full_url = if target_url.starts_with("http") {
-            target_url
+            target_url.clone()
         } else {
             format!("http://{}", target_url)
         };
@@ -252,7 +260,7 @@ pub async fn proxy_without_proxy(
         let uri = Uri::from_str(&full_url)
             .map_err(|e| error::ErrorBadRequest(format!("Invalid URI: {}", e)))?;
 
-        let _username = if rule.secure {
+        let username = if rule.secure {
             let token_header = req
                 .headers()
                 .get("Authorization")
@@ -356,14 +364,25 @@ pub async fn proxy_without_proxy(
             return Ok(HttpResponse::InternalServerError().append_header(("server", "ProxyAuth")).finish());
         }
 
+        let (parts, body) = response_result.into_parts();
+        let status = parts.status;
+        let headers = parts.headers;
+
         let mut client_resp = HttpResponse::build(status);
-        for (key, value) in response_result.headers() {
-            if key != USER_AGENT && key.as_str() != "authorization"  && key.as_str() != "server" {
+
+        let mut user_agent = "";
+
+        for (key, value) in &headers {
+            if key.as_str() == "user-agent" {
+                user_agent = value.to_str().unwrap_or("");
+            }
+
+            if key != USER_AGENT && key.as_str() != "authorization" && key.as_str() != "server" {
                 client_resp.append_header((key.clone(), value.clone()));
             }
         }
 
-        let body_bytes = hyper::body::to_bytes(response_result.into_body()).await.map_err(|e| {
+        let body_bytes = hyper::body::to_bytes(body).await.map_err(|e| {
             warn!(
                 client_ip = %ip,
                 target = %full_url,
@@ -372,6 +391,7 @@ pub async fn proxy_without_proxy(
             error::ErrorInternalServerError("500 Internal Server Error")
         })?;
 
+        info!("{} - {} {} {} {} {} {}", ip, target_url, method, status.as_u16(), body_bytes.len(), username, user_agent );
         Ok(client_resp.append_header(("server", "ProxyAuth")).body(body_bytes))
 
     } else {
