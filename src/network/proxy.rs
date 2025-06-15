@@ -7,6 +7,8 @@ use tokio::time::{timeout, Duration};
 use crate::AppState;
 use crate::token::security::validate_token;
 use crate::network::loadbalancing::forward_failover;
+use crate::config::config::BackendConfig;
+use crate::config::config::BackendInput;
 use crate::network::shared_client::{get_or_build_thread_client, get_or_build_client_proxy, ClientOptions};
 use tracing::{warn, info};
 
@@ -160,7 +162,25 @@ pub async fn proxy_with_proxy(
         };
 
         let response_result = if !rule.backends.is_empty() {
-            forward_failover(hyper_req, &rule.backends, Some(&rule.proxy_config)).await.map_err(|e| {
+
+            let backends: Vec<BackendConfig> = rule.backends.iter()
+            .filter_map(|b| {
+                let backend = match b {
+                    BackendInput::Simple(url) => BackendConfig {
+                        url: url.clone(),
+                        weight: 1,
+                    },
+                    BackendInput::Detailed(cfg) => cfg.clone(),
+                };
+                if backend.weight != -1 {
+                    Some(backend)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+            forward_failover(hyper_req, &backends, Some(&rule.proxy_config)).await.map_err(|e| {
                 warn!(client_ip = %ip, target = %full_url, "Failover failed: {}", e);
                 error::ErrorServiceUnavailable("503 Service Unavailable")
             })?
@@ -337,10 +357,20 @@ pub async fn proxy_without_proxy(
 
         let response_result = if !rule.backends.is_empty() {
             // Mode failover
-            forward_failover(hyper_req, &rule.backends, None).await.map_err(|e| {
+
+            let backends: Vec<BackendConfig> = rule.backends.iter().map(|b| match b {
+                BackendInput::Simple(url) => BackendConfig {
+                    url: url.clone(),
+                    weight: 1,
+                },
+                BackendInput::Detailed(cfg) => cfg.clone(),
+            }).collect();
+
+            forward_failover(hyper_req, &backends, None).await.map_err(|e| {
                 warn!(client_ip = %ip, target = %full_url, "Failover failed: {}", e);
                 error::ErrorServiceUnavailable("503 Service Unavailable")
             })?
+
         } else {
             // Mode direct
             match timeout(Duration::from_millis(500), client.request(hyper_req)).await {
