@@ -1,5 +1,5 @@
 mod config;
-mod protect;
+mod token;
 mod network;
 mod keystore;
 mod cmd;
@@ -12,8 +12,8 @@ mod logs;
 
 use actix_governor::{Governor, GovernorConfigBuilder};
 use actix_web::{App, HttpServer, web};
-use protect::security::init_derived_key;
-use protect::auth::auth;
+use token::security::init_derived_key;
+use token::auth::auth;
 use config::config::{AppConfig, AppState, RouteConfig, load_config};
 use config::def_config::{
     create_config, ensure_running_as_proxyauth, switch_to_user,

@@ -5,7 +5,7 @@ use std::net::IpAddr;
 use std::str::FromStr;
 use tokio::time::{timeout, Duration};
 use crate::AppState;
-use crate::protect::security::validate_token;
+use crate::token::security::validate_token;
 use crate::network::loadbalancing::forward_failover;
 use crate::network::shared_client::{get_or_build_thread_client, get_or_build_client_proxy, ClientOptions};
 use tracing::{warn, info};
