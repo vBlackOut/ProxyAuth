@@ -112,15 +112,15 @@ pub async fn forward_failover(
         now.duration_since(entry.last_failed) < BACKEND_RESET_THRESHOLD
     });
 
+    let (active_backends, disabled_backends): (Vec<_>, Vec<_>) = backends
+    .iter()
+    .partition(|b| b.weight != -1);
+
     let mut weighted_backends: Vec<&BackendConfig> = Vec::new();
-    for backend in backends {
+    for backend in &active_backends {
         for _ in 0..backend.weight.max(1) {
             weighted_backends.push(backend);
         }
-    }
-
-    if weighted_backends.is_empty() {
-        return Err(ForwardError::AllBackendsFailed);
     }
 
     let start_index = ROUND_ROBIN_COUNTER.fetch_add(1, Ordering::Relaxed);
@@ -132,17 +132,52 @@ pub async fn forward_failover(
 
         if let Some(entry) = BACKEND_COOLDOWN.get(url) {
             let delay = COOLDOWN_BASE * entry.failures.min(10);
-            if delay > COOLDOWN_MAX {
-                continue;
-            }
-
-            if entry.last_failed.elapsed() < delay {
-                tracing::warn!("Skipping backend {} (cooldown active: {}s, failures: {})", url, delay.as_secs(), entry.failures);
+            if delay > COOLDOWN_MAX || entry.last_failed.elapsed() < delay {
+                tracing::warn!(
+                    "Skipping backend {} (cooldown: {}s, failures: {})",
+                    url,
+                    delay.as_secs(),
+                    entry.failures
+                );
                 continue;
             }
         }
 
         if let Ok(resp) = try_forward_to_backend(url, proxy_addr, &body_bytes, &method, &uri, &headers).await {
+            LAST_GOOD_BACKEND.insert(BACKEND_CACHE_KEY, (url.clone(), Instant::now()));
+            BACKEND_COOLDOWN.remove(url);
+            return Ok(resp);
+        } else {
+            BACKEND_COOLDOWN.entry(url.clone())
+            .and_modify(|e| {
+                e.failures += 1;
+                e.last_failed = Instant::now();
+            })
+            .or_insert(CooldownEntry {
+                failures: 1,
+                last_failed: Instant::now(),
+            });
+        }
+    }
+
+    for backend in &disabled_backends {
+        let url = &backend.url;
+
+        if let Some(entry) = BACKEND_COOLDOWN.get(url) {
+            let delay = COOLDOWN_BASE * entry.failures.min(10);
+            if delay > COOLDOWN_MAX || entry.last_failed.elapsed() < delay {
+                tracing::warn!(
+                    "Skipping disabled fallback backend {} (cooldown: {}s, failures: {})",
+                    url,
+                    delay.as_secs(),
+                    entry.failures
+                );
+                continue;
+            }
+        }
+
+        if let Ok(resp) = try_forward_to_backend(url, proxy_addr, &body_bytes, &method, &uri, &headers).await {
+            tracing::warn!("Using disabled backend {} as fallback", url);
             LAST_GOOD_BACKEND.insert(BACKEND_CACHE_KEY, (url.clone(), Instant::now()));
             BACKEND_COOLDOWN.remove(url);
             return Ok(resp);

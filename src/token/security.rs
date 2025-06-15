@@ -23,6 +23,12 @@ pub fn get_build_rand() -> u64 {
     data
 }
 
+pub fn get_build_seed2() -> u64 {
+    let get_build = get();
+    let data = get_build.build_seed2;
+    data
+}
+
 pub fn get_build_epochdate() -> i64 {
     let get_build = get();
     let data = get_build.build_epoch;
@@ -153,10 +159,7 @@ pub async fn validate_token(
         .try_into()
         .map_err(|_| "Invalid token format")?;
 
-    let (token_hash_decrypt, factor) = data[0]
-        .rsplit_once('=')
-        .and_then(|(hash, factor_str)| factor_str.parse::<i64>().ok().map(|f| (hash, f)))
-        .ok_or("Invalid token format or factor")?;
+    let token_hash_decrypt = data[0];
 
     let index_user = data[2].parse::<usize>().map_err(|_| "Index invalide")?;
     let user = config
@@ -176,7 +179,7 @@ pub async fn validate_token(
     }
 
     let token_generated = generate_token(&user.username, &config, data[1], data[3]);
-    let token_hash = calcul_factorhash(token_generated, factor);
+    let token_hash = calcul_factorhash(token_generated);
 
     if hex::encode(Sha256::digest(token_hash)) != token_hash_decrypt {
         warn!("[{}] Invalid token", ip);

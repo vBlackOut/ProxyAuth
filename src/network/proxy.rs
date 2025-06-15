@@ -163,22 +163,13 @@ pub async fn proxy_with_proxy(
 
         let response_result = if !rule.backends.is_empty() {
 
-            let backends: Vec<BackendConfig> = rule.backends.iter()
-            .filter_map(|b| {
-                let backend = match b {
-                    BackendInput::Simple(url) => BackendConfig {
-                        url: url.clone(),
-                        weight: 1,
-                    },
-                    BackendInput::Detailed(cfg) => cfg.clone(),
-                };
-                if backend.weight != -1 {
-                    Some(backend)
-                } else {
-                    None
-                }
-            })
-            .collect();
+            let backends: Vec<BackendConfig> = rule.backends.iter().map(|b| match b {
+                BackendInput::Simple(url) => BackendConfig {
+                    url: url.clone(),
+                    weight: 1,
+                },
+                BackendInput::Detailed(cfg) => cfg.clone(),
+            }).collect();
 
             forward_failover(hyper_req, &backends, Some(&rule.proxy_config)).await.map_err(|e| {
                 warn!(client_ip = %ip, target = %full_url, "Failover failed: {}", e);

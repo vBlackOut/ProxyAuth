@@ -2,6 +2,11 @@ use rustls::{Certificate, PrivateKey, ServerConfig};
 use rustls_pemfile::{certs, pkcs8_private_keys};
 use std::fs::File;
 use std::io::BufReader;
+use std::net::TcpListener;
+
+pub fn check_port(addr: &str) -> bool {
+    TcpListener::bind(addr).is_ok()
+}
 
 pub fn load_rustls_config() -> rustls::ServerConfig {
     let cert_file = &mut BufReader::new(File::open("/etc/proxyauth/certs/cert.pem").expect("Cannot open certificate file"));

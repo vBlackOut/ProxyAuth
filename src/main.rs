@@ -41,7 +41,8 @@ use network::shared_client::{
 use crate::cli::prompt::prompt;
 use crate::keystore::import::decrypt_keystore;
 use crate::build::build_info::update_build_info;
-use tracing::{info, warn};
+use crate::tls::check_port;
+use tracing::warn;
 use chrono::Local;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
@@ -193,7 +194,7 @@ async fn main() -> std::io::Result<()> {
     match decrypt_keystore() {
         Ok(Some(message)) => {
             let _ = update_build_info(&message);
-            info!("Load keystore successfull from /etc/proxyauth/import/data.gpg");
+            println!("Load keystore successfull from /etc/proxyauth/import/data.gpg");
         }
         Ok(None) => {},
         Err(err) => warn!("Failed to decrypt keystore: {:?}", err),
@@ -250,8 +251,13 @@ async fn main() -> std::io::Result<()> {
         &requests_per_second_proxy_config,
     );
 
-
     let addr = format!("{}:{}", config.host, config.port);
+
+    if !check_port(&addr) {
+        eprintln!("Port {} is already in use. Server startup aborted.", addr);
+        std::process::exit(1);
+    }
+
     let sock_addr: std::net::SocketAddr = addr.parse().unwrap();
 
     let socket = Socket::new(Domain::IPV4, Type::STREAM, Some(Protocol::TCP))?;
