@@ -1,7 +1,7 @@
 pub mod network;
 pub mod token;
 pub mod timezone;
-pub mod build_info;
+pub mod build;
 pub mod config;
 pub mod keystore;
 pub mod cli;

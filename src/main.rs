@@ -7,7 +7,7 @@ mod start_actix;
 mod stats;
 mod timezone;
 mod tls;
-mod build_info;
+mod build;
 mod logs;
 
 use actix_governor::{Governor, GovernorConfigBuilder};
@@ -40,7 +40,7 @@ use network::shared_client::{
 };
 use crate::cli::prompt::prompt;
 use crate::keystore::import::decrypt_keystore;
-use crate::build_info::update_build_info;
+use crate::build::build_info::update_build_info;
 use tracing::{info, warn};
 use chrono::Local;
 
