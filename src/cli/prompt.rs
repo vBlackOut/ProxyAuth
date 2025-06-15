@@ -2,7 +2,7 @@ use std::sync::Arc;
 use clap::Parser;
 use crate::config::config::{AppConfig, load_config};
 use reqwest::{ClientBuilder, header::{HeaderMap, HeaderValue}};
-use crate::cmd::command::{Cli, Commands};
+use crate::cli::command::{Cli, Commands};
 use crate::config::def_config::{ensure_running_as_proxyauth, ensure_running_as_root, ensure_user_proxyauth_exists,
     setup_proxyauth_directory, switch_to_user,
 };

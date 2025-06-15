@@ -4,7 +4,7 @@ pub mod timezone;
 pub mod build_info;
 pub mod config;
 pub mod keystore;
-pub mod cmd;
+pub mod cli;
 pub mod stats;
 
 pub use token::auth::auth;

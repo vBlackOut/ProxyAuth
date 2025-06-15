@@ -2,7 +2,7 @@ mod config;
 mod token;
 mod network;
 mod keystore;
-mod cmd;
+mod cli;
 mod start_actix;
 mod stats;
 mod timezone;
@@ -38,7 +38,7 @@ use network::shared_client::{
     build_hyper_client_proxy, build_hyper_client_normal,
     build_hyper_client_cert, ClientOptions
 };
-use crate::cmd::prompt::prompt;
+use crate::cli::prompt::prompt;
 use crate::keystore::import::decrypt_keystore;
 use crate::build_info::update_build_info;
 use tracing::{info, warn};
