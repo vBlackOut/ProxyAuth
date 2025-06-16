@@ -21,6 +21,7 @@ fn main() {
     let mut rng = rand::thread_rng();
     let build_rand = rng.gen_range(1..999_999_999);
     let build_seed = rng.gen_range(1..999);
+    let build_seed2 = rng.gen_range(10..99);
 
     let build_time = SystemTime::now()
     .duration_since(UNIX_EPOCH)
@@ -33,6 +34,7 @@ fn main() {
     println!("cargo:rustc-env=BUILD_TIME={}", build_time);
     println!("cargo:rustc-env=BUILD_RAND={}", build_rand);
     println!("cargo:rustc-env=BUILD_SEED={}", build_seed);
+    println!("cargo:rustc-env=BUILD_SEED2={}", build_seed2);
     println!("cargo:rustc-env=BUILD_EPOCH_DATE={}", random_epoch);
 
     // SHUFFLE BUILD

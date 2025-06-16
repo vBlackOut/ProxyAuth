@@ -10,6 +10,7 @@ pub struct BuildInfo {
     pub build_time: u64,
     pub build_rand: u64,
     pub build_seed: u64,
+    pub build_seed2: u64,
     pub build_epoch: i64,
     pub shuffled_order: String,
 }
@@ -23,6 +24,7 @@ fn load_from_env() -> BuildInfo {
         build_time: env!("BUILD_TIME").parse().unwrap_or(0),
         build_rand: env!("BUILD_RAND").parse().unwrap_or(0),
         build_seed: env!("BUILD_SEED").parse().unwrap_or(0),
+        build_seed2: env!("BUILD_SEED2").parse().unwrap_or(0),
         build_epoch: env!("BUILD_EPOCH_DATE").parse().unwrap_or(0),
         shuffled_order: shuffled,
     }
@@ -42,8 +44,8 @@ pub fn update(new_info: BuildInfo) {
 pub fn update_build_info(input: &str) -> Result<(), String> {
     let parts: Vec<&str> = input.split('|').collect();
 
-    if parts.len() != 6 {
-        return Err("Invalid input shuffle format. Expected 6 fields.".into());
+    if parts.len() != 7 {
+        return Err("Invalid input shuffle format. Expected 7 fields.".into());
     }
 
     let build_info = BuildInfo {
@@ -51,8 +53,9 @@ pub fn update_build_info(input: &str) -> Result<(), String> {
         build_time: parts[1].parse().map_err(|_| "Invalid build_time")?,
         build_rand: parts[2].parse().map_err(|_| "Invalid build_rand")?,
         build_seed: parts[3].parse().map_err(|_| "Invalid build_seed")?,
-        build_epoch: parts[4].parse().map_err(|_| "Invalid build_epoch")?,
-        shuffled_order: parts[5].to_string(),
+        build_seed2: parts[4].parse().map_err(|_| "Invalid build_seed2")?,
+        build_epoch: parts[5].parse().map_err(|_| "Invalid build_epoch")?,
+        shuffled_order: parts[6].to_string(),
     };
 
     update(build_info);
@@ -63,11 +66,12 @@ pub fn update_build_info(input: &str) -> Result<(), String> {
 impl BuildInfo {
     pub fn to_string(&self) -> String {
         format!(
-            "{}|{}|{}|{}|{}|{}",
+            "{}|{}|{}|{}|{}|{}|{}",
             self.version,
             self.build_time,
             self.build_rand,
             self.build_seed,
+            self.build_seed2,
             self.build_epoch,
             self.shuffled_order
         )

@@ -10,7 +10,7 @@ use sequoia_openpgp::{
 };
 use std::fs::{File, create_dir_all};
 use std::io::{BufWriter, Write};
-use crate::build_info;
+use crate::build::build_info;
 
 
 pub fn export_as_file() -> Result<()> {

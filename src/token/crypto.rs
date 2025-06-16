@@ -1,4 +1,4 @@
-use crate::protect::security::get_build_rand;
+use crate::token::security::{get_build_rand, get_build_seed2};
 use base64::{Engine as _, engine::general_purpose};
 use chacha20poly1305::aead::generic_array::GenericArray;
 use chacha20poly1305::aead::generic_array::typenum::Unsigned;
@@ -7,7 +7,6 @@ use chacha20poly1305::{
     aead::{Aead, KeyInit, OsRng},
 };
 use hmac::{Hmac, Mac};
-use rand::Rng;
 use sha2::{Digest, Sha256};
 use std::fmt::Write;
 
@@ -125,8 +124,7 @@ pub fn process_string(s: &str, factor: u64) -> String {
 
 pub fn calcul_cipher(hashdata: String) -> String {
     let hash_split = split_hash(hashdata, 10);
-    let mut rng = rand::thread_rng();
-    let factor = rng.gen_range(10..99);
+    let factor = get_build_seed2();
 
     let mut hash_cypher = "".to_string();
     let totalhash_iter = hash_split.iter().count();
@@ -146,25 +144,20 @@ pub fn calcul_cipher(hashdata: String) -> String {
     let mut hashed = Sha256::new();
     hashed.update(hash_cypher.as_bytes());
 
-    format!("{:x}={}", hashed.finalize(), factor)
+    format!("{:x}", hashed.finalize())
 }
 
-pub fn calcul_factorhash(hashdata: String, factor: i64) -> String {
-    if !(10..=99).contains(&factor) {
-        return String::new();
-    }
-
+pub fn calcul_factorhash(hashdata: String) -> String {
     let hash_split = split_hash(hashdata, 10);
 
     let mut hash_cypher = String::with_capacity(hash_split.len() * 16);
-    let factor: u32 = factor as u32;
 
     for (i, hash) in hash_split.iter().enumerate() {
-        let transformed = process_string(hash, factor.into());
+        let transformed = process_string(hash, get_build_seed2());
         if i == 0 {
             write!(hash_cypher, "{}", transformed).unwrap();
         } else if i == hash_split.len() - 1 {
-            write!(hash_cypher, "-{}::{}", transformed, factor).unwrap();
+            write!(hash_cypher, "-{}::{}", transformed, get_build_seed2()).unwrap();
         } else {
             write!(hash_cypher, "-{}", transformed).unwrap();
         }

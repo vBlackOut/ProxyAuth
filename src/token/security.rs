@@ -1,8 +1,8 @@
 use crate::AppConfig;
 use crate::AppState;
-use crate::protect::crypto::{calcul_factorhash, decrypt, derive_key_from_secret};
+use crate::token::crypto::{calcul_factorhash, decrypt, derive_key_from_secret};
 use crate::timezone::check_date_token;
-use crate::build_info::get;
+use crate::build::build_info::get;
 use actix_web::web;
 use chrono::{Timelike, Utc, Duration, TimeZone};
 use hex;
@@ -20,6 +20,12 @@ fn get_build_time() -> u64 {
 pub fn get_build_rand() -> u64 {
     let get_build = get();
     let data = get_build.build_rand;
+    data
+}
+
+pub fn get_build_seed2() -> u64 {
+    let get_build = get();
+    let data = get_build.build_seed2;
     data
 }
 
@@ -142,7 +148,7 @@ pub async fn validate_token(
     data_app: &web::Data<AppState>,
     config: &AppConfig,
     ip: &str,
-) -> Result<String, String> {
+) -> Result<(String, String), String> {
     let key = derive_key_from_secret(&config.secret);
 
     let decrypt_token = decrypt(token, &key).map_err(|_| "Invalid token format")?;
@@ -153,10 +159,7 @@ pub async fn validate_token(
         .try_into()
         .map_err(|_| "Invalid token format")?;
 
-    let (token_hash_decrypt, factor) = data[0]
-        .rsplit_once('=')
-        .and_then(|(hash, factor_str)| factor_str.parse::<i64>().ok().map(|f| (hash, f)))
-        .ok_or("Invalid token format or factor")?;
+    let token_hash_decrypt = data[0];
 
     let index_user = data[2].parse::<usize>().map_err(|_| "Index invalide")?;
     let user = config
@@ -176,7 +179,7 @@ pub async fn validate_token(
     }
 
     let token_generated = generate_token(&user.username, &config, data[1], data[3]);
-    let token_hash = calcul_factorhash(token_generated, factor);
+    let token_hash = calcul_factorhash(token_generated);
 
     if hex::encode(Sha256::digest(token_hash)) != token_hash_decrypt {
         warn!("[{}] Invalid token", ip);
@@ -197,7 +200,7 @@ pub async fn validate_token(
         );
     }
 
-    Ok(user.username.to_string())
+    Ok((user.username.to_string(), data[3].to_string()))
 }
 
 pub fn extract_token_user(token: &str, config: &AppConfig, ip: String) -> Result<String, String> {

@@ -1,4 +1,4 @@
-use crate::protect::auth::generate_random_string;
+use crate::token::auth::generate_random_string;
 use crate::stats::tokencount::CounterToken;
 use argon2::password_hash::{SaltString, rand_core::OsRng};
 use argon2::{Argon2, PasswordHasher};
@@ -36,7 +36,26 @@ pub struct RouteRule {
     pub cert: HashMap<String, String>,
 
     #[serde(default = "default_backends")]
-    pub backends: Vec<String>,
+    pub backends: Vec<BackendInput>,
+}
+
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct BackendConfig {
+    pub url: String,
+    #[serde(default = "default_weight")]
+    pub weight: i16,
+}
+
+fn default_weight() -> i16 {
+    1
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum BackendInput {
+    Simple(String),
+    Detailed(BackendConfig),
 }
 
 #[derive(Default, Debug, Deserialize)]
@@ -153,8 +172,8 @@ fn default_username() -> Vec<String> {
     [].to_vec()
 }
 
-fn default_backends() -> Vec<String> {
-    [].to_vec()
+fn default_backends() -> Vec<BackendInput> {
+    Vec::new()
 }
 
 fn default_secure() -> bool {

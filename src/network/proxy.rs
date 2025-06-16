@@ -5,10 +5,12 @@ use std::net::IpAddr;
 use std::str::FromStr;
 use tokio::time::{timeout, Duration};
 use crate::AppState;
-use crate::protect::security::validate_token;
+use crate::token::security::validate_token;
 use crate::network::loadbalancing::forward_failover;
+use crate::config::config::BackendConfig;
+use crate::config::config::BackendInput;
 use crate::network::shared_client::{get_or_build_thread_client, get_or_build_client_proxy, ClientOptions};
-use tracing::warn;
+use tracing::{warn, info};
 
 pub fn client_ip(req: &HttpRequest) -> Option<IpAddr> {
     req.headers()
@@ -62,6 +64,8 @@ pub async fn proxy_with_proxy(
             format!("/{}", raw_forward)
         };
 
+        let mut user_agent = "";
+
         let mut target_url = format!(
             "{}{}",
             rule.target.trim_end_matches('/'),
@@ -74,7 +78,7 @@ pub async fn proxy_with_proxy(
         }
 
         let full_url = if target_url.starts_with("http") {
-            target_url
+            target_url.clone()
         } else {
             format!("http://{}", target_url)
         };
@@ -90,7 +94,7 @@ pub async fn proxy_with_proxy(
         let uri = Uri::from_str(&full_url)
         .map_err(|e| error::ErrorBadRequest(format!("Invalid proxy URI: {}", e)))?;
 
-        let _username = if rule.secure {
+        let (username, token_id) = if rule.secure {
             let token_header = req
             .headers()
             .get("Authorization")
@@ -98,9 +102,15 @@ pub async fn proxy_with_proxy(
             .and_then(|s| s.strip_prefix("Bearer "))
             .ok_or_else(|| error::ErrorUnauthorized("Missing token"))?;
 
-            let username = validate_token(token_header, &data, &data.config, &ip)
+            let (username, token_id) = validate_token(token_header, &data, &data.config, &ip)
             .await
-            .map_err(|err| error::ErrorUnauthorized(err))?;
+            .map_err(|err| {
+                warn!(
+                    client_ip = %ip,
+                    "Unauthorized token attempt"
+                );
+                error::ErrorUnauthorized(err)
+            })?;
 
             if !rule.username.contains(&username) {
                 warn!(
@@ -112,9 +122,9 @@ pub async fn proxy_with_proxy(
                 );
                 return Ok(HttpResponse::Unauthorized().append_header(("server", "ProxyAuth")).body("403 Forbidden"));
             }
-            username
+            (username, token_id)
         } else {
-            String::new()
+            (String::new(), String::new())
         };
 
         let mut request_builder = Request::builder()
@@ -122,6 +132,9 @@ pub async fn proxy_with_proxy(
         .uri(&uri);
 
         for (key, value) in req.headers() {
+            if key == "user-agent" {
+                user_agent = value.to_str().unwrap_or("");
+            }
             if key != "authorization" && key != "user-agent" {
                 request_builder = request_builder.header(key, value);
             }
@@ -149,7 +162,16 @@ pub async fn proxy_with_proxy(
         };
 
         let response_result = if !rule.backends.is_empty() {
-            forward_failover(hyper_req, &rule.backends, Some(&rule.proxy_config)).await.map_err(|e| {
+
+            let backends: Vec<BackendConfig> = rule.backends.iter().map(|b| match b {
+                BackendInput::Simple(url) => BackendConfig {
+                    url: url.clone(),
+                    weight: 1,
+                },
+                BackendInput::Detailed(cfg) => cfg.clone(),
+            }).collect();
+
+            forward_failover(hyper_req, &backends, Some(&rule.proxy_config)).await.map_err(|e| {
                 warn!(client_ip = %ip, target = %full_url, "Failover failed: {}", e);
                 error::ErrorServiceUnavailable("503 Service Unavailable")
             })?
@@ -186,10 +208,13 @@ pub async fn proxy_with_proxy(
             error::ErrorInternalServerError("500 Internal Server Error")
         })?;
 
+        info!("{} - {} {} {} {} {} [tid:{}] {}", ip, path, method, status.as_u16(), body_bytes.len(), username, token_id, user_agent);
         Ok(client_resp.append_header(("server", "ProxyAuth")).body(body_bytes))
+
     } else {
         Ok(HttpResponse::NotFound().append_header(("server", "ProxyAuth")).body("404 Not Found"))
     }
+
 }
 
 pub async fn proxy_without_proxy(
@@ -213,6 +238,8 @@ pub async fn proxy_without_proxy(
             format!("/{}", forward_path)
         };
 
+        let mut user_agent = "";
+
         let mut target_url = format!(
             "{}{}",
             rule.target.trim_end_matches('/'),
@@ -225,7 +252,7 @@ pub async fn proxy_without_proxy(
         }
 
         let full_url = if target_url.starts_with("http") {
-            target_url
+            target_url.clone()
         } else {
             format!("http://{}", target_url)
         };
@@ -252,7 +279,7 @@ pub async fn proxy_without_proxy(
         let uri = Uri::from_str(&full_url)
             .map_err(|e| error::ErrorBadRequest(format!("Invalid URI: {}", e)))?;
 
-        let _username = if rule.secure {
+        let (username, token_id) = if rule.secure {
             let token_header = req
                 .headers()
                 .get("Authorization")
@@ -260,28 +287,32 @@ pub async fn proxy_without_proxy(
                 .and_then(|s| s.strip_prefix("Bearer "))
                 .ok_or_else(|| error::ErrorUnauthorized("Missing token"))?;
 
-            let username = validate_token(token_header, &data, &data.config, &ip)
-                .await
-                .map_err(|err| {
-                    warn!(
-                        client_ip = %ip,
-                        "Unauthorized token attempt"
-                    );
-                    error::ErrorUnauthorized(err)
-                })?;
+            let (username, token_id) = validate_token(token_header, &data, &data.config, &ip)
+            .await
+            .map_err(|err| {
+                warn!(
+                    client_ip = %ip,
+                    "Unauthorized token attempt"
+                );
+                error::ErrorUnauthorized(err)
+            })?;
 
             if !rule.username.contains(&username) {
                 return Ok(HttpResponse::Unauthorized().append_header(("server", "ProxyAuth")).body("403 Forbidden"));
             }
-            username
+            (username, token_id)
         } else {
-            String::new()
+            (String::new(), String::new())
         };
 
         let mut request_builder = Request::builder()
             .method(method)
             .uri(&uri);
+
         for (key, value) in req.headers() {
+            if key.as_str() == "user-agent" {
+                user_agent = value.to_str().unwrap_or("");
+            }
             if key != "authorization" && key != "user-agent" {
                 request_builder = request_builder.header(key, value);
             }
@@ -317,10 +348,20 @@ pub async fn proxy_without_proxy(
 
         let response_result = if !rule.backends.is_empty() {
             // Mode failover
-            forward_failover(hyper_req, &rule.backends, None).await.map_err(|e| {
+
+            let backends: Vec<BackendConfig> = rule.backends.iter().map(|b| match b {
+                BackendInput::Simple(url) => BackendConfig {
+                    url: url.clone(),
+                    weight: 1,
+                },
+                BackendInput::Detailed(cfg) => cfg.clone(),
+            }).collect();
+
+            forward_failover(hyper_req, &backends, None).await.map_err(|e| {
                 warn!(client_ip = %ip, target = %full_url, "Failover failed: {}", e);
                 error::ErrorServiceUnavailable("503 Service Unavailable")
             })?
+
         } else {
             // Mode direct
             match timeout(Duration::from_millis(500), client.request(hyper_req)).await {
@@ -356,14 +397,19 @@ pub async fn proxy_without_proxy(
             return Ok(HttpResponse::InternalServerError().append_header(("server", "ProxyAuth")).finish());
         }
 
+        let (parts, body) = response_result.into_parts();
+        let status = parts.status;
+        let headers = parts.headers;
+
         let mut client_resp = HttpResponse::build(status);
-        for (key, value) in response_result.headers() {
-            if key != USER_AGENT && key.as_str() != "authorization"  && key.as_str() != "server" {
+
+        for (key, value) in &headers {
+            if key != USER_AGENT && key.as_str() != "authorization" && key.as_str() != "server" {
                 client_resp.append_header((key.clone(), value.clone()));
             }
         }
 
-        let body_bytes = hyper::body::to_bytes(response_result.into_body()).await.map_err(|e| {
+        let body_bytes = hyper::body::to_bytes(body).await.map_err(|e| {
             warn!(
                 client_ip = %ip,
                 target = %full_url,
@@ -372,6 +418,7 @@ pub async fn proxy_without_proxy(
             error::ErrorInternalServerError("500 Internal Server Error")
         })?;
 
+        info!("{} - {} {} {} {} {} [tid:{}] {}", ip, path, method, status.as_u16(), body_bytes.len(), username, token_id, user_agent );
         Ok(client_resp.append_header(("server", "ProxyAuth")).body(body_bytes))
 
     } else {
