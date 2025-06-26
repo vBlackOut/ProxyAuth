@@ -394,6 +394,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "base32"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23ce669cd6c8588f79e15cf450314f9638f967fc5770ff1c7c1deb0925ea7cfa"
+
+[[package]]
 name = "base64"
 version = "0.21.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2042,7 +2048,7 @@ dependencies = [
 
 [[package]]
 name = "proxyauth"
-version = "0.7.11"
+version = "0.7.12-beta0"
 dependencies = [
  "actix-governor",
  "actix-http",
@@ -2050,6 +2056,7 @@ dependencies = [
  "actix-web",
  "anyhow",
  "argon2",
+ "base32",
  "base64 0.21.7",
  "blake3",
  "bytes",

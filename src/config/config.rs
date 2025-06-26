@@ -14,6 +14,9 @@ use serde::Deserializer;
 use std::fmt;
 use serde::de::MapAccess;
 use serde::de::Visitor;
+use base32::Alphabet::RFC4648;
+use base32::encode;
+use rand::RngCore;
 
 #[derive(Debug, Deserialize)]
 pub struct RouteRule {
@@ -67,6 +70,7 @@ pub struct RouteConfig {
 pub struct User {
     pub username: String,
     pub password: String,
+    pub otpkey: Option<Vec<u8>>
 }
 
 impl Serialize for User {
@@ -77,6 +81,7 @@ impl Serialize for User {
         let mut state = serializer.serialize_struct("User", 2)?;
         state.serialize_field("username", &self.username)?;
         state.serialize_field("password", &self.password)?;
+        state.serialize_field("otpkey", &self.otpkey)?;
         state.end()
     }
 }
@@ -116,6 +121,9 @@ pub struct AppConfig {
 
     #[serde(default = "default_timezone")]
     pub timezone: String,
+
+    #[serde(default = "default_login_via_otp")]
+    pub login_via_otp: bool,
 }
 
 impl Serialize for AppConfig {
@@ -129,10 +137,11 @@ impl Serialize for AppConfig {
         state.serialize_field("token_admin", &self.token_admin)?;
         state.serialize_field("host", &self.host)?;
         state.serialize_field("port", &self.port)?;
+        state.serialize_field("log", &self.log)?;
         state.serialize_field("worker", &self.worker)?;
         state.serialize_field("ratelimit_auth", &self.ratelimit_auth)?;
         state.serialize_field("ratelimit_proxy", &self.ratelimit_proxy)?;
-        state.serialize_field("users", &self.users)?; // en dernier
+        state.serialize_field("users", &self.users)?;
         state.end()
     }
 }
@@ -200,6 +209,10 @@ fn default_max_idle_per_host() -> u16 {
     50
 }
 
+fn default_login_via_otp() -> bool {
+    false
+}
+
 fn default_log() -> HashMap<String, String> {
     let mut log = HashMap::new();
     log.insert("type".to_string(), "local".to_string());
@@ -229,21 +242,22 @@ fn default_cert() -> HashMap<String, String> {
 }
 
 pub fn load_config(path: &str) -> Arc<AppConfig> {
+
     let config_str = fs::read_to_string(path).expect("Could not read config.json file");
     let mut config: AppConfig =
-        serde_json::from_str(&config_str).expect("Invalid config format config.json");
+    serde_json::from_str(&config_str).expect("Invalid config format config.json");
 
     let mut updated = false;
     for user in &mut config.users {
         if !user.password.starts_with("$argon2") {
             let salt = SaltString::generate(&mut OsRng);
             let hash = Argon2::default()
-                .hash_password(user.password.as_bytes(), &salt)
-                .expect(&format!(
-                    "Password hashing failed for user {}",
-                    user.username
-                ))
-                .to_string();
+            .hash_password(user.password.as_bytes(), &salt)
+            .expect(&format!(
+                "Password hashing failed for user {}",
+                user.username
+            ))
+            .to_string();
 
             user.password = hash;
             updated = true;
@@ -285,7 +299,13 @@ D: Deserializer<'de>,
         {
             let mut map = HashMap::new();
             while let Some((k, v)) = access.next_entry::<String, serde_json::Value>()? {
-                map.insert(k, v.to_string());
+                let stringified = match v {
+                    serde_json::Value::String(s) => s,
+                    serde_json::Value::Bool(b) => b.to_string(),
+                    serde_json::Value::Number(n) => n.to_string(),
+                    _ => continue,
+                };
+                map.insert(k, stringified);
             }
             Ok(map)
         }
