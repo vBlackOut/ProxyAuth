@@ -138,6 +138,7 @@ impl Serialize for AppConfig {
         state.serialize_field("host", &self.host)?;
         state.serialize_field("port", &self.port)?;
         state.serialize_field("log", &self.log)?;
+        state.serialize_field("login_via_otp", &self.login_via_otp)?;
         state.serialize_field("worker", &self.worker)?;
         state.serialize_field("ratelimit_auth", &self.ratelimit_auth)?;
         state.serialize_field("ratelimit_proxy", &self.ratelimit_proxy)?;

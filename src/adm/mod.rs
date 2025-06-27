@@ -1,1 +1,1 @@
-pub mod otp_login;
+pub mod otp_method;
