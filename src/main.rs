@@ -9,6 +9,7 @@ mod timezone;
 mod tls;
 mod build;
 mod logs;
+mod adm;
 
 use actix_governor::{Governor, GovernorConfigBuilder};
 use actix_web::{App, HttpServer, web};

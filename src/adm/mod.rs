@@ -1,1 +1,1 @@
-pub mod otp_method;
+pub mod registry_otp;

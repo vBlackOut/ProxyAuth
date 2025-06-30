@@ -1,10 +1,13 @@
 use crate::token::auth::generate_random_string;
 use crate::stats::tokencount::CounterToken;
+use crate::adm::registry_otp::generate_base32_secret;
 use argon2::password_hash::{SaltString, rand_core::OsRng};
 use argon2::{Argon2, PasswordHasher};
 use serde::{Deserialize, Serialize, Serializer, ser::SerializeStruct};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::fs;
+use std::path::Path;
 use std::sync::Arc;
 use hyper::Client;
 use hyper::client::HttpConnector;
@@ -14,9 +17,6 @@ use serde::Deserializer;
 use std::fmt;
 use serde::de::MapAccess;
 use serde::de::Visitor;
-use base32::Alphabet::RFC4648;
-use base32::encode;
-use rand::RngCore;
 
 #[derive(Debug, Deserialize)]
 pub struct RouteRule {
@@ -277,6 +277,51 @@ pub fn load_config(path: &str) -> Arc<AppConfig> {
     }
 
     Arc::new(config)
+}
+
+pub fn add_otpkey(config_path: &str, username: &str) {
+    if !Path::new(config_path).exists() {
+        eprintln!("Config file not found: {}", config_path);
+        return;
+    }
+
+    let config_str = fs::read_to_string(config_path)
+    .expect("Failed to read the configuration file.");
+    let mut json: Value = serde_json::from_str(&config_str)
+    .expect("Invalid JSON format in configuration file.");
+
+    let users = json.get_mut("users")
+    .and_then(|u| u.as_array_mut())
+    .expect("Missing 'users' field in configuration file.");
+
+    let mut updated = false;
+
+    for user in users.iter_mut() {
+        let name = user.get("username").and_then(|u| u.as_str());
+        if name == Some(username) {
+            if user.get("otpkey").is_some() {
+                println!("User '{}' already has an OTP key.", username);
+            } else {
+                let otpkey = generate_base32_secret(32);
+                user.as_object_mut()
+                .unwrap()
+                .insert("otpkey".to_string(), Value::String(otpkey.clone()));
+                println!("OTP key successfully generated for '{}': {}", username, otpkey);
+                updated = true;
+            }
+            break;
+        }
+    }
+
+    if updated {
+        let updated_str = serde_json::to_string_pretty(&json)
+        .expect("Failed to serialize the updated configuration.");
+        fs::write(config_path, updated_str)
+        .expect("Failed to write the updated configuration file.");
+        println!("Configuration file has been updated.");
+    } else if !users.iter().any(|u| u.get("username").and_then(|n| n.as_str()) == Some(username)) {
+        eprintln!("User '{}' not found in the configuration file.", username);
+    }
 }
 
 fn deserialize_log_map<'de, D>(
