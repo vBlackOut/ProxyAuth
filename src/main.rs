@@ -179,6 +179,10 @@ async fn main() -> std::io::Result<()> {
                 tokio::spawn(log_collector(rx, max_logs));
             }
 
+            "disabled" => {
+
+            }
+
             _ => {
                 let fmt_layer = fmt::Layer::new().with_timer(LocalTime);
 
