@@ -6,6 +6,7 @@ use dashmap::DashMap;
 use fxhash::FxBuildHasher;
 use hyper::{Body, Client, Request, Response, Uri, Method};
 use hyper::body::to_bytes;
+use std::collections::HashSet;
 use hyper_proxy::{Proxy, ProxyConnector, Intercept};
 use crate::config::config::BackendConfig;
 use hyper_rustls::HttpsConnectorBuilder;
@@ -124,11 +125,18 @@ pub async fn forward_failover(
     }
 
     let start_index = ROUND_ROBIN_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let mut already_checked = HashSet::new();
 
     for i in 0..weighted_backends.len() {
         let index = (start_index + i) % weighted_backends.len();
         let backend = weighted_backends[index];
         let url = &backend.url;
+
+        if already_checked.contains(url) {
+            continue;
+        }
+
+        already_checked.insert(url.clone());
 
         if let Some(entry) = BACKEND_COOLDOWN.get(url) {
             let delay = COOLDOWN_BASE * entry.failures.min(10);
@@ -162,6 +170,11 @@ pub async fn forward_failover(
 
     for backend in &disabled_backends {
         let url = &backend.url;
+
+        if already_checked.contains(url) {
+            continue;
+        }
+        already_checked.insert(url.clone());
 
         if let Some(entry) = BACKEND_COOLDOWN.get(url) {
             let delay = COOLDOWN_BASE * entry.failures.min(10);
