@@ -279,6 +279,7 @@ pub fn load_config(path: &str) -> Arc<AppConfig> {
     Arc::new(config)
 }
 
+#[allow(dead_code)]
 pub fn add_otpkey(config_path: &str, username: &str) {
     if !Path::new(config_path).exists() {
         eprintln!("Config file not found: {}", config_path);
