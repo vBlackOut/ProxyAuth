@@ -1,86 +1,57 @@
-use rand::{rngs::OsRng, RngCore};
-use data_encoding::BASE32_NOPAD;
-use totp_rs::{Algorithm, TOTP};
-use urlencoding::encode;
+use actix_web::{post, web, HttpRequest, HttpResponse, Responder};
+use serde::{Deserialize, Serialize};
+use crate::token::auth::verify_password;
+use data_encoding::BASE64;
+use crate::adm::method_otp::generate_otpauth_uri;
+use crate::token::crypto::decrypt_base64;
+use totp_rs::Algorithm;
+use crate::AppState;
 
-// todo!() this file for create all method generete otpuri/totp/base32 and validate totp.
-
-#[allow(dead_code)]
-pub fn generate_base32_secret(length: usize) -> String {
-    let mut bytes = vec![0u8; length];
-    OsRng.fill_bytes(&mut bytes);
-    BASE32_NOPAD.encode(&bytes)
-}
-
-#[allow(dead_code)]
-pub fn generate_otpauth_uri(
-    label: &str,
-    issuer: &str,
-    secret_base32: &str,
-    algorithm: Algorithm,
-    digits: u32,
-    period: u64,
-) -> String {
-    let label_raw = format!("{}:{}", issuer, label);
-    let label_encoded = encode(&label_raw);
-    let issuer_encoded = encode(issuer);
-    let algo_str = match algorithm {
-        Algorithm::SHA1 => "SHA1",
-        Algorithm::SHA256 => "SHA256",
-        Algorithm::SHA512 => "SHA512",
-    };
-
-    format!(
-        "otpauth://totp/{}?secret={}&issuer={}&algorithm={}&digits={}&period={}",
-        label_encoded, secret_base32, issuer_encoded, algo_str, digits, period
-    )
-}
-
-#[allow(dead_code)]
-pub fn generate_totp_code(
-    secret_base32: &str,
-    algorithm: Algorithm,
-    digits: u32,
-    period: u64,
-) -> Result<String, String> {
-    let totp = TOTP::new(algorithm, digits.try_into().unwrap(), 0, period, secret_base32.as_bytes().to_vec())
-    .map_err(|e| format!("Error TOTP: {:?}", e))?;
-
-    totp.generate_current()
-    .map_err(|e| format!("Error code totp: {:?}", e))
+#[derive(Deserialize)]
+pub struct OtpRequest {
+    pub username: String,
+    pub password: String,
 }
 
 
-#[allow(dead_code)]
-pub fn validate_totp_code(
-    user_code: &str,
-    secret_base32: &str,
-    algorithm: Algorithm,
-    digits: u32,
-    period: u64,
-    tolerance: i64,
-) -> Result<bool, String> {
-    let totp = TOTP::new(
-        algorithm,
-        digits.try_into().unwrap(),
-                         0,
-                         period,
-                         secret_base32.as_bytes().to_vec(),
-    ).map_err(|e| format!("TOTP creation error: {:?}", e))?;
+#[derive(Serialize)]
+pub struct OtpAuthUriResponse {
+    pub otpauth_uri: String,
+}
 
-    let now = std::time::SystemTime::now()
-    .duration_since(std::time::UNIX_EPOCH)
-    .map_err(|e| format!("Time error: {:?}", e))?
-    .as_secs() as i64;
+#[post("/adm/auth/totp/get")]
+async fn get_otpauth_uri(
+    _req: HttpRequest,
+    auth: web::Json<OtpRequest>,
+    data: web::Data<AppState>,
+) -> impl Responder {
 
-    for offset in -tolerance..=tolerance {
-        let time = (now + offset * period as i64) as u64;
+    if let Some(user) = data
+        .config
+        .users
+        .iter()
+        .find(|u| u.username == auth.username && verify_password(&auth.password, &u.password))
+        {
+            if let Some(otpkey_enc) = &user.otpkey {
+                let otpkey_b64 = BASE64.encode(otpkey_enc);
+                let otp_secret = decrypt_base64(&otpkey_b64, &auth.password);
 
-        let code = totp.generate(time);
-        if code == user_code {
-            return Ok(true);
+                let uri = generate_otpauth_uri(
+                    &user.username,
+                    "ProxyAuth",
+                    &otp_secret,
+                    Algorithm::SHA512,
+                    6,
+                    30,
+                );
+
+                return HttpResponse::Ok().json(OtpAuthUriResponse {
+                    otpauth_uri: uri,
+                });
+            } else {
+                return HttpResponse::BadRequest().body("OTP key not set");
+            }
         }
-    }
 
-    Ok(false)
+        HttpResponse::Unauthorized().body("Invalid username or password")
 }

@@ -1,6 +1,6 @@
 use crate::token::auth::generate_random_string;
 use crate::stats::tokencount::CounterToken;
-use crate::adm::registry_otp::generate_base32_secret;
+use crate::adm::method_otp::generate_base32_secret;
 use argon2::password_hash::{SaltString, rand_core::OsRng};
 use argon2::{Argon2, PasswordHasher};
 use serde::{Deserialize, Serialize, Serializer, ser::SerializeStruct};
