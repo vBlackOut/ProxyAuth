@@ -70,7 +70,7 @@ pub struct RouteConfig {
 pub struct User {
     pub username: String,
     pub password: String,
-    pub otpkey: Option<Vec<u8>>
+    pub otpkey: Option<String> // Option<Vec<u8>>
 }
 
 impl Serialize for User {
@@ -164,6 +164,7 @@ pub struct AppState {
 pub struct AuthRequest {
     pub username: String,
     pub password: String,
+    pub totp_code: Option<String>,
 }
 
 fn default_host() -> String {

@@ -35,6 +35,7 @@ use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::Layer;
 use tracing_subscriber::fmt::time::FormatTime;
 use tls::load_rustls_config;
+use crate::adm::registry_otp::get_otpauth_uri;
 use network::shared_client::{
     build_hyper_client_proxy, build_hyper_client_normal,
     build_hyper_client_cert, ClientOptions
@@ -293,6 +294,7 @@ async fn main() -> std::io::Result<()> {
                     .service(web::resource("/auth").route(web::post().to(auth)))
                     .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
                     .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
+                    .service(web::resource("/adm/auth/totp/get").route(web::post().to(get_otpauth_uri)))
                     .default_service(web::to(global_proxy).wrap(Governor::new(&governor_proxy_conf)))
             })
             .workers((config.worker as u8).into())
@@ -325,6 +327,7 @@ async fn main() -> std::io::Result<()> {
                     )
                     .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
                     .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
+                    .service(web::resource("/adm/auth/totp/get").route(web::post().to(get_otpauth_uri)))
                     .default_service(web::to(global_proxy))
             })
             .workers((config.worker as u8).into())
@@ -370,6 +373,7 @@ async fn main() -> std::io::Result<()> {
                     )
                     .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
                     .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
+                    .service(web::resource("/adm/auth/totp/get").route(web::post().to(get_otpauth_uri)))
                     .default_service(web::to(global_proxy).wrap(Governor::new(&governor_proxy_conf)))
             })
             .workers((config.worker as u8).into())
@@ -387,6 +391,7 @@ async fn main() -> std::io::Result<()> {
                     .service(web::resource("/auth").route(web::post().to(auth)))
                     .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
                     .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
+                    .service(web::resource("/adm/auth/totp/get").route(web::post().to(get_otpauth_uri)))
                     .default_service(web::to(global_proxy))
             })
             .workers((config.worker as u8).into())
@@ -407,6 +412,7 @@ async fn main() -> std::io::Result<()> {
                     .service(web::resource("/auth").route(web::post().to(auth)))
                     .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
                     .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
+                    .service(web::resource("/adm/auth/totp/get").route(web::post().to(get_otpauth_uri)))
                     .default_service(web::to(global_proxy))
             })
             .workers((config.worker as u8).into())
