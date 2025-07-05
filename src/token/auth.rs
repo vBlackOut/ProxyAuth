@@ -7,6 +7,8 @@ use actix_web::{HttpRequest, HttpResponse, Responder, web};
 use argon2::Argon2;
 use argon2::password_hash::{PasswordHash, PasswordVerifier};
 use chrono::{Duration, Utc, TimeZone};
+use std::time::{SystemTime, UNIX_EPOCH};
+use totp_rs::{Algorithm, TOTP};
 use chrono_tz::Tz;
 use rand::rngs::OsRng;
 use rand::seq::SliceRandom;
@@ -82,12 +84,66 @@ pub async fn auth(
         .iter()
         .enumerate()
         .find(|(_, user)| {
-            user.username == auth.username && verify_password(&auth.password, &user.password)
+            user.username == auth.username &&
+            verify_password(&auth.password, &user.password)
         })
         .map(|(i, _)| i)
     {
         let user = &data.config.users[index_user];
 
+        // totp method
+        if data.config.login_via_otp {
+
+            let totp_code = match &auth.totp_code {
+                Some(code) => code.trim(),
+                None => {
+                    warn!("Missing TOTP code for user {}", user.username);
+                    return HttpResponse::Unauthorized()
+                    .append_header(("server", "ProxyAuth"))
+                    .body("Missing TOTP code");
+                }
+            };
+
+            let totp_key = match user.otpkey.as_deref() {
+                Some(key) => key,
+                None => {
+                    warn!("Missing TOTP secret for user {}", user.username);
+                    return HttpResponse::InternalServerError()
+                    .append_header(("server", "ProxyAuth"))
+                    .body("Missing TOTP secret");
+                }
+            };
+
+            let decoded_secret = match base32::decode(base32::Alphabet::RFC4648 { padding: false }, totp_key) {
+                Some(bytes) => bytes,
+                None => {
+                    warn!("Invalid base32 TOTP secret for user {}", user.username);
+                    return HttpResponse::InternalServerError()
+                    .append_header(("server", "ProxyAuth"))
+                    .body("Internal TOTP error");
+                }
+            };
+
+            let totp = TOTP::new(
+                Algorithm::SHA512,
+                6,
+                0,
+                30,
+                decoded_secret,
+            ).expect("TOTP creation failed");
+
+            let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+            let generated_code = totp.generate(now);
+
+            let is_valid = generated_code == totp_code;
+
+            if !is_valid {
+                warn!("Invalid TOTP code for user {}", user.username);
+                return HttpResponse::Unauthorized()
+                .append_header(("server", "ProxyAuth"))
+                .body("Invalid TOTP code");
+            }
+        }
 
         let expiry = get_expiry_with_timezone(data.config.clone(), None);
 

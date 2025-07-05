@@ -1,10 +1,13 @@
 use crate::token::auth::generate_random_string;
 use crate::stats::tokencount::CounterToken;
+use crate::adm::method_otp::generate_base32_secret;
 use argon2::password_hash::{SaltString, rand_core::OsRng};
 use argon2::{Argon2, PasswordHasher};
 use serde::{Deserialize, Serialize, Serializer, ser::SerializeStruct};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::fs;
+use std::path::Path;
 use std::sync::Arc;
 use hyper::Client;
 use hyper::client::HttpConnector;
@@ -67,6 +70,7 @@ pub struct RouteConfig {
 pub struct User {
     pub username: String,
     pub password: String,
+    pub otpkey: Option<String> // Option<Vec<u8>>
 }
 
 impl Serialize for User {
@@ -77,6 +81,7 @@ impl Serialize for User {
         let mut state = serializer.serialize_struct("User", 2)?;
         state.serialize_field("username", &self.username)?;
         state.serialize_field("password", &self.password)?;
+        state.serialize_field("otpkey", &self.otpkey)?;
         state.end()
     }
 }
@@ -116,6 +121,9 @@ pub struct AppConfig {
 
     #[serde(default = "default_timezone")]
     pub timezone: String,
+
+    #[serde(default = "default_login_via_otp")]
+    pub login_via_otp: bool,
 }
 
 impl Serialize for AppConfig {
@@ -129,10 +137,12 @@ impl Serialize for AppConfig {
         state.serialize_field("token_admin", &self.token_admin)?;
         state.serialize_field("host", &self.host)?;
         state.serialize_field("port", &self.port)?;
+        state.serialize_field("log", &self.log)?;
+        state.serialize_field("login_via_otp", &self.login_via_otp)?;
         state.serialize_field("worker", &self.worker)?;
         state.serialize_field("ratelimit_auth", &self.ratelimit_auth)?;
         state.serialize_field("ratelimit_proxy", &self.ratelimit_proxy)?;
-        state.serialize_field("users", &self.users)?; // en dernier
+        state.serialize_field("users", &self.users)?;
         state.end()
     }
 }
@@ -154,6 +164,7 @@ pub struct AppState {
 pub struct AuthRequest {
     pub username: String,
     pub password: String,
+    pub totp_code: Option<String>,
 }
 
 fn default_host() -> String {
@@ -200,6 +211,10 @@ fn default_max_idle_per_host() -> u16 {
     50
 }
 
+fn default_login_via_otp() -> bool {
+    false
+}
+
 fn default_log() -> HashMap<String, String> {
     let mut log = HashMap::new();
     log.insert("type".to_string(), "local".to_string());
@@ -229,21 +244,22 @@ fn default_cert() -> HashMap<String, String> {
 }
 
 pub fn load_config(path: &str) -> Arc<AppConfig> {
+
     let config_str = fs::read_to_string(path).expect("Could not read config.json file");
     let mut config: AppConfig =
-        serde_json::from_str(&config_str).expect("Invalid config format config.json");
+    serde_json::from_str(&config_str).expect("Invalid config format config.json");
 
     let mut updated = false;
     for user in &mut config.users {
         if !user.password.starts_with("$argon2") {
             let salt = SaltString::generate(&mut OsRng);
             let hash = Argon2::default()
-                .hash_password(user.password.as_bytes(), &salt)
-                .expect(&format!(
-                    "Password hashing failed for user {}",
-                    user.username
-                ))
-                .to_string();
+            .hash_password(user.password.as_bytes(), &salt)
+            .expect(&format!(
+                "Password hashing failed for user {}",
+                user.username
+            ))
+            .to_string();
 
             user.password = hash;
             updated = true;
@@ -262,6 +278,52 @@ pub fn load_config(path: &str) -> Arc<AppConfig> {
     }
 
     Arc::new(config)
+}
+
+#[allow(dead_code)]
+pub fn add_otpkey(config_path: &str, username: &str) {
+    if !Path::new(config_path).exists() {
+        eprintln!("Config file not found: {}", config_path);
+        return;
+    }
+
+    let config_str = fs::read_to_string(config_path)
+    .expect("Failed to read the configuration file.");
+    let mut json: Value = serde_json::from_str(&config_str)
+    .expect("Invalid JSON format in configuration file.");
+
+    let users = json.get_mut("users")
+    .and_then(|u| u.as_array_mut())
+    .expect("Missing 'users' field in configuration file.");
+
+    let mut updated = false;
+
+    for user in users.iter_mut() {
+        let name = user.get("username").and_then(|u| u.as_str());
+        if name == Some(username) {
+            if user.get("otpkey").is_some() {
+                println!("User '{}' already has an OTP key.", username);
+            } else {
+                let otpkey = generate_base32_secret(32);
+                user.as_object_mut()
+                .unwrap()
+                .insert("otpkey".to_string(), Value::String(otpkey.clone()));
+                println!("OTP key successfully generated for '{}': {}", username, otpkey);
+                updated = true;
+            }
+            break;
+        }
+    }
+
+    if updated {
+        let updated_str = serde_json::to_string_pretty(&json)
+        .expect("Failed to serialize the updated configuration.");
+        fs::write(config_path, updated_str)
+        .expect("Failed to write the updated configuration file.");
+        println!("Configuration file has been updated.");
+    } else if !users.iter().any(|u| u.get("username").and_then(|n| n.as_str()) == Some(username)) {
+        eprintln!("User '{}' not found in the configuration file.", username);
+    }
 }
 
 fn deserialize_log_map<'de, D>(
@@ -285,7 +347,13 @@ D: Deserializer<'de>,
         {
             let mut map = HashMap::new();
             while let Some((k, v)) = access.next_entry::<String, serde_json::Value>()? {
-                map.insert(k, v.to_string());
+                let stringified = match v {
+                    serde_json::Value::String(s) => s,
+                    serde_json::Value::Bool(b) => b.to_string(),
+                    serde_json::Value::Number(n) => n.to_string(),
+                    _ => continue,
+                };
+                map.insert(k, stringified);
             }
             Ok(map)
         }

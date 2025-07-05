@@ -8,6 +8,7 @@ use chacha20poly1305::{
 };
 use hmac::{Hmac, Mac};
 use sha2::{Digest, Sha256};
+use data_encoding::BASE64;
 use std::fmt::Write;
 
 type HmacSha256 = Hmac<Sha256>;
@@ -164,4 +165,37 @@ pub fn calcul_factorhash(hashdata: String) -> String {
     }
 
     hash_cypher
+}
+
+pub fn encrypt_base64(message: &str, password: &str) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(password.as_bytes());
+    let key = hasher.finalize();
+
+    let encrypted: Vec<u8> = message
+    .as_bytes()
+    .iter()
+    .enumerate()
+    .map(|(i, &b)| b ^ key[i % key.len()])
+    .collect();
+
+    BASE64.encode(&encrypted)
+}
+
+pub fn decrypt_base64(encoded: &str, password: &str) -> String {
+    let encrypted = BASE64
+    .decode(encoded.as_bytes())
+    .expect("Invalid base64");
+
+    let mut hasher = Sha256::new();
+    hasher.update(password.as_bytes());
+    let key = hasher.finalize();
+
+    let decrypted: Vec<u8> = encrypted
+    .iter()
+    .enumerate()
+    .map(|(i, &b)| b ^ key[i % key.len()])
+    .collect();
+
+    String::from_utf8(decrypted).expect("Invalid UTF-8")
 }

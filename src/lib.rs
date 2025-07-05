@@ -6,6 +6,7 @@ pub mod config;
 pub mod keystore;
 pub mod cli;
 pub mod stats;
+pub mod adm;
 
 pub use token::auth::auth;
 pub use config::config::{AppConfig, AppState, RouteConfig};
