@@ -1,22 +1,22 @@
-use crate::token::auth::generate_random_string;
-use crate::stats::tokencount::CounterToken;
 use crate::adm::method_otp::generate_base32_secret;
-use argon2::password_hash::{SaltString, rand_core::OsRng};
+use crate::stats::tokencount::CounterToken;
+use crate::token::auth::generate_random_string;
+use argon2::password_hash::{rand_core::OsRng, SaltString};
 use argon2::{Argon2, PasswordHasher};
-use serde::{Deserialize, Serialize, Serializer, ser::SerializeStruct};
+use hyper::client::HttpConnector;
+use hyper::Client;
+use hyper_proxy::ProxyConnector;
+use hyper_rustls::HttpsConnector;
+use serde::de::MapAccess;
+use serde::de::Visitor;
+use serde::Deserializer;
+use serde::{ser::SerializeStruct, Deserialize, Serialize, Serializer};
 use serde_json::Value;
 use std::collections::HashMap;
+use std::fmt;
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
-use hyper::Client;
-use hyper::client::HttpConnector;
-use hyper_rustls::HttpsConnector;
-use hyper_proxy::ProxyConnector;
-use serde::Deserializer;
-use std::fmt;
-use serde::de::MapAccess;
-use serde::de::Visitor;
 
 #[derive(Debug, Deserialize)]
 pub struct RouteRule {
@@ -41,7 +41,6 @@ pub struct RouteRule {
     #[serde(default = "default_backends")]
     pub backends: Vec<BackendInput>,
 }
-
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct BackendConfig {
@@ -70,7 +69,7 @@ pub struct RouteConfig {
 pub struct User {
     pub username: String,
     pub password: String,
-    pub otpkey: Option<String> // Option<Vec<u8>>
+    pub otpkey: Option<String>, // Option<Vec<u8>>
 }
 
 impl Serialize for User {
@@ -244,22 +243,21 @@ fn default_cert() -> HashMap<String, String> {
 }
 
 pub fn load_config(path: &str) -> Arc<AppConfig> {
-
     let config_str = fs::read_to_string(path).expect("Could not read config.json file");
     let mut config: AppConfig =
-    serde_json::from_str(&config_str).expect("Invalid config format config.json");
+        serde_json::from_str(&config_str).expect("Invalid config format config.json");
 
     let mut updated = false;
     for user in &mut config.users {
         if !user.password.starts_with("$argon2") {
             let salt = SaltString::generate(&mut OsRng);
             let hash = Argon2::default()
-            .hash_password(user.password.as_bytes(), &salt)
-            .expect(&format!(
-                "Password hashing failed for user {}",
-                user.username
-            ))
-            .to_string();
+                .hash_password(user.password.as_bytes(), &salt)
+                .expect(&format!(
+                    "Password hashing failed for user {}",
+                    user.username
+                ))
+                .to_string();
 
             user.password = hash;
             updated = true;
@@ -287,14 +285,15 @@ pub fn add_otpkey(config_path: &str, username: &str) {
         return;
     }
 
-    let config_str = fs::read_to_string(config_path)
-    .expect("Failed to read the configuration file.");
-    let mut json: Value = serde_json::from_str(&config_str)
-    .expect("Invalid JSON format in configuration file.");
+    let config_str =
+        fs::read_to_string(config_path).expect("Failed to read the configuration file.");
+    let mut json: Value =
+        serde_json::from_str(&config_str).expect("Invalid JSON format in configuration file.");
 
-    let users = json.get_mut("users")
-    .and_then(|u| u.as_array_mut())
-    .expect("Missing 'users' field in configuration file.");
+    let users = json
+        .get_mut("users")
+        .and_then(|u| u.as_array_mut())
+        .expect("Missing 'users' field in configuration file.");
 
     let mut updated = false;
 
@@ -306,9 +305,12 @@ pub fn add_otpkey(config_path: &str, username: &str) {
             } else {
                 let otpkey = generate_base32_secret(32);
                 user.as_object_mut()
-                .unwrap()
-                .insert("otpkey".to_string(), Value::String(otpkey.clone()));
-                println!("OTP key successfully generated for '{}': {}", username, otpkey);
+                    .unwrap()
+                    .insert("otpkey".to_string(), Value::String(otpkey.clone()));
+                println!(
+                    "OTP key successfully generated for '{}': {}",
+                    username, otpkey
+                );
                 updated = true;
             }
             break;
@@ -317,20 +319,21 @@ pub fn add_otpkey(config_path: &str, username: &str) {
 
     if updated {
         let updated_str = serde_json::to_string_pretty(&json)
-        .expect("Failed to serialize the updated configuration.");
+            .expect("Failed to serialize the updated configuration.");
         fs::write(config_path, updated_str)
-        .expect("Failed to write the updated configuration file.");
+            .expect("Failed to write the updated configuration file.");
         println!("Configuration file has been updated.");
-    } else if !users.iter().any(|u| u.get("username").and_then(|n| n.as_str()) == Some(username)) {
+    } else if !users
+        .iter()
+        .any(|u| u.get("username").and_then(|n| n.as_str()) == Some(username))
+    {
         eprintln!("User '{}' not found in the configuration file.", username);
     }
 }
 
-fn deserialize_log_map<'de, D>(
-    deserializer: D,
-) -> Result<HashMap<String, String>, D::Error>
+fn deserialize_log_map<'de, D>(deserializer: D) -> Result<HashMap<String, String>, D::Error>
 where
-D: Deserializer<'de>,
+    D: Deserializer<'de>,
 {
     struct LogMapVisitor;
 
@@ -343,7 +346,7 @@ D: Deserializer<'de>,
 
         fn visit_map<M>(self, mut access: M) -> Result<Self::Value, M::Error>
         where
-        M: MapAccess<'de>,
+            M: MapAccess<'de>,
         {
             let mut map = HashMap::new();
             while let Some((k, v)) = access.next_entry::<String, serde_json::Value>()? {

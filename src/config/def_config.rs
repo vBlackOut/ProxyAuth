@@ -1,5 +1,5 @@
 use nix::unistd::Group;
-use nix::unistd::{Uid, User, setuid};
+use nix::unistd::{setuid, Uid, User};
 use std::fs;
 use std::io;
 use std::io::Write;
@@ -43,7 +43,6 @@ pub fn ensure_running_as_root() {
         std::process::exit(1);
     }
 }
-
 
 fn is_alpine() -> bool {
     if let Ok(content) = fs::read_to_string("/etc/os-release") {

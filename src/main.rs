@@ -1,51 +1,48 @@
-mod config;
-mod token;
-mod network;
-mod keystore;
+mod adm;
+mod build;
 mod cli;
+mod config;
+mod keystore;
+mod logs;
+mod network;
 mod start_actix;
 mod stats;
 mod timezone;
 mod tls;
-mod build;
-mod logs;
-mod adm;
+mod token;
 
-use actix_governor::{Governor, GovernorConfigBuilder};
-use actix_web::{App, HttpServer, web};
-use token::security::init_derived_key;
-use token::auth::auth;
-use config::config::{AppConfig, AppState, RouteConfig, load_config};
-use config::def_config::{
-    create_config, ensure_running_as_proxyauth, switch_to_user,
-};
-use std::net::TcpListener;
-use socket2::{Socket, Domain, Type, Protocol};
-use network::proxy::global_proxy;
-use network::ratelimit::UserToken;
-use start_actix::mode_actix_web;
-use stats::stats::stats as metric_stats;
-use std::{fs, sync::Arc, process, time::Duration};
-pub use stats::tokencount::CounterToken;
-use tracing_loki::url::Url;
-use logs::{log_collector, ChannelLogWriter, get_logs};
-use tokio::sync::mpsc::unbounded_channel;
-use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
-use tracing_subscriber::filter::LevelFilter;
-use tracing_subscriber::Layer;
-use tracing_subscriber::fmt::time::FormatTime;
-use tls::load_rustls_config;
 use crate::adm::registry_otp::get_otpauth_uri;
-use network::shared_client::{
-    build_hyper_client_proxy, build_hyper_client_normal,
-    build_hyper_client_cert, ClientOptions
-};
+use crate::build::build_info::update_build_info;
 use crate::cli::prompt::prompt;
 use crate::keystore::import::decrypt_keystore;
-use crate::build::build_info::update_build_info;
 use crate::tls::check_port;
-use tracing::warn;
+use actix_governor::{Governor, GovernorConfigBuilder};
+use actix_web::{web, App, HttpServer};
 use chrono::Local;
+use config::config::{load_config, AppConfig, AppState, RouteConfig};
+use config::def_config::{create_config, ensure_running_as_proxyauth, switch_to_user};
+use logs::{get_logs, log_collector, ChannelLogWriter};
+use network::proxy::global_proxy;
+use network::ratelimit::UserToken;
+use network::shared_client::{
+    build_hyper_client_cert, build_hyper_client_normal, build_hyper_client_proxy, ClientOptions,
+};
+use socket2::{Domain, Protocol, Socket, Type};
+use start_actix::mode_actix_web;
+use stats::stats::stats as metric_stats;
+pub use stats::tokencount::CounterToken;
+use std::net::TcpListener;
+use std::{fs, process, sync::Arc, time::Duration};
+use tls::load_rustls_config;
+use token::auth::auth;
+use token::security::init_derived_key;
+use tokio::sync::mpsc::unbounded_channel;
+use tracing::warn;
+use tracing_loki::url::Url;
+use tracing_subscriber::filter::LevelFilter;
+use tracing_subscriber::fmt::time::FormatTime;
+use tracing_subscriber::Layer;
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -59,7 +56,6 @@ impl FormatTime for LocalTime {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-
     let _ = prompt().await;
 
     // launch as user proxyauth
@@ -91,21 +87,27 @@ async fn main() -> std::io::Result<()> {
     let counter_token = Arc::new(CounterToken::new());
 
     let client_normal = build_hyper_client_normal(&config);
-    let client_with_cert = build_hyper_client_cert(ClientOptions {
-        use_proxy: false,
-        proxy_addr: None,
-        use_cert: false,
-        cert_path: None,
-        key_path: None,
-    }, &config);
+    let client_with_cert = build_hyper_client_cert(
+        ClientOptions {
+            use_proxy: false,
+            proxy_addr: None,
+            use_cert: false,
+            cert_path: None,
+            key_path: None,
+        },
+        &config,
+    );
 
-    let client_with_proxy = build_hyper_client_proxy(ClientOptions {
-        use_proxy: true,
-        proxy_addr: Some("http://127.0.0.1:8888".to_string()),
-        use_cert: false,
-        cert_path: None,
-        key_path: None,
-    }, &config);
+    let client_with_proxy = build_hyper_client_proxy(
+        ClientOptions {
+            use_proxy: true,
+            proxy_addr: Some("http://127.0.0.1:8888".to_string()),
+            use_cert: false,
+            cert_path: None,
+            key_path: None,
+        },
+        &config,
+    );
 
     let state = web::Data::new(AppState {
         config: Arc::clone(&config),
@@ -120,7 +122,11 @@ async fn main() -> std::io::Result<()> {
 
     // logs
     fn init_logging(config: &AppConfig) {
-        let logs = config.log.get("type").map(|v| v.trim_matches('"')).unwrap_or("local");
+        let logs = config
+            .log
+            .get("type")
+            .map(|v| v.trim_matches('"'))
+            .unwrap_or("local");
 
         let env_filter = EnvFilter::new("proxyauth=trace")
             .add_directive("actix_web=warn".parse().unwrap())
@@ -160,7 +166,9 @@ async fn main() -> std::io::Result<()> {
             "http" => {
                 let (tx, rx) = unbounded_channel::<String>();
 
-                let max_logs = config.log.get("write_max_logs")
+                let max_logs = config
+                    .log
+                    .get("write_max_logs")
                     .and_then(|v| v.parse::<usize>().ok())
                     .expect("Invalid write_max_logs");
 
@@ -169,27 +177,24 @@ async fn main() -> std::io::Result<()> {
                     process::exit(1);
                 }
 
-                let fmt_layer = fmt::Layer::new()
-                    .with_timer(LocalTime)
-                    .with_writer(ChannelLogWriter { sender: tx.clone().into() });
+                let fmt_layer =
+                    fmt::Layer::new()
+                        .with_timer(LocalTime)
+                        .with_writer(ChannelLogWriter {
+                            sender: tx.clone().into(),
+                        });
 
-                base_registry
-                    .with(fmt_layer)
-                    .init();
+                base_registry.with(fmt_layer).init();
 
                 tokio::spawn(log_collector(rx, max_logs));
             }
 
-            "disabled" => {
-
-            }
+            "disabled" => {}
 
             _ => {
                 let fmt_layer = fmt::Layer::new().with_timer(LocalTime);
 
-                base_registry
-                    .with(fmt_layer)
-                    .init();
+                base_registry.with(fmt_layer).init();
             }
         }
     }
@@ -202,7 +207,7 @@ async fn main() -> std::io::Result<()> {
             let _ = update_build_info(&message);
             println!("Load keystore successfull from /etc/proxyauth/import/data.gpg");
         }
-        Ok(None) => {},
+        Ok(None) => {}
         Err(err) => warn!("Failed to decrypt keystore: {:?}", err),
     }
 
@@ -276,26 +281,30 @@ async fn main() -> std::io::Result<()> {
 
     match mode_actix {
         "NO_RATELIMIT_AUTH" => {
-
             let governor_proxy_conf = GovernorConfigBuilder::default()
                 .seconds_per_request(requests_per_second_proxy_config)
                 .burst_size(burst_proxy_config)
                 .key_extractor(UserToken)
-                .period(std::time::Duration::from_millis(
-                    delay_block_proxy_config,
-                ))
+                .period(std::time::Duration::from_millis(delay_block_proxy_config))
                 .finish()
                 .unwrap();
 
-            println!("\nlaunch ProxyAuth v{} \nratelimit On, (Proxy)\nstarting service: \"proxyauth-service\" worker: {} listening on {}", VERSION, config.worker, addr);
+            println!(
+                "\nlaunch ProxyAuth v{} \nratelimit On, (Proxy)\nstarting service: \"proxyauth-service\" worker: {} listening on {}",
+                VERSION, config.worker, addr
+            );
             HttpServer::new(move || {
                 App::new()
                     .app_data(state.clone())
                     .service(web::resource("/auth").route(web::post().to(auth)))
                     .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
                     .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
-                    .service(web::resource("/adm/auth/totp/get").route(web::post().to(get_otpauth_uri)))
-                    .default_service(web::to(global_proxy).wrap(Governor::new(&governor_proxy_conf)))
+                    .service(
+                        web::resource("/adm/auth/totp/get").route(web::post().to(get_otpauth_uri)),
+                    )
+                    .default_service(
+                        web::to(global_proxy).wrap(Governor::new(&governor_proxy_conf)),
+                    )
             })
             .workers((config.worker as u8).into())
             .keep_alive(Duration::from_secs(5))
@@ -305,61 +314,17 @@ async fn main() -> std::io::Result<()> {
         }
 
         "NO_RATELIMIT_PROXY" => {
-
             let governor_auth_conf = GovernorConfigBuilder::default()
                 .seconds_per_request(requests_per_second_auth_config)
                 .burst_size(burst_auth_config)
                 .use_headers()
                 .period(std::time::Duration::from_millis(delay_block_auth_config))
-                .finish()
-                .unwrap();
-
-            println!("\nlaunch ProxyAuth v{} \nratelimit On (Auth)\nstarting service: \"proxyauth-service\" worker: {} listening on {}", VERSION, config.worker, addr);
-            HttpServer::new(move || {
-                App::new()
-                    .app_data(state.clone())
-                    .service(
-                        web::resource("/auth").route(
-                            web::post()
-                                .to(auth)
-                                .wrap(Governor::new(&governor_auth_conf)),
-                        ),
-                    )
-                    .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
-                    .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
-                    .service(web::resource("/adm/auth/totp/get").route(web::post().to(get_otpauth_uri)))
-                    .default_service(web::to(global_proxy))
-            })
-            .workers((config.worker as u8).into())
-            .keep_alive(Duration::from_secs(5))
-            .listen_rustls_0_21(listener, load_rustls_config())?
-            .run()
-            .await
-        }
-
-        "RATELIMIT_GLOBAL_ON" => {
-
-            let governor_auth_conf = GovernorConfigBuilder::default()
-                .seconds_per_request(requests_per_second_auth_config)
-                .burst_size(burst_auth_config)
-                .use_headers()
-                .period(std::time::Duration::from_millis(delay_block_auth_config))
-                .finish()
-                .unwrap();
-
-            let governor_proxy_conf = GovernorConfigBuilder::default()
-                .seconds_per_request(requests_per_second_proxy_config)
-                .burst_size(burst_proxy_config)
-                .key_extractor(UserToken)
-                .period(std::time::Duration::from_millis(
-                    delay_block_proxy_config,
-                ))
                 .finish()
                 .unwrap();
 
             println!(
-                "\nlaunch ProxyAuth v{} \nratelimit On, (Proxy, Auth)\nstarting service: \"proxyauth-service\" worker: {} listening on {}",
-                 VERSION, config.worker, addr
+                "\nlaunch ProxyAuth v{} \nratelimit On (Auth)\nstarting service: \"proxyauth-service\" worker: {} listening on {}",
+                VERSION, config.worker, addr
             );
             HttpServer::new(move || {
                 App::new()
@@ -373,8 +338,57 @@ async fn main() -> std::io::Result<()> {
                     )
                     .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
                     .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
-                    .service(web::resource("/adm/auth/totp/get").route(web::post().to(get_otpauth_uri)))
-                    .default_service(web::to(global_proxy).wrap(Governor::new(&governor_proxy_conf)))
+                    .service(
+                        web::resource("/adm/auth/totp/get").route(web::post().to(get_otpauth_uri)),
+                    )
+                    .default_service(web::to(global_proxy))
+            })
+            .workers((config.worker as u8).into())
+            .keep_alive(Duration::from_secs(5))
+            .listen_rustls_0_21(listener, load_rustls_config())?
+            .run()
+            .await
+        }
+
+        "RATELIMIT_GLOBAL_ON" => {
+            let governor_auth_conf = GovernorConfigBuilder::default()
+                .seconds_per_request(requests_per_second_auth_config)
+                .burst_size(burst_auth_config)
+                .use_headers()
+                .period(std::time::Duration::from_millis(delay_block_auth_config))
+                .finish()
+                .unwrap();
+
+            let governor_proxy_conf = GovernorConfigBuilder::default()
+                .seconds_per_request(requests_per_second_proxy_config)
+                .burst_size(burst_proxy_config)
+                .key_extractor(UserToken)
+                .period(std::time::Duration::from_millis(delay_block_proxy_config))
+                .finish()
+                .unwrap();
+
+            println!(
+                "\nlaunch ProxyAuth v{} \nratelimit On, (Proxy, Auth)\nstarting service: \"proxyauth-service\" worker: {} listening on {}",
+                VERSION, config.worker, addr
+            );
+            HttpServer::new(move || {
+                App::new()
+                    .app_data(state.clone())
+                    .service(
+                        web::resource("/auth").route(
+                            web::post()
+                                .to(auth)
+                                .wrap(Governor::new(&governor_auth_conf)),
+                        ),
+                    )
+                    .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
+                    .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
+                    .service(
+                        web::resource("/adm/auth/totp/get").route(web::post().to(get_otpauth_uri)),
+                    )
+                    .default_service(
+                        web::to(global_proxy).wrap(Governor::new(&governor_proxy_conf)),
+                    )
             })
             .workers((config.worker as u8).into())
             .keep_alive(Duration::from_secs(5))
@@ -384,14 +398,19 @@ async fn main() -> std::io::Result<()> {
         }
 
         "RATELIMIT_GLOBAL_OFF" => {
-            println!("\nlaunch ProxyAuth v{} \nratelimit Off\nstarting service: \"proxyauth-service\" worker: {} listening on {}", VERSION, config.worker, addr);
+            println!(
+                "\nlaunch ProxyAuth v{} \nratelimit Off\nstarting service: \"proxyauth-service\" worker: {} listening on {}",
+                VERSION, config.worker, addr
+            );
             HttpServer::new(move || {
                 App::new()
                     .app_data(state.clone())
                     .service(web::resource("/auth").route(web::post().to(auth)))
                     .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
                     .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
-                    .service(web::resource("/adm/auth/totp/get").route(web::post().to(get_otpauth_uri)))
+                    .service(
+                        web::resource("/adm/auth/totp/get").route(web::post().to(get_otpauth_uri)),
+                    )
                     .default_service(web::to(global_proxy))
             })
             .workers((config.worker as u8).into())
@@ -412,7 +431,9 @@ async fn main() -> std::io::Result<()> {
                     .service(web::resource("/auth").route(web::post().to(auth)))
                     .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
                     .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
-                    .service(web::resource("/adm/auth/totp/get").route(web::post().to(get_otpauth_uri)))
+                    .service(
+                        web::resource("/adm/auth/totp/get").route(web::post().to(get_otpauth_uri)),
+                    )
                     .default_service(web::to(global_proxy))
             })
             .workers((config.worker as u8).into())
