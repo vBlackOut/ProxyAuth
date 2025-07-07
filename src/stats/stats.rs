@@ -1,5 +1,5 @@
 use crate::AppState;
-use actix_web::{web, HttpRequest, HttpResponse, Responder};
+use actix_web::{HttpRequest, HttpResponse, Responder, web};
 
 pub async fn stats(req: HttpRequest, data: web::Data<AppState>) -> impl Responder {
     let expected_token = &data.config.token_admin;

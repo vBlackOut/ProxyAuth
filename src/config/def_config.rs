@@ -1,5 +1,5 @@
 use nix::unistd::Group;
-use nix::unistd::{setuid, Uid, User};
+use nix::unistd::{Uid, User, setuid};
 use std::fs;
 use std::io;
 use std::io::Write;

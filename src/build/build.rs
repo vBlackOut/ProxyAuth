@@ -1,12 +1,12 @@
 use rand::seq::SliceRandom;
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
-use std::env;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
-use std::process;
 use std::time::{SystemTime, UNIX_EPOCH};
+use std::process;
+use std::env;
 
 fn main() {
     let version = env::var("CARGO_PKG_VERSION").expect("CARGO_PKG_VERSION not set");
@@ -24,10 +24,10 @@ fn main() {
     let build_seed2 = rng.gen_range(10..99);
 
     let build_time = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs()
-        .to_string();
+    .duration_since(UNIX_EPOCH)
+    .unwrap()
+    .as_secs()
+    .to_string();
 
     let random_epoch: i64 = rng.gen_range(0..999_999_999_999);
 
@@ -54,10 +54,10 @@ fn main() {
         "pub const SHUFFLED_ORDER: [&str; {}] = [{}];",
         fields.len(),
         fields
-            .iter()
-            .map(|s| format!("\"{}\"", s))
-            .collect::<Vec<_>>()
-            .join(", ")
+        .iter()
+        .map(|s| format!("\"{}\"", s))
+        .collect::<Vec<_>>()
+        .join(", ")
     );
 
     let out_dir = std::env::var("OUT_DIR").unwrap();

@@ -1,10 +1,10 @@
 use crate::token::security::{get_build_rand, get_build_seed2};
-use base64::{engine::general_purpose, Engine as _};
-use chacha20poly1305::aead::generic_array::typenum::Unsigned;
+use base64::{Engine as _, engine::general_purpose};
 use chacha20poly1305::aead::generic_array::GenericArray;
+use chacha20poly1305::aead::generic_array::typenum::Unsigned;
 use chacha20poly1305::{
-    aead::{Aead, KeyInit, OsRng},
     AeadCore, ChaCha20Poly1305,
+    aead::{Aead, KeyInit, OsRng},
 };
 use data_encoding::BASE64;
 use hmac::{Hmac, Mac};
@@ -18,7 +18,7 @@ pub fn derive_key_from_secret(secret: &str) -> [u8; 32] {
     let key = key_u64.to_be_bytes();
 
     let mut mac = <HmacSha256 as hmac::digest::KeyInit>::new_from_slice(&key)
-        .expect("HMAC can take key of any size");
+    .expect("HMAC can take key of any size");
 
     mac.update(secret.as_bytes());
     let result = mac.finalize().into_bytes();
@@ -33,8 +33,8 @@ pub fn encrypt(cleartext: &str, key: &[u8]) -> String {
     let nonce = ChaCha20Poly1305::generate_nonce(&mut OsRng); // 96 bits = 12 bytes
 
     let ciphertext = cipher
-        .encrypt(&nonce, cleartext.as_bytes())
-        .expect("encryption failure!");
+    .encrypt(&nonce, cleartext.as_bytes())
+    .expect("encryption failure!");
 
     let mut output = Vec::with_capacity(nonce.len() + ciphertext.len());
     output.extend_from_slice(&nonce);
@@ -72,10 +72,10 @@ pub fn decrypt(obsf: &str, key: &[u8]) -> Result<String, ()> {
 
 fn split_hash(s: String, n: usize) -> Vec<String> {
     s.chars()
-        .collect::<Vec<_>>()
-        .chunks(n)
-        .map(|chunk| chunk.iter().collect())
-        .collect()
+    .collect::<Vec<_>>()
+    .chunks(n)
+    .map(|chunk| chunk.iter().collect())
+    .collect()
 }
 
 pub fn process_string(s: &str, factor: u64) -> String {
@@ -173,11 +173,11 @@ pub fn encrypt_base64(message: &str, password: &str) -> String {
     let key = hasher.finalize();
 
     let encrypted: Vec<u8> = message
-        .as_bytes()
-        .iter()
-        .enumerate()
-        .map(|(i, &b)| b ^ key[i % key.len()])
-        .collect();
+    .as_bytes()
+    .iter()
+    .enumerate()
+    .map(|(i, &b)| b ^ key[i % key.len()])
+    .collect();
 
     BASE64.encode(&encrypted)
 }
@@ -190,10 +190,10 @@ pub fn decrypt_base64(encoded: &str, password: &str) -> String {
     let key = hasher.finalize();
 
     let decrypted: Vec<u8> = encrypted
-        .iter()
-        .enumerate()
-        .map(|(i, &b)| b ^ key[i % key.len()])
-        .collect();
+    .iter()
+    .enumerate()
+    .map(|(i, &b)| b ^ key[i % key.len()])
+    .collect();
 
     String::from_utf8(decrypted).expect("Invalid UTF-8")
 }
