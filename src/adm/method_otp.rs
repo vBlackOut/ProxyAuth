@@ -1,5 +1,5 @@
-use rand::{rngs::OsRng, RngCore};
 use data_encoding::BASE32_NOPAD;
+use rand::{RngCore, rngs::OsRng};
 use totp_rs::{Algorithm, TOTP};
 use urlencoding::encode;
 
@@ -43,13 +43,18 @@ pub fn generate_totp_code(
     digits: u32,
     period: u64,
 ) -> Result<String, String> {
-    let totp = TOTP::new(algorithm, digits.try_into().unwrap(), 0, period, secret_base32.as_bytes().to_vec())
+    let totp = TOTP::new(
+        algorithm,
+        digits.try_into().unwrap(),
+        0,
+        period,
+        secret_base32.as_bytes().to_vec(),
+    )
     .map_err(|e| format!("Error TOTP: {:?}", e))?;
 
     totp.generate_current()
-    .map_err(|e| format!("Error code totp: {:?}", e))
+        .map_err(|e| format!("Error code totp: {:?}", e))
 }
-
 
 #[allow(dead_code)]
 pub fn validate_totp_code(
@@ -63,15 +68,16 @@ pub fn validate_totp_code(
     let totp = TOTP::new(
         algorithm,
         digits.try_into().unwrap(),
-                         0,
-                         period,
-                         secret_base32.as_bytes().to_vec(),
-    ).map_err(|e| format!("TOTP creation error: {:?}", e))?;
+        0,
+        period,
+        secret_base32.as_bytes().to_vec(),
+    )
+    .map_err(|e| format!("TOTP creation error: {:?}", e))?;
 
     let now = std::time::SystemTime::now()
-    .duration_since(std::time::UNIX_EPOCH)
-    .map_err(|e| format!("Time error: {:?}", e))?
-    .as_secs() as i64;
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| format!("Time error: {:?}", e))?
+        .as_secs() as i64;
 
     for offset in -tolerance..=tolerance {
         let time = (now + offset * period as i64) as u64;

@@ -2,18 +2,18 @@ use std::fs;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
+use crate::AppConfig;
+use crate::config::config::BackendConfig;
 use dashmap::DashMap;
 use fxhash::FxBuildHasher;
-use hyper::{Body, Client, Request, Response, Uri, Method};
-use hyper::body::to_bytes;
 use fxhash::FxHashSet;
-use hyper_proxy::{Proxy, ProxyConnector, Intercept};
-use crate::config::config::BackendConfig;
+use hyper::body::to_bytes;
+use hyper::{Body, Client, Method, Request, Response, Uri};
+use hyper_proxy::{Intercept, Proxy, ProxyConnector};
 use hyper_rustls::HttpsConnectorBuilder;
 use once_cell::sync::Lazy;
 use thiserror::Error;
 use tokio::time::timeout;
-use crate::AppConfig;
 
 #[derive(Debug, Error)]
 pub enum ForwardError {
@@ -32,11 +32,14 @@ pub fn load_config(path: &str) -> AppConfig {
 
 type FxDashMap<K, V> = DashMap<K, V, FxBuildHasher>;
 type DefaultClient = Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>, Body>;
-type ProxyClient = Client<ProxyConnector<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>, Body>;
+type ProxyClient =
+    Client<ProxyConnector<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>, Body>;
 
 static CLIENT_POOL: Lazy<FxDashMap<String, DefaultClient>> = Lazy::new(FxDashMap::default);
-static PROXY_CLIENT_POOL: Lazy<FxDashMap<(String, String), ProxyClient>> = Lazy::new(FxDashMap::default);
-static LAST_GOOD_BACKEND: Lazy<FxDashMap<&'static str, (String, Instant)>> = Lazy::new(FxDashMap::default);
+static PROXY_CLIENT_POOL: Lazy<FxDashMap<(String, String), ProxyClient>> =
+    Lazy::new(FxDashMap::default);
+static LAST_GOOD_BACKEND: Lazy<FxDashMap<&'static str, (String, Instant)>> =
+    Lazy::new(FxDashMap::default);
 static BACKEND_COOLDOWN: Lazy<FxDashMap<String, CooldownEntry>> = Lazy::new(FxDashMap::default);
 static ROUND_ROBIN_COUNTER: Lazy<AtomicUsize> = Lazy::new(|| AtomicUsize::new(0));
 
@@ -58,14 +61,14 @@ async fn get_or_build_client(backend: &str) -> DefaultClient {
     }
 
     let https = HttpsConnectorBuilder::new()
-    .with_native_roots()
-    .https_or_http()
-    .enable_http1()
-    .build();
+        .with_native_roots()
+        .https_or_http()
+        .enable_http1()
+        .build();
 
     let client = Client::builder()
-    .pool_max_idle_per_host(200)
-    .build::<_, Body>(https);
+        .pool_max_idle_per_host(200)
+        .build::<_, Body>(https);
 
     CLIENT_POOL.insert(backend.to_string(), client.clone());
     client
@@ -82,17 +85,17 @@ async fn get_or_build_client_with_proxy(proxy_addr: &str, backend: &str) -> Prox
     let proxy = Proxy::new(Intercept::All, proxy_uri);
 
     let https = HttpsConnectorBuilder::new()
-    .with_native_roots()
-    .https_or_http()
-    .enable_http1()
-    .build();
+        .with_native_roots()
+        .https_or_http()
+        .enable_http1()
+        .build();
 
-    let proxy_connector = ProxyConnector::from_proxy(https, proxy)
-    .expect("Failed to create proxy connector");
+    let proxy_connector =
+        ProxyConnector::from_proxy(https, proxy).expect("Failed to create proxy connector");
 
     let client = Client::builder()
-    .pool_max_idle_per_host(200)
-    .build(proxy_connector);
+        .pool_max_idle_per_host(200)
+        .build(proxy_connector);
 
     PROXY_CLIENT_POOL.insert(key, client.clone());
     client
@@ -109,13 +112,11 @@ pub async fn forward_failover(
     let body_bytes = to_bytes(req.into_body()).await?;
 
     let now = Instant::now();
-    BACKEND_COOLDOWN.retain(|_, entry| {
-        now.duration_since(entry.last_failed) < BACKEND_RESET_THRESHOLD
-    });
+    BACKEND_COOLDOWN
+        .retain(|_, entry| now.duration_since(entry.last_failed) < BACKEND_RESET_THRESHOLD);
 
-    let (active_backends, disabled_backends): (Vec<_>, Vec<_>) = backends
-    .iter()
-    .partition(|b| b.weight != -1);
+    let (active_backends, disabled_backends): (Vec<_>, Vec<_>) =
+        backends.iter().partition(|b| b.weight != -1);
 
     let mut weighted_backends: Vec<&BackendConfig> = Vec::new();
     for backend in &active_backends {
@@ -149,20 +150,23 @@ pub async fn forward_failover(
             }
         }
 
-        if let Ok(resp) = try_forward_to_backend(url, proxy_addr, &body_bytes, &method, &uri, &headers).await {
+        if let Ok(resp) =
+            try_forward_to_backend(url, proxy_addr, &body_bytes, &method, &uri, &headers).await
+        {
             LAST_GOOD_BACKEND.insert(BACKEND_CACHE_KEY, (url.clone(), Instant::now()));
             BACKEND_COOLDOWN.remove(url);
             return Ok(resp);
         } else {
-            BACKEND_COOLDOWN.entry(url.clone())
-            .and_modify(|e| {
-                e.failures += 1;
-                e.last_failed = Instant::now();
-            })
-            .or_insert(CooldownEntry {
-                failures: 1,
-                last_failed: Instant::now(),
-            });
+            BACKEND_COOLDOWN
+                .entry(url.clone())
+                .and_modify(|e| {
+                    e.failures += 1;
+                    e.last_failed = Instant::now();
+                })
+                .or_insert(CooldownEntry {
+                    failures: 1,
+                    last_failed: Instant::now(),
+                });
         }
     }
 
@@ -186,21 +190,24 @@ pub async fn forward_failover(
             }
         }
 
-        if let Ok(resp) = try_forward_to_backend(url, proxy_addr, &body_bytes, &method, &uri, &headers).await {
+        if let Ok(resp) =
+            try_forward_to_backend(url, proxy_addr, &body_bytes, &method, &uri, &headers).await
+        {
             tracing::warn!("Using disabled backend {} as fallback", url);
             LAST_GOOD_BACKEND.insert(BACKEND_CACHE_KEY, (url.clone(), Instant::now()));
             BACKEND_COOLDOWN.remove(url);
             return Ok(resp);
         } else {
-            BACKEND_COOLDOWN.entry(url.clone())
-            .and_modify(|e| {
-                e.failures += 1;
-                e.last_failed = Instant::now();
-            })
-            .or_insert(CooldownEntry {
-                failures: 1,
-                last_failed: Instant::now(),
-            });
+            BACKEND_COOLDOWN
+                .entry(url.clone())
+                .and_modify(|e| {
+                    e.failures += 1;
+                    e.last_failed = Instant::now();
+                })
+                .or_insert(CooldownEntry {
+                    failures: 1,
+                    last_failed: Instant::now(),
+                });
         }
     }
 
@@ -215,7 +222,9 @@ async fn try_forward_to_backend(
     uri: &Uri,
     headers: &hyper::HeaderMap,
 ) -> Result<Response<Body>, ForwardError> {
-    let uri_backend: Uri = backend.parse().map_err(|_| ForwardError::AllBackendsFailed)?;
+    let uri_backend: Uri = backend
+        .parse()
+        .map_err(|_| ForwardError::AllBackendsFailed)?;
 
     let mut parts = uri.clone().into_parts();
     parts.scheme = uri_backend.scheme().cloned();
@@ -224,9 +233,7 @@ async fn try_forward_to_backend(
 
     let full_uri = Uri::from_parts(parts).map_err(|_| ForwardError::AllBackendsFailed)?;
 
-    let mut builder = Request::builder()
-    .method(method.clone())
-    .uri(full_uri);
+    let mut builder = Request::builder().method(method.clone()).uri(full_uri);
 
     for (key, value) in headers.iter() {
         if key.as_str().to_ascii_lowercase() != "host" {
@@ -234,19 +241,29 @@ async fn try_forward_to_backend(
         }
     }
 
-    builder = builder.header("Host", uri_backend.authority().map(|a| a.as_str()).unwrap_or("127.0.0.1"));
+    builder = builder.header(
+        "Host",
+        uri_backend
+            .authority()
+            .map(|a| a.as_str())
+            .unwrap_or("127.0.0.1"),
+    );
 
     let new_req = if *method == Method::GET || *method == Method::HEAD {
-        builder.body(Body::empty()).expect("Failed to build GET/HEAD request")
+        builder
+            .body(Body::empty())
+            .expect("Failed to build GET/HEAD request")
     } else {
-        builder.body(Body::from(body_bytes.to_vec())).expect("Failed to build request with body")
+        builder
+            .body(Body::from(body_bytes.to_vec()))
+            .expect("Failed to build request with body")
     };
 
     let response_result = match proxy_addr {
         Some(proxy) => {
             let client = get_or_build_client_with_proxy(proxy, backend).await;
             timeout(Duration::from_secs(10), client.request(new_req)).await
-        },
+        }
         None => {
             let client = get_or_build_client(backend).await;
             timeout(Duration::from_secs(10), client.request(new_req)).await
@@ -258,7 +275,11 @@ async fn try_forward_to_backend(
             if resp.status().is_success() {
                 Ok(resp)
             } else {
-                tracing::warn!("Failover: backend {} returned non-success status {}", backend, resp.status());
+                tracing::warn!(
+                    "Failover: backend {} returned non-success status {}",
+                    backend,
+                    resp.status()
+                );
                 Err(ForwardError::AllBackendsFailed)
             }
         }

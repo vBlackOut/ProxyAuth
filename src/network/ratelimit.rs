@@ -48,12 +48,13 @@ impl KeyExtractor for UserToken {
         })?;
 
         // key ratelimite: user extract inside the token
-         let user_or_ip = req.headers()
-        .get("Authorization")
-        .and_then(|h| h.to_str().ok())
-        .and_then(|s| s.strip_prefix("Bearer "))
-        .and_then(|token| extract_token_user(token, &app_data.config, ip.clone()).ok())
-        .unwrap_or_else(|| ip.clone());
+        let user_or_ip = req
+            .headers()
+            .get("Authorization")
+            .and_then(|h| h.to_str().ok())
+            .and_then(|s| s.strip_prefix("Bearer "))
+            .and_then(|token| extract_token_user(token, &app_data.config, ip.clone()).ok())
+            .unwrap_or_else(|| ip.clone());
 
         // key ratelimit: path request
         let path = req.path().to_string();

@@ -1,11 +1,13 @@
 use actix_web::{App, HttpResponse, test, web};
+use proxyauth::network::shared_client::{
+    ClientOptions, build_hyper_client_cert, build_hyper_client_normal, build_hyper_client_proxy,
+};
+use proxyauth::{AppConfig, AppState, CounterToken, RouteConfig, auth as auth_handler};
 use serde::de::DeserializeOwned;
 use serde_json::json;
 use std::fs;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
-use proxyauth::{AppConfig, AppState, CounterToken, RouteConfig, auth as auth_handler};
-use proxyauth::network::shared_client::{build_hyper_client_proxy, build_hyper_client_normal, build_hyper_client_cert, ClientOptions};
 
 fn load_config<T: DeserializeOwned>(path: &str) -> T {
     let data = fs::read_to_string(path).expect("Failed to read config file");
@@ -33,21 +35,27 @@ fn create_app_for_test() -> App<
     .expect("Failed to parse routes YAML");
 
     let client_normal = build_hyper_client_normal(&config);
-    let client_with_cert = build_hyper_client_cert(ClientOptions {
-        use_proxy: false,
-        proxy_addr: None,
-        use_cert: false,
-        cert_path: None,
-        key_path: None,
-    }, &config);
+    let client_with_cert = build_hyper_client_cert(
+        ClientOptions {
+            use_proxy: false,
+            proxy_addr: None,
+            use_cert: false,
+            cert_path: None,
+            key_path: None,
+        },
+        &config,
+    );
 
-    let client_with_proxy = build_hyper_client_proxy(ClientOptions {
-        use_proxy: true,
-        proxy_addr: Some("http://127.0.0.1:8888".to_string()),
-        use_cert: false,
-        cert_path: None,
-        key_path: None,
-    }, &config);
+    let client_with_proxy = build_hyper_client_proxy(
+        ClientOptions {
+            use_proxy: true,
+            proxy_addr: Some("http://127.0.0.1:8888".to_string()),
+            use_cert: false,
+            cert_path: None,
+            key_path: None,
+        },
+        &config,
+    );
 
     let counter_token = CounterToken::new();
 
@@ -58,7 +66,6 @@ fn create_app_for_test() -> App<
         client_normal,
         client_with_cert,
         client_with_proxy,
-
     });
 
     App::new()

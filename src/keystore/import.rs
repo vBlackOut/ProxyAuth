@@ -4,14 +4,16 @@ use std::io::{BufReader, Read};
 use std::path::Path;
 use std::sync::Arc;
 
-use sequoia_openpgp as openpgp;
-use openpgp::{Cert, KeyHandle, KeyID, Result};
-use openpgp::parse::Parse;
 use openpgp::crypto::{KeyPair, SessionKey};
 use openpgp::packet::{PKESK, SKESK};
+use openpgp::parse::Parse;
+use openpgp::parse::stream::{
+    DecryptionHelper, DecryptorBuilder, MessageStructure, VerificationHelper,
+};
 use openpgp::policy::{Policy, StandardPolicy};
 use openpgp::types::SymmetricAlgorithm;
-use openpgp::parse::stream::{DecryptorBuilder, DecryptionHelper, VerificationHelper, MessageStructure};
+use openpgp::{Cert, KeyHandle, KeyID, Result};
+use sequoia_openpgp as openpgp;
 
 pub fn decrypt_keystore() -> Result<Option<String>> {
     let import_dir = "/etc/proxyauth/import";
@@ -30,8 +32,7 @@ pub fn decrypt_keystore() -> Result<Option<String>> {
     let policy = &StandardPolicy::new();
     let helper = Helper::new(policy, vec![cert.clone()]);
 
-    let mut decryptor = DecryptorBuilder::from_bytes(&data)?
-        .with_policy(policy, None, helper)?;
+    let mut decryptor = DecryptorBuilder::from_bytes(&data)?.with_policy(policy, None, helper)?;
 
     let mut output = Vec::new();
     std::io::copy(&mut decryptor, &mut output)?;
@@ -51,7 +52,8 @@ impl<'a> Helper<'a> {
         let mut keys = HashMap::new();
         for cert in certs {
             let cert = Arc::new(cert);
-            for ka in cert.keys()
+            for ka in cert
+                .keys()
                 .unencrypted_secret()
                 .with_policy(policy, None)
                 .supported()
@@ -72,7 +74,7 @@ impl<'a> DecryptionHelper for Helper<'a> {
         pkesks: &[PKESK],
         _skesks: &[SKESK],
         sym_algo: Option<SymmetricAlgorithm>,
-        decrypt: &mut dyn FnMut(Option<SymmetricAlgorithm>, &SessionKey) -> bool
+        decrypt: &mut dyn FnMut(Option<SymmetricAlgorithm>, &SessionKey) -> bool,
     ) -> Result<Option<Cert>> {
         let mut recipient: Option<Cert> = None;
 

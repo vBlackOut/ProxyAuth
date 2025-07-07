@@ -1,15 +1,15 @@
 use crate::AppConfig;
 use crate::AppState;
-use crate::token::crypto::{calcul_factorhash, decrypt, derive_key_from_secret};
-use crate::timezone::check_date_token;
 use crate::build::build_info::get;
+use crate::timezone::check_date_token;
+use crate::token::crypto::{calcul_factorhash, decrypt, derive_key_from_secret};
 use actix_web::web;
-use chrono::{Timelike, Utc, Duration, TimeZone};
+use chrono::{Duration, TimeZone, Timelike, Utc};
 use hex;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
-use tracing::{error, info, warn};
 use std::sync::OnceLock;
+use tracing::{error, info, warn};
 
 fn get_build_time() -> u64 {
     let get_build = get();
@@ -54,7 +54,10 @@ fn format_long_date(seconds: u128) -> String {
     let minutes = (remaining % 3600) / 60;
     let seconds = remaining % 60;
 
-    format!("+{:0>8}-01-01T{:02}:{:02}:{:02}Z", year, hours, minutes, seconds)
+    format!(
+        "+{:0>8}-01-01T{:02}:{:02}:{:02}Z",
+        year, hours, minutes, seconds
+    )
 }
 
 pub fn init_derived_key(secret: &str) {
@@ -66,9 +69,7 @@ pub fn generate_secret(secret: &str, token_expiry_seconds: &i64) -> String {
     let base = get_build_datetime();
 
     let next_reset_time = match *token_expiry_seconds {
-        0..=86_400 => {
-            base + Duration::seconds(*token_expiry_seconds)
-        }
+        0..=86_400 => base + Duration::seconds(*token_expiry_seconds),
 
         86_401..=2_419_200 => {
             let weeks = (*token_expiry_seconds as f64 / (7.0 * 86400.0)).ceil() as i64;
@@ -93,14 +94,17 @@ pub fn generate_secret(secret: &str, token_expiry_seconds: &i64) -> String {
             };
 
             let first_of_next_month = Utc
-            .with_ymd_and_hms(next_year as i32, next_month, 1, 0, 0, 0)
-            .unwrap();
+                .with_ymd_and_hms(next_year as i32, next_month, 1, 0, 0, 0)
+                .unwrap();
 
             let last_day = first_of_next_month - Duration::days(1);
             last_day
-            .with_hour(23).unwrap()
-            .with_minute(59).unwrap()
-            .with_second(59).unwrap()
+                .with_hour(23)
+                .unwrap()
+                .with_minute(59)
+                .unwrap()
+                .with_second(59)
+                .unwrap()
         }
 
         31_104_001..=157_680_000 => {
@@ -108,9 +112,7 @@ pub fn generate_secret(secret: &str, token_expiry_seconds: &i64) -> String {
             Utc.with_ymd_and_hms(0 + years, 12, 31, 23, 59, 59).unwrap()
         }
 
-        _ => {
-            base + Duration::seconds(86_400)
-        }
+        _ => base + Duration::seconds(86_400),
     };
 
     let now = Utc::now();
@@ -119,12 +121,18 @@ pub fn generate_secret(secret: &str, token_expiry_seconds: &i64) -> String {
     format!("{}:{}", secret, next_reset_time.timestamp())
 }
 
-
-pub fn generate_token(username: &str, config: &AppConfig, time_expire: &str, token_id: &str) -> String {
-
+pub fn generate_token(
+    username: &str,
+    config: &AppConfig,
+    time_expire: &str,
+    token_id: &str,
+) -> String {
     let values_map = HashMap::from([
         ("username", username.to_string()),
-        ("secret_with_timestamp", generate_secret(&config.secret, &config.token_expiry_seconds)),
+        (
+            "secret_with_timestamp",
+            generate_secret(&config.secret, &config.token_expiry_seconds),
+        ),
         ("build_time", get_build_time().to_string()),
         ("time_expire", time_expire.to_string()),
         ("build_rand", get_build_rand().to_string()),
@@ -162,15 +170,15 @@ pub async fn validate_token(
     let token_hash_decrypt = data[0];
 
     let index_user = data[2].parse::<usize>().map_err(|_| "Index invalide")?;
-    let user = config
-        .users
-        .get(index_user)
-        .ok_or("User not found")?;
+    let user = config.users.get(index_user).ok_or("User not found")?;
 
     let time_expire = check_date_token(data[1], &user.username, ip, &config.timezone)
         .map_err(|_| "Your token is expired")?;
 
-    if (time_expire > (config.token_expiry_seconds as i64).try_into().unwrap()).try_into().unwrap() {
+    if (time_expire > (config.token_expiry_seconds as i64).try_into().unwrap())
+        .try_into()
+        .unwrap()
+    {
         error!(
             "[{}] username {} try to access token limit config {} value request {}",
             ip, user.username, config.token_expiry_seconds, time_expire
@@ -187,7 +195,10 @@ pub async fn validate_token(
     }
 
     if config.stats {
-        let count = data_app.counter.record_and_get(&user.username, data[3], &time_expire.to_string());
+        let count =
+            data_app
+                .counter
+                .record_and_get(&user.username, data[3], &time_expire.to_string());
 
         info!(
             "[{}] user {} is logged token expire in {} seconds [token used: {}]",
