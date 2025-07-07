@@ -1,13 +1,13 @@
-use actix_web::{HttpResponse, HttpRequest, Responder, web};
+use crate::AppState;
+use actix_web::{HttpRequest, HttpResponse, Responder, web};
 use once_cell::sync::Lazy;
 use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tracing_subscriber::fmt::MakeWriter;
-use crate::AppState;
 
-
-pub static LOG_BUFFER: Lazy<Arc<Mutex<Vec<String>>>> = Lazy::new(|| Arc::new(Mutex::new(Vec::new())));
+pub static LOG_BUFFER: Lazy<Arc<Mutex<Vec<String>>>> =
+    Lazy::new(|| Arc::new(Mutex::new(Vec::new())));
 
 #[derive(Clone)]
 pub struct ChannelWriter {
@@ -59,8 +59,8 @@ pub async fn get_logs(req: HttpRequest, data: web::Data<AppState>) -> impl Respo
         Some(token) if token == expected_token => {
             let logs = LOG_BUFFER.lock().unwrap();
             HttpResponse::Ok()
-            .content_type("text/plain")
-            .body(logs.join(""))
+                .content_type("text/plain")
+                .body(logs.join(""))
         }
         _ => HttpResponse::Unauthorized().body("Invalid or missing token"),
     }

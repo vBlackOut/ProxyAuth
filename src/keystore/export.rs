@@ -1,8 +1,9 @@
-use sequoia_openpgp::serialize::stream::*;
-use sequoia_openpgp::policy::StandardPolicy;
+use crate::build::build_info;
+use anyhow::Context;
 use sequoia_openpgp::Result;
 use sequoia_openpgp::packet::UserID;
-use anyhow::Context;
+use sequoia_openpgp::policy::StandardPolicy;
+use sequoia_openpgp::serialize::stream::*;
 use sequoia_openpgp::{
     armor::{Kind as ArmorKind, Writer as ArmorWriter},
     cert::{Cert, CertBuilder},
@@ -10,8 +11,6 @@ use sequoia_openpgp::{
 };
 use std::fs::{File, create_dir_all};
 use std::io::{BufWriter, Write};
-use crate::build::build_info;
-
 
 pub fn export_as_file() -> Result<()> {
     let dir = std::env::current_dir()?.to_str().unwrap().to_string();
@@ -19,8 +18,7 @@ pub fn export_as_file() -> Result<()> {
 
     // Generate cert from Applications
     let userid = UserID::from("ProxyAuth <security@proxyauth.app>");
-    let (cert, _) = CertBuilder::general_purpose([userid])
-        .generate()?;
+    let (cert, _) = CertBuilder::general_purpose([userid]).generate()?;
     let current = build_info::get();
 
     // Export private key
@@ -42,7 +40,6 @@ pub fn export_as_file() -> Result<()> {
     Ok(())
 }
 
-
 fn encrypt(cert: &Cert, text: &str, path: &str) -> anyhow::Result<()> {
     let policy = &StandardPolicy::new();
 
@@ -56,14 +53,13 @@ fn encrypt(cert: &Cert, text: &str, path: &str) -> anyhow::Result<()> {
         .next()
         .ok_or_else(|| anyhow::anyhow!("No suitable encryption key"))?;
 
-    let file = File::create(path)
-        .with_context(|| format!("Failed to create output file: {}", path))?;
+    let file =
+        File::create(path).with_context(|| format!("Failed to create output file: {}", path))?;
     let mut armor = ArmorWriter::new(file, ArmorKind::Message)?;
 
     let message = Message::new(&mut armor);
 
-    let encryptor = Encryptor::for_recipients(message, [Recipient::from(recipient_key)])
-        .build()?;
+    let encryptor = Encryptor::for_recipients(message, [Recipient::from(recipient_key)]).build()?;
 
     // Write Text File for valide format GPG.
     let mut literal = LiteralWriter::new(encryptor).build()?;
@@ -74,4 +70,3 @@ fn encrypt(cert: &Cert, text: &str, path: &str) -> anyhow::Result<()> {
 
     Ok(())
 }
-

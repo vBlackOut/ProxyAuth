@@ -1,20 +1,22 @@
-use std::sync::Arc;
-use clap::Parser;
-use crate::config::config::{AppConfig, load_config};
-use reqwest::{ClientBuilder, header::{HeaderMap, HeaderValue}};
 use crate::cli::command::{Cli, Commands};
-use crate::config::def_config::{ensure_running_as_proxyauth, ensure_running_as_root, ensure_user_proxyauth_exists,
+use crate::config::config::{AppConfig, load_config};
+use crate::config::def_config::{
+    ensure_running_as_proxyauth, ensure_running_as_root, ensure_user_proxyauth_exists,
     setup_proxyauth_directory, switch_to_user,
 };
 use crate::keystore::export::export_as_file;
+use clap::Parser;
+use reqwest::{
+    ClientBuilder,
+    header::{HeaderMap, HeaderValue},
+};
+use std::sync::Arc;
 
 pub async fn prompt() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     match &cli.command {
-        None => {
-            return Ok(())
-        }
+        None => return Ok(()),
 
         Some(Commands::Prepare) => {
             switch_to_user("root")?;
@@ -30,14 +32,12 @@ pub async fn prompt() -> Result<(), Box<dyn std::error::Error>> {
             match target.as_deref() {
                 None => {
                     std::process::exit(0);
-                },
+                }
                 Some("export") => {
                     let _ = export_as_file();
                     std::process::exit(0);
-                },
-                Some(_host) => {
-                    Ok(())
                 }
+                Some(_host) => Ok(()),
             }
         }
 
@@ -48,10 +48,7 @@ pub async fn prompt() -> Result<(), Box<dyn std::error::Error>> {
             let config: Arc<AppConfig> = load_config("/etc/proxyauth/config/config.json");
 
             let mut headers = HeaderMap::new();
-            headers.insert(
-                "X-Auth-Token",
-                HeaderValue::from_str(&config.token_admin)?,
-            );
+            headers.insert("X-Auth-Token", HeaderValue::from_str(&config.token_admin)?);
 
             let client = ClientBuilder::new()
                 .danger_accept_invalid_certs(true)
@@ -73,6 +70,4 @@ pub async fn prompt() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
-
-
 }

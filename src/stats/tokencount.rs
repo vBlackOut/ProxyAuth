@@ -1,13 +1,13 @@
+use chrono::DateTime;
+use chrono::TimeZone;
+use chrono::{Duration, Utc};
 use dashmap::DashMap;
 use rustc_hash::FxHasher;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::hash::BuildHasherDefault;
-use std::sync::atomic::{AtomicU64, Ordering};
-use chrono::{Utc, Duration};
 use std::sync::Arc;
-use chrono::DateTime;
-use chrono::TimeZone;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 type FxDashMap<K, V> = DashMap<K, V, BuildHasherDefault<FxHasher>>;
 
@@ -47,18 +47,17 @@ impl CounterToken {
             .clone()
     }
 
-//     pub fn record_and_get(&self, user: &str, token_id: &str) -> u64 {
-//         let key = self.make_key(user, token_id);
-//         let entry = self.counts.entry(key).or_insert_with(|| AtomicU64::new(0));
-//         entry.fetch_add(1, Ordering::Relaxed) + 1
-//     }
+    //     pub fn record_and_get(&self, user: &str, token_id: &str) -> u64 {
+    //         let key = self.make_key(user, token_id);
+    //         let entry = self.counts.entry(key).or_insert_with(|| AtomicU64::new(0));
+    //         entry.fetch_add(1, Ordering::Relaxed) + 1
+    //     }
 
     pub fn record_and_get(&self, user: &str, token_id: &str, expire_at: &str) -> u64 {
         let key = self.make_key(user, token_id);
         let now = Utc::now();
 
-        let parsed_expire = expire_at.parse::<i64>()
-            .expect("Invalid expire_at format");
+        let parsed_expire = expire_at.parse::<i64>().expect("Invalid expire_at format");
 
         let expire_timestamp = now + Duration::seconds(parsed_expire);
 
@@ -67,16 +66,18 @@ impl CounterToken {
             .single()
             .expect("timestamp is out of range");
 
-        let usage = self.counts.entry(key.clone()).or_insert_with(|| TokenUsage {
-            token_id: token_id.to_string(),
-            count: AtomicU64::new(0),
-            delivery_at: now,
-            expire_at: expire_at_datetime,
-        });
+        let usage = self
+            .counts
+            .entry(key.clone())
+            .or_insert_with(|| TokenUsage {
+                token_id: token_id.to_string(),
+                count: AtomicU64::new(0),
+                delivery_at: now,
+                expire_at: expire_at_datetime,
+            });
 
         usage.count.fetch_add(1, Ordering::Relaxed) + 1
     }
-
 
     pub fn get_count(&self, user: &str, token_id: &str) -> u64 {
         let key = self.make_key(user, token_id);
@@ -101,10 +102,10 @@ impl CounterToken {
                     .entry(user.to_string())
                     .or_insert_with(|| Vec::with_capacity(4))
                     .push(TokenUsage {
-                            token_id: token_id.to_string().clone(),
-                            count: count.into(),
-                            delivery_at: usage.delivery_at,
-                            expire_at: usage.expire_at,
+                        token_id: token_id.to_string().clone(),
+                        count: count.into(),
+                        delivery_at: usage.delivery_at,
+                        expire_at: usage.expire_at,
                     });
             }
         }

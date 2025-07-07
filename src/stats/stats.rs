@@ -11,8 +11,8 @@ pub async fn stats(req: HttpRequest, data: web::Data<AppState>) -> impl Responde
                 let stats = data.counter.get_all_tokens_json();
                 let json = serde_json::to_string_pretty(&stats).unwrap();
                 HttpResponse::Ok()
-                .content_type("application/json")
-                .body(json)
+                    .content_type("application/json")
+                    .body(json)
             } else {
                 HttpResponse::Ok().body("Stats is disabled on this server")
             }
