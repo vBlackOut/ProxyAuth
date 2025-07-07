@@ -18,6 +18,7 @@ pkgs.mkShell {
 
   shellHook = ''
     echo "Rust version: $(rustc --version)"
+    rustfmt --edition 2024 src/*.rs tests/*.rs
     cargo audit || true
   '';
 
