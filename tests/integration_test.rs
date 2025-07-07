@@ -1,8 +1,8 @@
-use actix_web::{test, web, App, HttpResponse};
+use actix_web::{App, HttpResponse, test, web};
 use proxyauth::network::shared_client::{
-    build_hyper_client_cert, build_hyper_client_normal, build_hyper_client_proxy, ClientOptions,
+    ClientOptions, build_hyper_client_cert, build_hyper_client_normal, build_hyper_client_proxy,
 };
-use proxyauth::{auth as auth_handler, AppConfig, AppState, CounterToken, RouteConfig};
+use proxyauth::{AppConfig, AppState, CounterToken, RouteConfig, auth as auth_handler};
 use serde::de::DeserializeOwned;
 use serde_json::json;
 use std::fs;

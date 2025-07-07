@@ -1,17 +1,17 @@
+use crate::AppState;
 use crate::config::config::BackendConfig;
 use crate::config::config::BackendInput;
 use crate::network::loadbalancing::forward_failover;
 use crate::network::shared_client::{
-    get_or_build_client_proxy, get_or_build_thread_client, ClientOptions,
+    ClientOptions, get_or_build_client_proxy, get_or_build_thread_client,
 };
 use crate::token::security::validate_token;
-use crate::AppState;
-use actix_web::{error, web, Error, HttpRequest, HttpResponse};
+use actix_web::{Error, HttpRequest, HttpResponse, error, web};
 use hyper::header::USER_AGENT;
 use hyper::{Body, Method, Request, Uri};
 use std::net::IpAddr;
 use std::str::FromStr;
-use tokio::time::{timeout, Duration};
+use tokio::time::{Duration, timeout};
 use tracing::{info, warn};
 
 pub fn client_ip(req: &HttpRequest) -> Option<IpAddr> {

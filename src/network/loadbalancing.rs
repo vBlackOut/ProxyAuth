@@ -2,8 +2,8 @@ use std::fs;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
-use crate::config::config::BackendConfig;
 use crate::AppConfig;
+use crate::config::config::BackendConfig;
 use dashmap::DashMap;
 use fxhash::FxBuildHasher;
 use fxhash::FxHashSet;

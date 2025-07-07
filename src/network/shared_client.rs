@@ -1,7 +1,7 @@
 use crate::config::config::AppConfig;
 use dashmap::DashMap;
 use fxhash::FxBuildHasher;
-use hyper::{client::HttpConnector, Body, Client};
+use hyper::{Body, Client, client::HttpConnector};
 use hyper_proxy::{Intercept, Proxy, ProxyConnector};
 use hyper_rustls::HttpsConnector;
 use once_cell::sync::Lazy;

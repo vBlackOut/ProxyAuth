@@ -17,15 +17,15 @@ use crate::cli::prompt::prompt;
 use crate::keystore::import::decrypt_keystore;
 use crate::tls::check_port;
 use actix_governor::{Governor, GovernorConfigBuilder};
-use actix_web::{web, App, HttpServer};
+use actix_web::{App, HttpServer, web};
 use chrono::Local;
-use config::config::{load_config, AppConfig, AppState, RouteConfig};
+use config::config::{AppConfig, AppState, RouteConfig, load_config};
 use config::def_config::{create_config, ensure_running_as_proxyauth, switch_to_user};
-use logs::{get_logs, log_collector, ChannelLogWriter};
+use logs::{ChannelLogWriter, get_logs, log_collector};
 use network::proxy::global_proxy;
 use network::ratelimit::UserToken;
 use network::shared_client::{
-    build_hyper_client_cert, build_hyper_client_normal, build_hyper_client_proxy, ClientOptions,
+    ClientOptions, build_hyper_client_cert, build_hyper_client_normal, build_hyper_client_proxy,
 };
 use socket2::{Domain, Protocol, Socket, Type};
 use start_actix::mode_actix_web;
@@ -39,10 +39,10 @@ use token::security::init_derived_key;
 use tokio::sync::mpsc::unbounded_channel;
 use tracing::warn;
 use tracing_loki::url::Url;
+use tracing_subscriber::Layer;
 use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::fmt::time::FormatTime;
-use tracing_subscriber::Layer;
-use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
+use tracing_subscriber::{EnvFilter, Registry, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 

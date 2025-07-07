@@ -1,5 +1,5 @@
 use crate::AppState;
-use actix_web::{web, HttpRequest, HttpResponse, Responder};
+use actix_web::{HttpRequest, HttpResponse, Responder, web};
 use once_cell::sync::Lazy;
 use std::io::{self, Write};
 use std::sync::{Arc, Mutex};

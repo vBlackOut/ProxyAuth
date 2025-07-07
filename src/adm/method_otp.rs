@@ -1,5 +1,5 @@
 use data_encoding::BASE32_NOPAD;
-use rand::{rngs::OsRng, RngCore};
+use rand::{RngCore, rngs::OsRng};
 use totp_rs::{Algorithm, TOTP};
 use urlencoding::encode;
 

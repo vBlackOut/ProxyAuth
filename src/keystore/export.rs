@@ -1,9 +1,9 @@
 use crate::build::build_info;
 use anyhow::Context;
+use sequoia_openpgp::Result;
 use sequoia_openpgp::packet::UserID;
 use sequoia_openpgp::policy::StandardPolicy;
 use sequoia_openpgp::serialize::stream::*;
-use sequoia_openpgp::Result;
 use sequoia_openpgp::{
     armor::{Kind as ArmorKind, Writer as ArmorWriter},
     cert::{Cert, CertBuilder},

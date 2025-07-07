@@ -6,10 +6,10 @@ use std::sync::Arc;
 
 use openpgp::crypto::{KeyPair, SessionKey};
 use openpgp::packet::{PKESK, SKESK};
+use openpgp::parse::Parse;
 use openpgp::parse::stream::{
     DecryptionHelper, DecryptorBuilder, MessageStructure, VerificationHelper,
 };
-use openpgp::parse::Parse;
 use openpgp::policy::{Policy, StandardPolicy};
 use openpgp::types::SymmetricAlgorithm;
 use openpgp::{Cert, KeyHandle, KeyID, Result};

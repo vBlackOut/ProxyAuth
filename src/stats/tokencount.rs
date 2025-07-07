@@ -6,8 +6,8 @@ use rustc_hash::FxHasher;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::hash::BuildHasherDefault;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 type FxDashMap<K, V> = DashMap<K, V, BuildHasherDefault<FxHasher>>;
 

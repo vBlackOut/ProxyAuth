@@ -1,3 +1,5 @@
+use crate::AppConfig;
+use crate::AppState;
 use crate::config::config::AuthRequest;
 use crate::network::proxy::client_ip;
 use crate::token::crypto::{calcul_cipher, derive_key_from_secret, encrypt};
@@ -6,7 +8,6 @@ use crate::AppConfig;
 use crate::AppState;
 use actix_web::{web, HttpRequest, HttpResponse, Responder};
 use argon2::password_hash::{PasswordHash, PasswordVerifier};
-use argon2::Argon2;
 use blake3;
 use chrono::{Duration, TimeZone, Utc};
 use chrono_tz::Tz;

@@ -1,8 +1,8 @@
+use crate::AppState;
 use crate::adm::method_otp::generate_otpauth_uri;
 use crate::config::config::add_otpkey;
 use crate::token::auth::verify_password;
-use crate::AppState;
-use actix_web::{web, HttpRequest, HttpResponse, Responder};
+use actix_web::{HttpRequest, HttpResponse, Responder, web};
 use serde::{Deserialize, Serialize};
 use totp_rs::Algorithm;
 

@@ -1,5 +1,5 @@
 use crate::cli::command::{Cli, Commands};
-use crate::config::config::{load_config, AppConfig};
+use crate::config::config::{AppConfig, load_config};
 use crate::config::def_config::{
     ensure_running_as_proxyauth, ensure_running_as_root, ensure_user_proxyauth_exists,
     setup_proxyauth_directory, switch_to_user,
@@ -7,8 +7,8 @@ use crate::config::def_config::{
 use crate::keystore::export::export_as_file;
 use clap::Parser;
 use reqwest::{
-    header::{HeaderMap, HeaderValue},
     ClientBuilder,
+    header::{HeaderMap, HeaderValue},
 };
 use std::sync::Arc;
 
