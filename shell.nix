@@ -1,19 +1,23 @@
-{ pkgs ? import <nixpkgs> {} }:
-
+let
+  rustOverlay = import (fetchTarball "https://github.com/oxalica/rust-overlay/archive/master.tar.gz");
+  pkgs = import (fetchTarball "https://github.com/NixOS/nixpkgs/archive/nixos-23.11.tar.gz") {
+    overlays = [ rustOverlay ];
+  };
+in
 pkgs.mkShell {
-  buildInputs = with pkgs; [
-    rustc
-    cargo
-    cargo-audit
-    rustfmt
-    clippy
-    rust-analyzer
-    pkg-config
-    openssl
-    nettle
+  buildInputs = [
+    pkgs.rust-bin.nightly.latest.default
+    pkgs.rust-analyzer
+    pkgs.cargo-audit
+    pkgs.rustfmt
+    pkgs.clippy
+    pkgs.pkg-config
+    pkgs.openssl
+    pkgs.nettle
   ];
 
   shellHook = ''
+    echo "Rust version: $(rustc --version)"
     rustfmt --edition 2024 src/*.rs tests/*.rs
     cargo audit
   '';

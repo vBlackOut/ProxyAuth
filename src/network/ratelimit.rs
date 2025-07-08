@@ -44,7 +44,7 @@ impl KeyExtractor for UserToken {
 
         let app_data = req.app_data::<web::Data<AppState>>().ok_or_else(|| {
             Self::KeyExtractionError::new("Missing app state")
-                .set_status_code(StatusCode::INTERNAL_SERVER_ERROR)
+            .set_status_code(StatusCode::INTERNAL_SERVER_ERROR)
         })?;
 
         // key ratelimite: user extract inside the token
@@ -67,15 +67,16 @@ impl KeyExtractor for UserToken {
         mut response: HttpResponseBuilder,
     ) -> HttpResponse {
         let wait_time = negative
-            .wait_time_from(DefaultClock::default().now())
-            .as_secs();
+        .wait_time_from(DefaultClock::default().now())
+        .as_secs();
+
         response.content_type(ContentType::json())
         .insert_header(("Retry-After", wait_time.to_string()))
 
-            .body(
-                format!(
-                    r#"{{"code":429, "error": "TooManyRequests", "message": "Too Many Requests", "after": {wait_time}}}"#
-                )
+        .body(
+            format!(
+                r#"{{"code":429, "error": "TooManyRequests", "message": "Too Many Requests", "after": {wait_time}}}"#
             )
+        )
     }
 }
