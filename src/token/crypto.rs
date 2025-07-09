@@ -167,6 +167,7 @@ pub fn calcul_factorhash(hashdata: String) -> String {
     hash_cypher
 }
 
+#[allow(dead_code)]
 pub fn encrypt_base64(message: &str, password: &str) -> String {
     let mut hasher = Sha256::new();
     hasher.update(password.as_bytes());
@@ -182,6 +183,7 @@ pub fn encrypt_base64(message: &str, password: &str) -> String {
     BASE64.encode(&encrypted)
 }
 
+#[allow(dead_code)]
 pub fn decrypt_base64(encoded: &str, password: &str) -> String {
     let encrypted = BASE64.decode(encoded.as_bytes()).expect("Invalid base64");
 

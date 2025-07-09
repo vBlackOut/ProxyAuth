@@ -149,7 +149,7 @@ pub async fn auth(
 
         let id_token = generate_random_string(48);
 
-        let expiry_ts = expiry.naive_utc().timestamp().to_string();
+        let expiry_ts = expiry.naive_utc().and_utc().timestamp().to_string();
         let expires_at_str = expiry.format("%Y-%m-%d %H:%M:%S").to_string();
 
         let token = generate_token(&auth.username, &data.config, &expiry_ts, &id_token);
