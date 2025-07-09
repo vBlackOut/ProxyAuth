@@ -70,8 +70,8 @@ pub async fn get_otpauth_uri(
         .and_then(|users| users.as_array())
         .and_then(|users| {
             users
-            .iter()
-            .find(|u| u.get("username").and_then(|n| n.as_str()) == Some(&auth.username))
+                .iter()
+                .find(|u| u.get("username").and_then(|n| n.as_str()) == Some(&auth.username))
         })
         .and_then(|u| u.get("otpkey").and_then(|v| v.as_str()))
         .map(|s| s.to_string());

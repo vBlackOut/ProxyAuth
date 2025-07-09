@@ -18,7 +18,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use totp_rs::{Algorithm, TOTP};
 use tracing::{info, warn};
 
-
 pub fn verify_password(input: &str, stored_hash: &str) -> bool {
     match PasswordHash::new(stored_hash) {
         Ok(parsed) => Argon2::default()
@@ -34,20 +33,20 @@ pub fn generate_random_string(len: usize) -> String {
     let mut rng = OsRng;
 
     let base: Vec<u8> = (0..len)
-    .map(|_| *charset.choose(&mut rng).unwrap())
-    .collect();
+        .map(|_| *charset.choose(&mut rng).unwrap())
+        .collect();
 
     let now = Utc::now().timestamp() as u64;
     let shift: u8 = (now ^ (now >> 3) ^ (now << 1)).wrapping_rem(97) as u8;
 
     let random_char: Vec<u8> = base
-    .into_iter()
-    .map(|byte| {
-        let idx = charset.iter().position(|&c| c == byte).unwrap_or(0);
-        let new_idx = (idx as u8 + shift) as usize % charset.len();
-        charset[new_idx]
-    })
-    .collect();
+        .into_iter()
+        .map(|byte| {
+            let idx = charset.iter().position(|&c| c == byte).unwrap_or(0);
+            let new_idx = (idx as u8 + shift) as usize % charset.len();
+            charset[new_idx]
+        })
+        .collect();
 
     let mut full_input = random_char.clone();
     full_input.extend_from_slice(&now.to_le_bytes());
@@ -57,12 +56,19 @@ pub fn generate_random_string(len: usize) -> String {
     hex::encode(hash.as_bytes())
 }
 
-fn get_expiry_with_timezone(config: Arc<AppConfig>, optional_timestamp: Option<i64>) -> DateTime<Tz> {
+fn get_expiry_with_timezone(
+    config: Arc<AppConfig>,
+    optional_timestamp: Option<i64>,
+) -> DateTime<Tz> {
     let tz: Tz = config.timezone.parse().expect("Invalid timezone in config");
 
     let utc_now = optional_timestamp
-    .map(|ts| Utc.timestamp_opt(ts, 0).single().expect("Invalid timestamp"))
-    .unwrap_or_else(Utc::now);
+        .map(|ts| {
+            Utc.timestamp_opt(ts, 0)
+                .single()
+                .expect("Invalid timestamp")
+        })
+        .unwrap_or_else(Utc::now);
 
     let local_time = utc_now.with_timezone(&tz);
     local_time + Duration::seconds(config.token_expiry_seconds)
@@ -84,96 +90,96 @@ pub async fn auth(
             user.username == auth.username && verify_password(&auth.password, &user.password)
         })
         .map(|(i, _)| i)
-        {
-            let user = &data.config.users[index_user];
+    {
+        let user = &data.config.users[index_user];
 
-            // totp method
-            if data.config.login_via_otp {
-                let totp_code = match &auth.totp_code {
-                    Some(code) => code.trim(),
-                    None => {
-                        warn!("Missing TOTP code for user {}", user.username);
-                        return HttpResponse::Unauthorized()
+        // totp method
+        if data.config.login_via_otp {
+            let totp_code = match &auth.totp_code {
+                Some(code) => code.trim(),
+                None => {
+                    warn!("Missing TOTP code for user {}", user.username);
+                    return HttpResponse::Unauthorized()
                         .append_header(("server", "ProxyAuth"))
                         .body("Missing TOTP code");
-                    }
-                };
+                }
+            };
 
-                let totp_key = match user.otpkey.as_deref() {
-                    Some(key) => key,
-                    None => {
-                        warn!("Missing TOTP secret for user {}", user.username);
-                        return HttpResponse::InternalServerError()
+            let totp_key = match user.otpkey.as_deref() {
+                Some(key) => key,
+                None => {
+                    warn!("Missing TOTP secret for user {}", user.username);
+                    return HttpResponse::InternalServerError()
                         .append_header(("server", "ProxyAuth"))
                         .body("Missing TOTP secret");
-                    }
-                };
+                }
+            };
 
-                let decoded_secret =
+            let decoded_secret =
                 match base32::decode(base32::Alphabet::RFC4648 { padding: false }, totp_key) {
                     Some(bytes) => bytes,
                     None => {
                         warn!("Invalid base32 TOTP secret for user {}", user.username);
                         return HttpResponse::InternalServerError()
-                        .append_header(("server", "ProxyAuth"))
-                        .body("Internal TOTP error");
+                            .append_header(("server", "ProxyAuth"))
+                            .body("Internal TOTP error");
                     }
                 };
 
-                let totp = TOTP::new(Algorithm::SHA512, 6, 0, 30, decoded_secret)
+            let totp = TOTP::new(Algorithm::SHA512, 6, 0, 30, decoded_secret)
                 .expect("TOTP creation failed");
 
-                let now = SystemTime::now()
+            let now = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
                 .unwrap()
                 .as_secs();
-                let generated_code = totp.generate(now);
+            let generated_code = totp.generate(now);
 
-                let is_valid = generated_code == totp_code;
+            let is_valid = generated_code == totp_code;
 
-                if !is_valid {
-                    warn!("Invalid TOTP code for user {}", user.username);
-                    return HttpResponse::Unauthorized()
+            if !is_valid {
+                warn!("Invalid TOTP code for user {}", user.username);
+                return HttpResponse::Unauthorized()
                     .append_header(("server", "ProxyAuth"))
                     .body("Invalid TOTP code");
-                }
             }
+        }
 
-            let expiry = get_expiry_with_timezone(data.config.clone(), None);
+        let expiry = get_expiry_with_timezone(data.config.clone(), None);
 
-            let id_token = generate_random_string(48);
+        let id_token = generate_random_string(48);
 
-            let expiry_ts = expiry.naive_utc().timestamp().to_string();
-            let expires_at_str = expiry.format("%Y-%m-%d %H:%M:%S").to_string();
+        let expiry_ts = expiry.naive_utc().timestamp().to_string();
+        let expires_at_str = expiry.format("%Y-%m-%d %H:%M:%S").to_string();
 
-            let token = generate_token(&auth.username, &data.config, &expiry_ts, &id_token);
+        let token = generate_token(&auth.username, &data.config, &expiry_ts, &id_token);
 
-            let key = derive_key_from_secret(&data.config.secret);
+        let key = derive_key_from_secret(&data.config.secret);
 
-            let cipher_token = format!(
-                "{}|{}|{}|{}",
-                calcul_cipher(token.clone()),
-                expiry_ts,
-                index_user,
-                id_token
-            );
+        let cipher_token = format!(
+            "{}|{}|{}|{}",
+            calcul_cipher(token.clone()),
+            expiry_ts,
+            index_user,
+            id_token
+        );
 
-            let token_encrypt = encrypt(&cipher_token, &key);
+        let token_encrypt = encrypt(&cipher_token, &key);
 
-            info!(
-                "[{}] new token generated for user {} expirated at {}",
-                ip, user.username, expires_at_str
-            );
-            HttpResponse::Ok()
+        info!(
+            "[{}] new token generated for user {} expirated at {}",
+            ip, user.username, expires_at_str
+        );
+        HttpResponse::Ok()
             .append_header(("server", "ProxyAuth"))
             .json(serde_json::json!({
                 "token": token_encrypt,
                 "expires_at": expires_at_str,
             }))
-        } else {
-            warn!("Invalid credential for enter user {}.", auth.username);
-            return HttpResponse::Unauthorized()
+    } else {
+        warn!("Invalid credential for enter user {}.", auth.username);
+        return HttpResponse::Unauthorized()
             .append_header(("server", "ProxyAuth"))
             .body("Invalid credentials");
-        }
+    }
 }
