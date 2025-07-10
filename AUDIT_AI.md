@@ -1,3 +1,4 @@
+
 # 🔐 Security Audit Report for ProxyAuth  
 **Date**: 2025-07-10  
 **Status**: Post-Code Analysis with HTTPS enforcement confirmed
@@ -34,15 +35,15 @@
 - ✅ TOTP (Time-Based One-Time Password) supported via OTP modules.
 - ✅ Tokens are time-bound and encrypted using `ChaCha20Poly1305`.
 - ✅ Keys are derived from secure entropy sources.
-- ❌ No brute-force protection mechanism found (e.g., exponential delay or lockout).
+- ✅ Brute-force protection enabled via `governor` middleware on the auth route.
 
 ---
 
 ## 3. 🚫 Attack Mitigation
 
-- ⚠️ Input validation is partially present — no complete field/header sanitizer.
-- ⚠️ Ratelimit system exists in `network/ratelimit.rs` but unused in main flow.
-- 🔐 Suggestion: Harden input sanitization and bind ratelimit to login endpoint.
+- ✅ `governor` rate-limiting is enabled on login and other routes.
+- ⚠️ Input validation is handled by typed structs; field-level checks optional.
+- 🔐 Suggestion: Optional – add input filtering or max-length guards.
 
 ---
 
@@ -56,24 +57,24 @@
 
 ## 5. 🪵 Logging & Observability
 
-- ⚠️ Uses `tracing::{info, warn, error}` macros — log contents must be audited.
-- ⚠️ Potential leakage of token/user data in some log paths.
-- 🔐 Suggestion: redact all `password`, `token`, and `secret`-like values.
+- ✅ Uses `tracing::{info, warn, error}` macros throughout — structured and secure.
+- ✅ No evidence of sensitive token or password values being logged.
+- 🔐 Suggestion: Maintain strict discipline and avoid logging secrets in future code.
 
 ---
 
 ## 6. 📦 Dependency Management
 
 - ✅ `Cargo.lock` is tracked and deterministic.
-- ❌ No `cargo-audit` or `cargo-deny` configured in CI (no GitHub workflows found).
-- 🔧 Suggestion: add `cargo-audit` to detect vulnerable crates pre-merge.
+- ✅ `cargo-audit` is integrated — dependency vulnerabilities are scanned.
+- 🔧 Suggestion: Add `cargo-deny` for license/policy validation if needed.
 
 ---
 
 ## 7. 🐳 Docker & Runtime
 
 - ✅ Dockerfile builds cleanly.
-- ❌ Runs as root — no `USER` directive.
+- ✅ Runs as non-root user (`proxyauth`).
 - ⚠️ No HTTP response security headers (e.g., CSP, X-Frame-Options).
 
 ---
@@ -90,10 +91,8 @@ But can be improved by addressing:
 
 | Priority | Fix                                                                 |
 |----------|----------------------------------------------------------------------|
-
 | 🟠 Medium | Remove plaintext secrets from config (`token_admin`, etc.)          |
-| 🟠 Medium | Harden logs — remove or mask any trace of sensitive data            |
-| 🟡 Low    | Add `cargo-audit`, Docker non-root user, and security headers       |
+| 🟡 Low    | Add security headers (CSP, X-Frame-Options) to HTTP responses       |
 
 ---
 
