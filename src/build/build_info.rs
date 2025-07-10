@@ -16,7 +16,6 @@ pub struct BuildInfo {
 }
 
 fn load_from_env() -> BuildInfo {
-
     let shuffled = SHUFFLED_ORDER.join(",");
 
     BuildInfo {
@@ -61,7 +60,6 @@ pub fn update_build_info(input: &str) -> Result<(), String> {
     update(build_info);
     Ok(())
 }
-
 
 impl BuildInfo {
     pub fn to_string(&self) -> String {

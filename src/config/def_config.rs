@@ -44,7 +44,6 @@ pub fn ensure_running_as_root() {
     }
 }
 
-
 fn is_alpine() -> bool {
     if let Ok(content) = fs::read_to_string("/etc/os-release") {
         content.to_lowercase().contains("alpine")

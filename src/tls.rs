@@ -9,8 +9,12 @@ pub fn check_port(addr: &str) -> bool {
 }
 
 pub fn load_rustls_config() -> rustls::ServerConfig {
-    let cert_file = &mut BufReader::new(File::open("/etc/proxyauth/certs/cert.pem").expect("Cannot open certificate file"));
-    let key_file = &mut BufReader::new(File::open("/etc/proxyauth/certs/key.pem").expect("Cannot open key file"));
+    let cert_file = &mut BufReader::new(
+        File::open("/etc/proxyauth/certs/cert.pem").expect("Cannot open certificate file"),
+    );
+    let key_file = &mut BufReader::new(
+        File::open("/etc/proxyauth/certs/key.pem").expect("Cannot open key file"),
+    );
 
     let cert_chain = certs(cert_file)
         .expect("Cannot read certificates")
