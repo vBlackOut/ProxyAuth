@@ -1,9 +1,10 @@
 use crate::AppState;
 use crate::adm::method_otp::generate_otpauth_uri;
 use crate::config::config::add_otpkey;
-use crate::token::auth::verify_password;
+use crate::token::auth::{is_ip_allowed, verify_password};
 use actix_web::{HttpRequest, HttpResponse, Responder, web};
 use serde::{Deserialize, Serialize};
+use tracing::warn;
 use totp_rs::Algorithm;
 
 #[derive(Deserialize)]
@@ -23,6 +24,11 @@ pub async fn get_otpauth_uri(
     body: web::Bytes,
     data: web::Data<AppState>,
 ) -> impl Responder {
+
+    let ip = req.peer_addr()
+    .map(|addr| addr.ip().to_string())
+    .unwrap_or_else(|| "0.0.0.0".to_string());
+
     let content_type = req
         .headers()
         .get("content-type")
@@ -54,6 +60,13 @@ pub async fn get_otpauth_uri(
     }
 
     let user = user.unwrap();
+
+    if !is_ip_allowed(&ip, user) {
+        warn!("[{}] Access denied: IP not allowed for user {}", ip, user.username);
+        return HttpResponse::Forbidden()
+        .append_header(("server", "ProxyAuth"))
+        .body("Access denied");
+    }
 
     if user.otpkey.is_none() {
         add_otpkey("/etc/proxyauth/config/config.json", &user.username);

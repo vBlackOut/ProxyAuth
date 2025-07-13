@@ -111,10 +111,9 @@ pub async fn auth(
     {
         let user = &data.config.users[index_user];
 
-        if is_ip_allowed(&ip, &user) {
-        } else {
+        if !is_ip_allowed(&ip, &user) {
             warn!("[{}] Access ip denied for user {}", ip, user.username);
-            return HttpResponse::Unauthorized()
+            return HttpResponse::Forbidden()
                 .append_header(("server", "ProxyAuth"))
                 .body("Access denied");
         }
