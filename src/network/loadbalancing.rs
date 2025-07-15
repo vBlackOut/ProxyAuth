@@ -4,9 +4,8 @@ use std::time::{Duration, Instant};
 
 use crate::AppConfig;
 use crate::config::config::BackendConfig;
+use ahash::{AHashMap, AHashSet, RandomState};
 use dashmap::DashMap;
-use fxhash::FxBuildHasher;
-use fxhash::FxHashSet;
 use hyper::body::to_bytes;
 use hyper::{Body, Client, Method, Request, Response, Uri};
 use hyper_proxy::{Intercept, Proxy, ProxyConnector};
@@ -30,17 +29,15 @@ pub fn load_config(path: &str) -> AppConfig {
     serde_yaml::from_str(&content).expect("Invalid YAML format")
 }
 
-type FxDashMap<K, V> = DashMap<K, V, FxBuildHasher>;
+type AHasherDashMap<K, V> = DashMap<K, V, RandomState>;
 type DefaultClient = Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>, Body>;
 type ProxyClient =
     Client<ProxyConnector<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>, Body>;
 
-static CLIENT_POOL: Lazy<FxDashMap<String, DefaultClient>> = Lazy::new(FxDashMap::default);
-static PROXY_CLIENT_POOL: Lazy<FxDashMap<(String, String), ProxyClient>> =
-    Lazy::new(FxDashMap::default);
-static LAST_GOOD_BACKEND: Lazy<FxDashMap<&'static str, (String, Instant)>> =
-    Lazy::new(FxDashMap::default);
-static BACKEND_COOLDOWN: Lazy<FxDashMap<String, CooldownEntry>> = Lazy::new(FxDashMap::default);
+static CLIENT_POOL: Lazy<AHasherDashMap<String, DefaultClient>> = Lazy::new(Default::default);
+static PROXY_CLIENT_POOL: Lazy<AHasherDashMap<(String, String), ProxyClient>> = Lazy::new(Default::default);
+static LAST_GOOD_BACKEND: Lazy<AHasherDashMap<&'static str, (String, Instant)>> = Lazy::new(Default::default);
+static BACKEND_COOLDOWN: Lazy<AHasherDashMap<String, CooldownEntry>> = Lazy::new(Default::default);
 static ROUND_ROBIN_COUNTER: Lazy<AtomicUsize> = Lazy::new(|| AtomicUsize::new(0));
 
 struct CooldownEntry {
@@ -126,7 +123,7 @@ pub async fn forward_failover(
     }
 
     let start_index = ROUND_ROBIN_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let mut already_checked = FxHashSet::default();
+    let mut already_checked = AHashSet::default();
 
     for i in 0..weighted_backends.len() {
         let index = (start_index + i) % weighted_backends.len();
