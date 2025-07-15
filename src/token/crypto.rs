@@ -1,4 +1,5 @@
 use crate::token::security::{get_build_rand, get_build_seed2};
+use blake3;
 use base64::{Engine as _, engine::general_purpose};
 use chacha20poly1305::aead::generic_array::GenericArray;
 use chacha20poly1305::aead::generic_array::typenum::Unsigned;
@@ -14,18 +15,18 @@ use std::fmt::Write;
 type HmacSha256 = Hmac<Sha256>;
 
 pub fn derive_key_from_secret(secret: &str) -> [u8; 32] {
+
     let key_u64 = get_build_rand();
-    let key = key_u64.to_be_bytes();
+    let mut key = [0u8; 32];
+    key[..8].copy_from_slice(&key_u64.to_be_bytes());
 
-    let mut mac = <HmacSha256 as hmac::digest::KeyInit>::new_from_slice(&key)
-        .expect("HMAC can take key of any size");
+    let mut hasher = blake3::Hasher::new_keyed(&key);
 
-    mac.update(secret.as_bytes());
-    let result = mac.finalize().into_bytes();
+    hasher.update(secret.as_bytes());
 
-    let mut derived_key = [0u8; 32];
-    derived_key.copy_from_slice(&result[..]);
-    derived_key
+    let hash_output = hasher.finalize();
+
+    *hash_output.as_bytes()
 }
 
 pub fn encrypt(cleartext: &str, key: &[u8]) -> String {
@@ -127,25 +128,22 @@ pub fn calcul_cipher(hashdata: String) -> String {
     let hash_split = split_hash(hashdata, 10);
     let factor = get_build_seed2();
 
-    let mut hash_cypher = "".to_string();
-    let totalhash_iter = hash_split.iter().count();
+    let mut hash_cypher = String::new();
+    let totalhash_iter = hash_split.len();
 
     for (i, hash) in hash_split.iter().enumerate() {
         let transformed = process_string(hash, factor);
 
         if i == totalhash_iter - 1 {
-            hash_cypher += &format!("-{}::{}", &transformed, factor).to_string();
+            hash_cypher += &format!("-{}", transformed);
         } else if i >= 1 {
-            hash_cypher += &format!("-{}", &transformed).to_string();
+            hash_cypher += &format!("-{}", transformed);
         } else {
-            hash_cypher += &format!("{}", &transformed).to_string();
+            hash_cypher += &transformed;
         }
     }
 
-    let mut hashed = Sha256::new();
-    hashed.update(hash_cypher.as_bytes());
-
-    format!("{:x}", hashed.finalize())
+    blake3::hash(hash_cypher.as_bytes()).to_hex().to_string()
 }
 
 pub fn calcul_factorhash(hashdata: String) -> String {
@@ -158,7 +156,7 @@ pub fn calcul_factorhash(hashdata: String) -> String {
         if i == 0 {
             write!(hash_cypher, "{}", transformed).unwrap();
         } else if i == hash_split.len() - 1 {
-            write!(hash_cypher, "-{}::{}", transformed, get_build_seed2()).unwrap();
+            write!(hash_cypher, "-{}", transformed).unwrap();
         } else {
             write!(hash_cypher, "-{}", transformed).unwrap();
         }
