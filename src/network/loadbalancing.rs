@@ -123,7 +123,7 @@ pub async fn forward_failover(
     }
 
     let start_index = ROUND_ROBIN_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let mut already_checked = AHashSet::default();
+    let mut already_checked = AHashSet::with_capacity(backends.len());
 
     for i in 0..weighted_backends.len() {
         let index = (start_index + i) % weighted_backends.len();
