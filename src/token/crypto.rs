@@ -1,3 +1,4 @@
+use ahash::AHashMap;
 use crate::token::security::{get_build_rand, get_build_seed2};
 use blake3;
 use base64::{Engine as _, engine::general_purpose};
@@ -8,25 +9,37 @@ use chacha20poly1305::{
     aead::{Aead, KeyInit, OsRng},
 };
 use data_encoding::BASE64;
-use hmac::{Hmac, Mac};
+use hmac::Mac;
 use sha2::{Digest, Sha256};
 use std::fmt::Write;
+use std::sync::Mutex;
+use once_cell::sync::Lazy;
 
-type HmacSha256 = Hmac<Sha256>;
+static DERIVED_KEYS: Lazy<Mutex<AHashMap<String, [u8; 32]>>> = Lazy::new(|| Mutex::new(AHashMap::new()));
 
 pub fn derive_key_from_secret(secret: &str) -> [u8; 32] {
+    {
+        let cache = DERIVED_KEYS.lock().unwrap();
+        if let Some(cached) = cache.get(secret) {
+            return *cached;
+        }
+    }
 
     let key_u64 = get_build_rand();
     let mut key = [0u8; 32];
     key[..8].copy_from_slice(&key_u64.to_be_bytes());
 
     let mut hasher = blake3::Hasher::new_keyed(&key);
-
     hasher.update(secret.as_bytes());
-
     let hash_output = hasher.finalize();
+    let derived = *hash_output.as_bytes();
 
-    *hash_output.as_bytes()
+    DERIVED_KEYS
+    .lock()
+    .unwrap()
+    .insert(secret.to_string(), derived);
+
+    derived
 }
 
 pub fn encrypt(cleartext: &str, key: &[u8]) -> String {

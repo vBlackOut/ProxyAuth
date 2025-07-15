@@ -6,7 +6,6 @@ use crate::token::crypto::{calcul_factorhash, decrypt, derive_key_from_secret};
 use actix_web::web;
 use blake3;
 use chrono::{Duration, TimeZone, Timelike, Utc};
-use hex;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::OnceLock;
