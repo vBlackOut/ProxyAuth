@@ -1,4 +1,5 @@
 use std::fs;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
@@ -30,13 +31,15 @@ pub fn load_config(path: &str) -> AppConfig {
 }
 
 type AHasherDashMap<K, V> = DashMap<K, V, RandomState>;
-type DefaultClient = Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>, Body>;
-type ProxyClient =
-    Client<ProxyConnector<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>, Body>;
-
-static CLIENT_POOL: Lazy<AHasherDashMap<String, DefaultClient>> = Lazy::new(Default::default);
-static PROXY_CLIENT_POOL: Lazy<AHasherDashMap<(String, String), ProxyClient>> = Lazy::new(Default::default);
-static LAST_GOOD_BACKEND: Lazy<AHasherDashMap<&'static str, (String, Instant)>> = Lazy::new(Default::default);
+type ArcClient = Arc<Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>, Body>>;
+type ClientPool = DashMap<String, ArcClient, RandomState>;
+static CLIENT_POOL: Lazy<ClientPool> = Lazy::new(ClientPool::default);
+type ProxyArcClient =
+    Arc<Client<ProxyConnector<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>, Body>>;
+type ProxyClientPool = DashMap<(String, String), ProxyArcClient, RandomState>;
+static PROXY_CLIENT_POOL: Lazy<ProxyClientPool> = Lazy::new(ProxyClientPool::default);
+static LAST_GOOD_BACKEND: Lazy<AHasherDashMap<&'static str, (String, Instant)>> =
+    Lazy::new(Default::default);
 static BACKEND_COOLDOWN: Lazy<AHasherDashMap<String, CooldownEntry>> = Lazy::new(Default::default);
 static ROUND_ROBIN_COUNTER: Lazy<AtomicUsize> = Lazy::new(|| AtomicUsize::new(0));
 
@@ -52,9 +55,11 @@ const COOLDOWN_BASE: Duration = Duration::from_secs(5);
 const COOLDOWN_MAX: Duration = Duration::from_secs(10);
 const BACKEND_RESET_THRESHOLD: Duration = Duration::from_secs(5);
 
-async fn get_or_build_client(backend: &str) -> DefaultClient {
-    if let Some(client) = CLIENT_POOL.get(backend) {
-        return client.clone();
+async fn get_or_build_client(backend: &str) -> ArcClient {
+    let key = backend.trim().to_lowercase();
+
+    if let Some(client) = CLIENT_POOL.get(&key) {
+        return Arc::clone(&client);
     }
 
     let https = HttpsConnectorBuilder::new()
@@ -67,15 +72,17 @@ async fn get_or_build_client(backend: &str) -> DefaultClient {
         .pool_max_idle_per_host(200)
         .build::<_, Body>(https);
 
-    CLIENT_POOL.insert(backend.to_string(), client.clone());
-    client
+    let arc_client = Arc::new(client);
+    CLIENT_POOL.insert(key, Arc::clone(&arc_client));
+
+    arc_client
 }
 
-async fn get_or_build_client_with_proxy(proxy_addr: &str, backend: &str) -> ProxyClient {
+async fn get_or_build_client_with_proxy(proxy_addr: &str, backend: &str) -> ProxyArcClient {
     let key = (proxy_addr.to_string(), backend.to_string());
 
     if let Some(client) = PROXY_CLIENT_POOL.get(&key) {
-        return client.clone();
+        return Arc::clone(&client);
     }
 
     let proxy_uri: Uri = proxy_addr.parse().expect("Invalid proxy URI");
@@ -94,8 +101,9 @@ async fn get_or_build_client_with_proxy(proxy_addr: &str, backend: &str) -> Prox
         .pool_max_idle_per_host(200)
         .build(proxy_connector);
 
-    PROXY_CLIENT_POOL.insert(key, client.clone());
-    client
+    let arc_client = Arc::new(client);
+    PROXY_CLIENT_POOL.insert(key, Arc::clone(&arc_client));
+    arc_client
 }
 
 pub async fn forward_failover(
@@ -115,11 +123,16 @@ pub async fn forward_failover(
     let (active_backends, disabled_backends): (Vec<_>, Vec<_>) =
         backends.iter().partition(|b| b.weight != -1);
 
-    let mut weighted_backends: Vec<&BackendConfig> = Vec::new();
+    let estimated: usize = active_backends
+        .iter()
+        .map(|b| b.weight.max(1) as usize)
+        .sum();
+
+    let mut weighted_backends: Vec<&BackendConfig> = Vec::with_capacity(estimated);
+
     for backend in &active_backends {
-        for _ in 0..backend.weight.max(1) {
-            weighted_backends.push(backend);
-        }
+        let weight = backend.weight.max(1) as usize;
+        weighted_backends.extend(std::iter::repeat(backend).take(weight));
     }
 
     let start_index = ROUND_ROBIN_COUNTER.fetch_add(1, Ordering::Relaxed);
@@ -259,11 +272,11 @@ async fn try_forward_to_backend(
     let response_result = match proxy_addr {
         Some(proxy) => {
             let client = get_or_build_client_with_proxy(proxy, backend).await;
-            timeout(Duration::from_secs(10), client.request(new_req)).await
+            timeout(Duration::from_millis(1500), client.request(new_req)).await
         }
         None => {
             let client = get_or_build_client(backend).await;
-            timeout(Duration::from_secs(10), client.request(new_req)).await
+            timeout(Duration::from_millis(1500), client.request(new_req)).await
         }
     };
 
