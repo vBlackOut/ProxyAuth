@@ -1,7 +1,7 @@
-use ahash::AHashMap;
 use crate::token::security::{get_build_rand, get_build_seed2};
-use blake3;
+use ahash::AHashMap;
 use base64::{Engine as _, engine::general_purpose};
+use blake3;
 use chacha20poly1305::aead::generic_array::GenericArray;
 use chacha20poly1305::aead::generic_array::typenum::Unsigned;
 use chacha20poly1305::{
@@ -10,12 +10,13 @@ use chacha20poly1305::{
 };
 use data_encoding::BASE64;
 use hmac::Mac;
+use once_cell::sync::Lazy;
 use sha2::{Digest, Sha256};
 use std::fmt::Write;
 use std::sync::Mutex;
-use once_cell::sync::Lazy;
 
-static DERIVED_KEYS: Lazy<Mutex<AHashMap<String, [u8; 32]>>> = Lazy::new(|| Mutex::new(AHashMap::new()));
+static DERIVED_KEYS: Lazy<Mutex<AHashMap<String, [u8; 32]>>> =
+    Lazy::new(|| Mutex::new(AHashMap::new()));
 
 pub fn derive_key_from_secret(secret: &str) -> [u8; 32] {
     {
@@ -35,9 +36,9 @@ pub fn derive_key_from_secret(secret: &str) -> [u8; 32] {
     let derived = *hash_output.as_bytes();
 
     DERIVED_KEYS
-    .lock()
-    .unwrap()
-    .insert(secret.to_string(), derived);
+        .lock()
+        .unwrap()
+        .insert(secret.to_string(), derived);
 
     derived
 }
