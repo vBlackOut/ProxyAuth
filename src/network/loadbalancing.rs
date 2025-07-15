@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 use crate::AppConfig;
 use crate::config::config::BackendConfig;
-use ahash::{AHashMap, AHashSet, RandomState};
+use ahash::{AHashSet, RandomState};
 use dashmap::DashMap;
 use hyper::body::to_bytes;
 use hyper::{Body, Client, Method, Request, Response, Uri};
@@ -123,7 +123,7 @@ pub async fn forward_failover(
     }
 
     let start_index = ROUND_ROBIN_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let mut already_checked = AHashSet::with_capacity(backends.len());
+    let mut already_checked = AHashSet::default();
 
     for i in 0..weighted_backends.len() {
         let index = (start_index + i) % weighted_backends.len();
