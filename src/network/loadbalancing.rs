@@ -8,6 +8,7 @@ use crate::config::config::BackendConfig;
 use ahash::{AHashSet, RandomState};
 use dashmap::DashMap;
 use hyper::body::to_bytes;
+use hyper::client::HttpConnector;
 use hyper::{Body, Client, Method, Request, Response, Uri};
 use hyper_proxy::{Intercept, Proxy, ProxyConnector};
 use hyper_rustls::HttpsConnectorBuilder;
@@ -62,14 +63,19 @@ async fn get_or_build_client(backend: &str) -> ArcClient {
         return Arc::clone(&client);
     }
 
+    let mut connector = HttpConnector::new();
+    connector.set_nodelay(true);
+    connector.set_reuse_address(true);
+    connector.set_keepalive(Some(Duration::from_secs(30)));
+
     let https = HttpsConnectorBuilder::new()
-        .with_native_roots()
-        .https_or_http()
-        .enable_http1()
-        .build();
+    .with_native_roots()
+    .https_or_http()
+    .enable_http1()
+    .wrap_connector(connector);
 
     let client = Client::builder()
-        .pool_max_idle_per_host(200)
+        .pool_max_idle_per_host(1000)
         .build::<_, Body>(https);
 
     let arc_client = Arc::new(client);
@@ -88,17 +94,22 @@ async fn get_or_build_client_with_proxy(proxy_addr: &str, backend: &str) -> Prox
     let proxy_uri: Uri = proxy_addr.parse().expect("Invalid proxy URI");
     let proxy = Proxy::new(Intercept::All, proxy_uri);
 
+    let mut connector = HttpConnector::new();
+    connector.set_nodelay(true);
+    connector.set_reuse_address(true);
+    connector.set_keepalive(Some(Duration::from_secs(30)));
+
     let https = HttpsConnectorBuilder::new()
-        .with_native_roots()
-        .https_or_http()
-        .enable_http1()
-        .build();
+    .with_native_roots()
+    .https_or_http()
+    .enable_http1()
+    .wrap_connector(connector);
 
     let proxy_connector =
         ProxyConnector::from_proxy(https, proxy).expect("Failed to create proxy connector");
 
     let client = Client::builder()
-        .pool_max_idle_per_host(200)
+        .pool_max_idle_per_host(1000)
         .build(proxy_connector);
 
     let arc_client = Arc::new(client);
