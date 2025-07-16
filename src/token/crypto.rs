@@ -12,11 +12,15 @@ use data_encoding::BASE64;
 use hmac::Mac;
 use once_cell::sync::Lazy;
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 use std::fmt::Write;
-use std::sync::Mutex;
+use std::sync::{Mutex, RwLock};
 
 static DERIVED_KEYS: Lazy<Mutex<AHashMap<String, [u8; 32]>>> =
     Lazy::new(|| Mutex::new(AHashMap::new()));
+
+static LETTER_CACHE: Lazy<RwLock<HashMap<(u8, u8), char>>> = Lazy::new(|| RwLock::new(HashMap::new()));
+static NUMBER_CACHE: Lazy<RwLock<HashMap<(u64, u64), String>>> = Lazy::new(|| RwLock::new(HashMap::new()));
 
 pub fn derive_key_from_secret(secret: &str) -> [u8; 32] {
     {
@@ -95,44 +99,75 @@ fn split_hash(s: String, n: usize) -> Vec<String> {
 
 pub fn process_string(s: &str, factor: u64) -> String {
     let mut result = String::with_capacity(s.len() * 2);
-    let limited_factor = (factor % 26) as u8;
-
+    let shift = (factor % 26) as u8;
     let mut number_acc = 0u64;
-    let mut has_digits = false;
+    let mut in_digit = false;
 
-    for c in s.chars() {
-        if c.is_ascii_alphabetic() {
-            if has_digits {
-                write!(result, "{}", number_acc * factor).unwrap();
-                number_acc = 0;
-                has_digits = false;
+    for c in s.bytes() {
+        match c {
+            b'0'..=b'9' => {
+                in_digit = true;
+                number_acc = number_acc * 10 + (c - b'0') as u64;
             }
+            b'a'..=b'z' | b'A'..=b'Z' => {
+                if in_digit {
+                    let key = (number_acc, factor);
+                    let str_value = {
+                        let cache = NUMBER_CACHE.read().unwrap();
+                        cache.get(&key).cloned()
+                    }.unwrap_or_else(|| {
+                        let computed = (number_acc * factor).to_string();
+                        NUMBER_CACHE.write().unwrap().insert(key, computed.clone());
+                        computed
+                    });
+                    result.push_str(&str_value);
+                    number_acc = 0;
+                    in_digit = false;
+                }
 
-            let (_base, new_char) = if c.is_ascii_lowercase() {
-                let base = b'a';
-                let new_pos = (c as u8 - base + limited_factor) % 26 + base;
-                (base, new_pos as char)
-            } else {
-                let base = b'A';
-                let new_pos = (c as u8 - base + limited_factor) % 26 + base;
-                (base, new_pos as char)
-            };
-            result.push(new_char);
-        } else if c.is_ascii_digit() {
-            has_digits = true;
-            number_acc = number_acc * 10 + (c as u64 - b'0' as u64);
-        } else {
-            if has_digits {
-                write!(result, "{}", number_acc * factor).unwrap();
-                number_acc = 0;
-                has_digits = false;
+                let key = (c, shift);
+                let shifted = {
+                    let cache = LETTER_CACHE.read().unwrap();
+                    cache.get(&key).copied()
+                }.unwrap_or_else(|| {
+                    let base = if c.is_ascii_lowercase() { b'a' } else { b'A' };
+                    let new_c = ((c - base + shift) % 26 + base) as char;
+                    LETTER_CACHE.write().unwrap().insert(key, new_c);
+                    new_c
+                });
+                result.push(shifted);
             }
-            result.push(c);
+            _ => {
+                if in_digit {
+                    let key = (number_acc, factor);
+                    let str_value = {
+                        let cache = NUMBER_CACHE.read().unwrap();
+                        cache.get(&key).cloned()
+                    }.unwrap_or_else(|| {
+                        let computed = (number_acc * factor).to_string();
+                        NUMBER_CACHE.write().unwrap().insert(key, computed.clone());
+                        computed
+                    });
+                    result.push_str(&str_value);
+                    number_acc = 0;
+                    in_digit = false;
+                }
+                result.push(c as char);
+            }
         }
     }
 
-    if has_digits {
-        write!(result, "{}", number_acc * factor).unwrap();
+    if in_digit {
+        let key = (number_acc, factor);
+        let str_value = {
+            let cache = NUMBER_CACHE.read().unwrap();
+            cache.get(&key).cloned()
+        }.unwrap_or_else(|| {
+            let computed = (number_acc * factor).to_string();
+            NUMBER_CACHE.write().unwrap().insert(key, computed.clone());
+            computed
+        });
+        result.push_str(&str_value);
     }
 
     result
