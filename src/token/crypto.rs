@@ -19,8 +19,10 @@ use std::sync::{Mutex, RwLock};
 static DERIVED_KEYS: Lazy<Mutex<AHashMap<String, [u8; 32]>>> =
     Lazy::new(|| Mutex::new(AHashMap::new()));
 
-static LETTER_CACHE: Lazy<RwLock<AHashMap<(u8, u8), char>>> = Lazy::new(|| RwLock::new(AHashMap::new()));
-static NUMBER_CACHE: Lazy<RwLock<AHashMap<(u64, u64), String>>> = Lazy::new(|| RwLock::new(AHashMap::new()));
+static LETTER_CACHE: Lazy<RwLock<AHashMap<(u8, u8), char>>> =
+    Lazy::new(|| RwLock::new(AHashMap::new()));
+static NUMBER_CACHE: Lazy<RwLock<AHashMap<(u64, u64), String>>> =
+    Lazy::new(|| RwLock::new(AHashMap::new()));
 
 pub fn derive_key_from_secret(secret: &str) -> [u8; 32] {
     {
@@ -115,7 +117,8 @@ pub fn process_string(s: &str, factor: u64) -> String {
                     let value = {
                         let cache = NUMBER_CACHE.read().unwrap();
                         cache.get(&key).cloned()
-                    }.unwrap_or_else(|| {
+                    }
+                    .unwrap_or_else(|| {
                         let computed = (number_acc * factor).to_string();
                         NUMBER_CACHE.write().unwrap().insert(key, computed.clone());
                         computed
@@ -130,7 +133,8 @@ pub fn process_string(s: &str, factor: u64) -> String {
                 let shifted = {
                     let cache = LETTER_CACHE.read().unwrap();
                     cache.get(&key).copied()
-                }.unwrap_or_else(|| {
+                }
+                .unwrap_or_else(|| {
                     let base = if c.is_ascii_lowercase() { b'a' } else { b'A' };
                     let new_char = ((c - base + shift) % 26 + base) as char;
                     LETTER_CACHE.write().unwrap().insert(key, new_char);
@@ -145,7 +149,8 @@ pub fn process_string(s: &str, factor: u64) -> String {
                     let value = {
                         let cache = NUMBER_CACHE.read().unwrap();
                         cache.get(&key).cloned()
-                    }.unwrap_or_else(|| {
+                    }
+                    .unwrap_or_else(|| {
                         let computed = (number_acc * factor).to_string();
                         NUMBER_CACHE.write().unwrap().insert(key, computed.clone());
                         computed
@@ -166,7 +171,8 @@ pub fn process_string(s: &str, factor: u64) -> String {
         let value = {
             let cache = NUMBER_CACHE.read().unwrap();
             cache.get(&key).cloned()
-        }.unwrap_or_else(|| {
+        }
+        .unwrap_or_else(|| {
             let computed = (number_acc * factor).to_string();
             NUMBER_CACHE.write().unwrap().insert(key, computed.clone());
             computed

@@ -69,10 +69,10 @@ async fn get_or_build_client(backend: &str) -> ArcClient {
     connector.set_keepalive(Some(Duration::from_secs(30)));
 
     let https = HttpsConnectorBuilder::new()
-    .with_native_roots()
-    .https_or_http()
-    .enable_http1()
-    .wrap_connector(connector);
+        .with_native_roots()
+        .https_or_http()
+        .enable_http1()
+        .wrap_connector(connector);
 
     let client = Client::builder()
         .pool_max_idle_per_host(1000)
@@ -100,10 +100,10 @@ async fn get_or_build_client_with_proxy(proxy_addr: &str, backend: &str) -> Prox
     connector.set_keepalive(Some(Duration::from_secs(30)));
 
     let https = HttpsConnectorBuilder::new()
-    .with_native_roots()
-    .https_or_http()
-    .enable_http1()
-    .wrap_connector(connector);
+        .with_native_roots()
+        .https_or_http()
+        .enable_http1()
+        .wrap_connector(connector);
 
     let proxy_connector =
         ProxyConnector::from_proxy(https, proxy).expect("Failed to create proxy connector");

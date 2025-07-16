@@ -81,12 +81,12 @@ fn get_expiry_with_timezone(
     let tz: Tz = config.timezone.parse().expect("Invalid timezone in config");
 
     let utc_now = optional_timestamp
-    .map(|ts| {
-        Utc.timestamp_opt(ts, 0)
-        .single()
-        .expect("Invalid timestamp")
-    })
-    .unwrap_or_else(Utc::now);
+        .map(|ts| {
+            Utc.timestamp_opt(ts, 0)
+                .single()
+                .expect("Invalid timestamp")
+        })
+        .unwrap_or_else(Utc::now);
 
     let utc_expiry = utc_now + Duration::seconds(config.token_expiry_seconds);
     utc_expiry.with_timezone(&tz)
@@ -99,12 +99,12 @@ pub fn get_expiry_with_timezone_format(
     let tz: Tz = config.timezone.parse().expect("Invalid timezone in config");
 
     let utc_now = optional_timestamp
-    .map(|ts| {
-        Utc.timestamp_opt(ts, 0)
-        .single()
-        .expect("Invalid timestamp")
-    })
-    .unwrap_or_else(Utc::now);
+        .map(|ts| {
+            Utc.timestamp_opt(ts, 0)
+                .single()
+                .expect("Invalid timestamp")
+        })
+        .unwrap_or_else(Utc::now);
 
     let utc_expiry = utc_now + Duration::seconds(config.token_expiry_seconds);
 
@@ -112,7 +112,6 @@ pub fn get_expiry_with_timezone_format(
 
     local_expiry.format("%Y-%m-%d %H:%M:%S").to_string()
 }
-
 
 pub async fn auth(
     req: HttpRequest,
