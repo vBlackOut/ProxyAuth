@@ -309,7 +309,6 @@ async fn main() -> std::io::Result<()> {
             .workers((config.worker as u8).into())
             .keep_alive(Duration::from_secs(5))
             .backlog(65535)
-            .max_connections(200_000)
             .listen_rustls_0_21(listener, load_rustls_config())?
             .run()
             .await
@@ -348,7 +347,6 @@ async fn main() -> std::io::Result<()> {
             .workers((config.worker as u8).into())
             .keep_alive(Duration::from_secs(5))
             .backlog(65535)
-            .max_connections(200_000)
             .listen_rustls_0_21(listener, load_rustls_config())?
             .run()
             .await
@@ -397,7 +395,6 @@ async fn main() -> std::io::Result<()> {
             .workers((config.worker as u8).into())
             .keep_alive(Duration::from_secs(5))
             .backlog(65535)
-            .max_connections(200_000)
             .listen_rustls_0_21(listener, load_rustls_config())?
             .run()
             .await
@@ -422,7 +419,6 @@ async fn main() -> std::io::Result<()> {
             .workers((config.worker as u8).into())
             .keep_alive(Duration::from_secs(5))
             .backlog(65535)
-            .max_connections(200_000)
             .listen_rustls_0_21(listener, load_rustls_config())?
             .run()
             .await
@@ -447,7 +443,6 @@ async fn main() -> std::io::Result<()> {
             .workers((config.worker as u8).into())
             .keep_alive(Duration::from_secs(5))
             .backlog(65535)
-            .max_connections(200_000)
             .listen_rustls_0_21(listener, load_rustls_config())?
             .run()
             .await

@@ -81,16 +81,38 @@ fn get_expiry_with_timezone(
     let tz: Tz = config.timezone.parse().expect("Invalid timezone in config");
 
     let utc_now = optional_timestamp
-        .map(|ts| {
-            Utc.timestamp_opt(ts, 0)
-                .single()
-                .expect("Invalid timestamp")
-        })
-        .unwrap_or_else(Utc::now);
+    .map(|ts| {
+        Utc.timestamp_opt(ts, 0)
+        .single()
+        .expect("Invalid timestamp")
+    })
+    .unwrap_or_else(Utc::now);
 
-    let local_time = utc_now.with_timezone(&tz);
-    local_time + Duration::seconds(config.token_expiry_seconds)
+    let utc_expiry = utc_now + Duration::seconds(config.token_expiry_seconds);
+    utc_expiry.with_timezone(&tz)
 }
+
+pub fn get_expiry_with_timezone_format(
+    config: Arc<AppConfig>,
+    optional_timestamp: Option<i64>,
+) -> String {
+    let tz: Tz = config.timezone.parse().expect("Invalid timezone in config");
+
+    let utc_now = optional_timestamp
+    .map(|ts| {
+        Utc.timestamp_opt(ts, 0)
+        .single()
+        .expect("Invalid timestamp")
+    })
+    .unwrap_or_else(Utc::now);
+
+    let utc_expiry = utc_now + Duration::seconds(config.token_expiry_seconds);
+
+    let local_expiry: DateTime<Tz> = utc_expiry.with_timezone(&tz);
+
+    local_expiry.format("%Y-%m-%d %H:%M:%S").to_string()
+}
+
 
 pub async fn auth(
     req: HttpRequest,
@@ -174,8 +196,8 @@ pub async fn auth(
 
         let id_token = generate_random_string(48);
 
-        let expiry_ts = expiry.naive_utc().and_utc().timestamp().to_string();
-        let expires_at_str = expiry.format("%Y-%m-%d %H:%M:%S").to_string();
+        let expiry_ts = expiry.with_timezone(&Utc).timestamp().to_string();
+        let expires_at_str = get_expiry_with_timezone_format(data.config.clone(), None);
 
         let token = generate_token(&auth.username, &data.config, &expiry_ts, &id_token);
 

@@ -19,8 +19,8 @@ use std::sync::{Mutex, RwLock};
 static DERIVED_KEYS: Lazy<Mutex<AHashMap<String, [u8; 32]>>> =
     Lazy::new(|| Mutex::new(AHashMap::new()));
 
-static LETTER_CACHE: Lazy<RwLock<HashMap<(u8, u8), char>>> = Lazy::new(|| RwLock::new(HashMap::new()));
-static NUMBER_CACHE: Lazy<RwLock<HashMap<(u64, u64), String>>> = Lazy::new(|| RwLock::new(HashMap::new()));
+static LETTER_CACHE: Lazy<RwLock<AHashMap<(u8, u8), char>>> = Lazy::new(|| RwLock::new(AHashMap::new()));
+static NUMBER_CACHE: Lazy<RwLock<AHashMap<(u64, u64), String>>> = Lazy::new(|| RwLock::new(AHashMap::new()));
 
 pub fn derive_key_from_secret(secret: &str) -> [u8; 32] {
     {
@@ -99,9 +99,9 @@ fn split_hash(s: String, n: usize) -> Vec<String> {
 
 pub fn process_string(s: &str, factor: u64) -> String {
     let mut result = String::with_capacity(s.len() * 2);
-    let shift = (factor % 26) as u8;
     let mut number_acc = 0u64;
     let mut in_digit = false;
+    let shift = (factor % 26) as u8;
 
     for c in s.bytes() {
         match c {
@@ -112,7 +112,7 @@ pub fn process_string(s: &str, factor: u64) -> String {
             b'a'..=b'z' | b'A'..=b'Z' => {
                 if in_digit {
                     let key = (number_acc, factor);
-                    let str_value = {
+                    let value = {
                         let cache = NUMBER_CACHE.read().unwrap();
                         cache.get(&key).cloned()
                     }.unwrap_or_else(|| {
@@ -120,7 +120,8 @@ pub fn process_string(s: &str, factor: u64) -> String {
                         NUMBER_CACHE.write().unwrap().insert(key, computed.clone());
                         computed
                     });
-                    result.push_str(&str_value);
+
+                    result.push_str(&value);
                     number_acc = 0;
                     in_digit = false;
                 }
@@ -131,16 +132,17 @@ pub fn process_string(s: &str, factor: u64) -> String {
                     cache.get(&key).copied()
                 }.unwrap_or_else(|| {
                     let base = if c.is_ascii_lowercase() { b'a' } else { b'A' };
-                    let new_c = ((c - base + shift) % 26 + base) as char;
-                    LETTER_CACHE.write().unwrap().insert(key, new_c);
-                    new_c
+                    let new_char = ((c - base + shift) % 26 + base) as char;
+                    LETTER_CACHE.write().unwrap().insert(key, new_char);
+                    new_char
                 });
+
                 result.push(shifted);
             }
             _ => {
                 if in_digit {
                     let key = (number_acc, factor);
-                    let str_value = {
+                    let value = {
                         let cache = NUMBER_CACHE.read().unwrap();
                         cache.get(&key).cloned()
                     }.unwrap_or_else(|| {
@@ -148,10 +150,12 @@ pub fn process_string(s: &str, factor: u64) -> String {
                         NUMBER_CACHE.write().unwrap().insert(key, computed.clone());
                         computed
                     });
-                    result.push_str(&str_value);
+
+                    result.push_str(&value);
                     number_acc = 0;
                     in_digit = false;
                 }
+
                 result.push(c as char);
             }
         }
@@ -159,7 +163,7 @@ pub fn process_string(s: &str, factor: u64) -> String {
 
     if in_digit {
         let key = (number_acc, factor);
-        let str_value = {
+        let value = {
             let cache = NUMBER_CACHE.read().unwrap();
             cache.get(&key).cloned()
         }.unwrap_or_else(|| {
@@ -167,51 +171,41 @@ pub fn process_string(s: &str, factor: u64) -> String {
             NUMBER_CACHE.write().unwrap().insert(key, computed.clone());
             computed
         });
-        result.push_str(&str_value);
+
+        result.push_str(&value);
     }
 
     result
 }
 
 pub fn calcul_cipher(hashdata: String) -> String {
-    let hash_split = split_hash(hashdata, 10);
     let factor = get_build_seed2();
+    let transformed = transform_hash_parts(&hashdata, factor);
 
-    let mut hash_cypher = String::new();
-    let totalhash_iter = hash_split.len();
-
-    for (i, hash) in hash_split.iter().enumerate() {
-        let transformed = process_string(hash, factor);
-
-        if i == totalhash_iter - 1 {
-            hash_cypher += &format!("-{}", transformed);
-        } else if i >= 1 {
-            hash_cypher += &format!("-{}", transformed);
-        } else {
-            hash_cypher += &transformed;
-        }
-    }
-
-    blake3::hash(hash_cypher.as_bytes()).to_hex().to_string()
+    blake3::hash(transformed.as_bytes()).to_hex().to_string()
 }
 
 pub fn calcul_factorhash(hashdata: String) -> String {
-    let hash_split = split_hash(hashdata, 10);
+    let factor = get_build_seed2();
+    transform_hash_parts(&hashdata, factor)
+}
 
-    let mut hash_cypher = String::with_capacity(hash_split.len() * 16);
+fn transform_hash_parts(input: &str, factor: u64) -> String {
+    let parts = split_hash(input.to_string(), 10);
+    let mut out = String::with_capacity(parts.len() * 16); // estimation
+    let mut first = true;
 
-    for (i, hash) in hash_split.iter().enumerate() {
-        let transformed = process_string(hash, get_build_seed2());
-        if i == 0 {
-            write!(hash_cypher, "{}", transformed).unwrap();
-        } else if i == hash_split.len() - 1 {
-            write!(hash_cypher, "-{}", transformed).unwrap();
+    for part in parts {
+        let encoded = process_string(&part, factor);
+        if first {
+            write!(out, "{}", encoded).unwrap();
+            first = false;
         } else {
-            write!(hash_cypher, "-{}", transformed).unwrap();
+            write!(out, "-{}", encoded).unwrap();
         }
     }
 
-    hash_cypher
+    out
 }
 
 #[allow(dead_code)]
