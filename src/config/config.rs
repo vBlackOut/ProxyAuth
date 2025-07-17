@@ -133,13 +133,16 @@ pub struct AppConfig {
     pub pending_connections_limit: u32,
 
     #[serde(default = "default_socket_listen")]
-    pub socket_listen: i32,
+    pub socket_listen: u32,
 
     #[serde(default = "default_client_timeout")]
     pub client_timeout: u64,
 
     #[serde(default = "default_keep_alive")]
     pub keep_alive: u64,
+
+    #[serde(default = "default_num_instances")]
+    pub num_instances: u8,
 }
 
 impl Serialize for AppConfig {
@@ -161,6 +164,7 @@ impl Serialize for AppConfig {
         state.serialize_field("client_timeout", &self.client_timeout)?;
         state.serialize_field("keep_alive", &self.keep_alive)?;
         state.serialize_field("worker", &self.worker)?;
+        state.serialize_field("num_instances", &self.num_instances)?;
         state.serialize_field("ratelimit_auth", &self.ratelimit_auth)?;
         state.serialize_field("ratelimit_proxy", &self.ratelimit_proxy)?;
         state.serialize_field("users", &self.users)?;
@@ -212,6 +216,10 @@ fn default_keep_alive() -> u64 {
     5000
 }
 
+fn default_num_instances() -> u8 {
+    2
+}
+
 fn default_client_timeout() -> u64 {
     5000
 }
@@ -220,7 +228,7 @@ fn default_pending_connections_limit() -> u32 {
     65535
 }
 
-fn default_socket_listen() -> i32 {
+fn default_socket_listen() -> u32 {
     1024
 }
 
