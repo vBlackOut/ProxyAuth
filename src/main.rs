@@ -211,6 +211,11 @@ async fn main() -> std::io::Result<()> {
         Err(err) => warn!("Failed to decrypt keystore: {:?}", err),
     }
 
+    // config connections
+    let max_connections = config.max_connections;
+    let pending_connection_limit = config.pending_connection_limit;
+    let socket_listen = config.socket_listen;
+
     // configuration proxy ratelimit
     let requests_per_second_proxy_config = config
         .ratelimit_proxy
@@ -275,7 +280,7 @@ async fn main() -> std::io::Result<()> {
     socket.set_reuse_address(true)?;
     socket.set_reuse_port(true)?;
     socket.bind(&sock_addr.into())?;
-    socket.listen(1024)?;
+    socket.listen(socket_listen)?;
 
     let listener: TcpListener = socket.into();
 
@@ -308,7 +313,8 @@ async fn main() -> std::io::Result<()> {
             })
             .workers((config.worker as u8).into())
             .keep_alive(Duration::from_secs(5))
-            .backlog(65535)
+            .backlog(pending_connection_limit)
+            .max_connections(max_connections)
             .listen_rustls_0_21(listener, load_rustls_config())?
             .run()
             .await
@@ -346,7 +352,8 @@ async fn main() -> std::io::Result<()> {
             })
             .workers((config.worker as u8).into())
             .keep_alive(Duration::from_secs(5))
-            .backlog(65535)
+            .backlog(pending_connection_limit)
+            .max_connections(max_connections)
             .listen_rustls_0_21(listener, load_rustls_config())?
             .run()
             .await
@@ -394,7 +401,8 @@ async fn main() -> std::io::Result<()> {
             })
             .workers((config.worker as u8).into())
             .keep_alive(Duration::from_secs(5))
-            .backlog(65535)
+            .backlog(pending_connection_limit)
+            .max_connections(max_connections)
             .listen_rustls_0_21(listener, load_rustls_config())?
             .run()
             .await
@@ -418,7 +426,8 @@ async fn main() -> std::io::Result<()> {
             })
             .workers((config.worker as u8).into())
             .keep_alive(Duration::from_secs(5))
-            .backlog(65535)
+            .backlog(pending_connection_limit)
+            .max_connections(max_connections)
             .listen_rustls_0_21(listener, load_rustls_config())?
             .run()
             .await
@@ -442,7 +451,8 @@ async fn main() -> std::io::Result<()> {
             })
             .workers((config.worker as u8).into())
             .keep_alive(Duration::from_secs(5))
-            .backlog(65535)
+            .backlog(pending_connection_limit)
+            .max_connections(max_connections)
             .listen_rustls_0_21(listener, load_rustls_config())?
             .run()
             .await

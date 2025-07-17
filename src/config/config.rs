@@ -125,6 +125,15 @@ pub struct AppConfig {
 
     #[serde(default = "default_login_via_otp")]
     pub login_via_otp: bool,
+
+    #[serde(default = "default_max_connections")]
+    pub max_connections: usize,
+
+    #[serde(default = "default_pending_connection_limit")]
+    pub pending_connection_limit: u32,
+
+    #[serde(default = "default_socket_listen")]
+    pub socket_listen: i32,
 }
 
 impl Serialize for AppConfig {
@@ -140,6 +149,9 @@ impl Serialize for AppConfig {
         state.serialize_field("port", &self.port)?;
         state.serialize_field("log", &self.log)?;
         state.serialize_field("login_via_otp", &self.login_via_otp)?;
+        state.serialize_field("max_connections", &self.max_connections)?;
+        state.serialize_field("pending_connection_limit", &self.pending_connection_limit)?;
+        state.serialize_field("socket_listen", &self.socket_listen)?;
         state.serialize_field("worker", &self.worker)?;
         state.serialize_field("ratelimit_auth", &self.ratelimit_auth)?;
         state.serialize_field("ratelimit_proxy", &self.ratelimit_proxy)?;
@@ -182,6 +194,18 @@ fn default_port() -> u16 {
 
 fn default_username() -> Vec<String> {
     [].to_vec()
+}
+
+fn default_max_connections() -> usize {
+    50_000
+}
+
+fn default_pending_connection_limit() -> u32 {
+    65535
+}
+
+fn default_socket_listen() -> i32 {
+    1024
 }
 
 fn default_backends() -> Vec<BackendInput> {
