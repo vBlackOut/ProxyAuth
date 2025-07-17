@@ -1,13 +1,14 @@
 use std::fs;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use crate::AppConfig;
 use crate::config::config::BackendConfig;
+use ahash::{AHashSet, RandomState};
 use dashmap::DashMap;
-use fxhash::FxBuildHasher;
-use fxhash::FxHashSet;
 use hyper::body::to_bytes;
+use hyper::client::HttpConnector;
 use hyper::{Body, Client, Method, Request, Response, Uri};
 use hyper_proxy::{Intercept, Proxy, ProxyConnector};
 use hyper_rustls::HttpsConnectorBuilder;
@@ -30,17 +31,17 @@ pub fn load_config(path: &str) -> AppConfig {
     serde_yaml::from_str(&content).expect("Invalid YAML format")
 }
 
-type FxDashMap<K, V> = DashMap<K, V, FxBuildHasher>;
-type DefaultClient = Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>, Body>;
-type ProxyClient =
-    Client<ProxyConnector<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>, Body>;
-
-static CLIENT_POOL: Lazy<FxDashMap<String, DefaultClient>> = Lazy::new(FxDashMap::default);
-static PROXY_CLIENT_POOL: Lazy<FxDashMap<(String, String), ProxyClient>> =
-    Lazy::new(FxDashMap::default);
-static LAST_GOOD_BACKEND: Lazy<FxDashMap<&'static str, (String, Instant)>> =
-    Lazy::new(FxDashMap::default);
-static BACKEND_COOLDOWN: Lazy<FxDashMap<String, CooldownEntry>> = Lazy::new(FxDashMap::default);
+type AHasherDashMap<K, V> = DashMap<K, V, RandomState>;
+type ArcClient = Arc<Client<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>, Body>>;
+type ClientPool = DashMap<String, ArcClient, RandomState>;
+static CLIENT_POOL: Lazy<ClientPool> = Lazy::new(ClientPool::default);
+type ProxyArcClient =
+    Arc<Client<ProxyConnector<hyper_rustls::HttpsConnector<hyper::client::HttpConnector>>, Body>>;
+type ProxyClientPool = DashMap<(String, String), ProxyArcClient, RandomState>;
+static PROXY_CLIENT_POOL: Lazy<ProxyClientPool> = Lazy::new(ProxyClientPool::default);
+static LAST_GOOD_BACKEND: Lazy<AHasherDashMap<&'static str, (String, Instant)>> =
+    Lazy::new(Default::default);
+static BACKEND_COOLDOWN: Lazy<AHasherDashMap<String, CooldownEntry>> = Lazy::new(Default::default);
 static ROUND_ROBIN_COUNTER: Lazy<AtomicUsize> = Lazy::new(|| AtomicUsize::new(0));
 
 struct CooldownEntry {
@@ -55,50 +56,65 @@ const COOLDOWN_BASE: Duration = Duration::from_secs(5);
 const COOLDOWN_MAX: Duration = Duration::from_secs(10);
 const BACKEND_RESET_THRESHOLD: Duration = Duration::from_secs(5);
 
-async fn get_or_build_client(backend: &str) -> DefaultClient {
-    if let Some(client) = CLIENT_POOL.get(backend) {
-        return client.clone();
+async fn get_or_build_client(backend: &str) -> ArcClient {
+    let key = backend.trim().to_lowercase();
+
+    if let Some(client) = CLIENT_POOL.get(&key) {
+        return Arc::clone(&client);
     }
+
+    let mut connector = HttpConnector::new();
+    connector.set_nodelay(true);
+    connector.set_reuse_address(true);
+    connector.set_keepalive(Some(Duration::from_secs(30)));
 
     let https = HttpsConnectorBuilder::new()
         .with_native_roots()
         .https_or_http()
         .enable_http1()
-        .build();
+        .wrap_connector(connector);
 
     let client = Client::builder()
-        .pool_max_idle_per_host(200)
+        .pool_max_idle_per_host(1000)
         .build::<_, Body>(https);
 
-    CLIENT_POOL.insert(backend.to_string(), client.clone());
-    client
+    let arc_client = Arc::new(client);
+    CLIENT_POOL.insert(key, Arc::clone(&arc_client));
+
+    arc_client
 }
 
-async fn get_or_build_client_with_proxy(proxy_addr: &str, backend: &str) -> ProxyClient {
+async fn get_or_build_client_with_proxy(proxy_addr: &str, backend: &str) -> ProxyArcClient {
     let key = (proxy_addr.to_string(), backend.to_string());
 
     if let Some(client) = PROXY_CLIENT_POOL.get(&key) {
-        return client.clone();
+        return Arc::clone(&client);
     }
 
     let proxy_uri: Uri = proxy_addr.parse().expect("Invalid proxy URI");
     let proxy = Proxy::new(Intercept::All, proxy_uri);
 
+    let mut connector = HttpConnector::new();
+    connector.set_nodelay(true);
+    connector.set_reuse_address(true);
+    connector.set_keepalive(Some(Duration::from_secs(30)));
+
     let https = HttpsConnectorBuilder::new()
         .with_native_roots()
         .https_or_http()
         .enable_http1()
-        .build();
+        .wrap_connector(connector);
 
     let proxy_connector =
         ProxyConnector::from_proxy(https, proxy).expect("Failed to create proxy connector");
 
     let client = Client::builder()
-        .pool_max_idle_per_host(200)
+        .pool_max_idle_per_host(1000)
         .build(proxy_connector);
 
-    PROXY_CLIENT_POOL.insert(key, client.clone());
-    client
+    let arc_client = Arc::new(client);
+    PROXY_CLIENT_POOL.insert(key, Arc::clone(&arc_client));
+    arc_client
 }
 
 pub async fn forward_failover(
@@ -118,15 +134,20 @@ pub async fn forward_failover(
     let (active_backends, disabled_backends): (Vec<_>, Vec<_>) =
         backends.iter().partition(|b| b.weight != -1);
 
-    let mut weighted_backends: Vec<&BackendConfig> = Vec::new();
+    let estimated: usize = active_backends
+        .iter()
+        .map(|b| b.weight.max(1) as usize)
+        .sum();
+
+    let mut weighted_backends: Vec<&BackendConfig> = Vec::with_capacity(estimated);
+
     for backend in &active_backends {
-        for _ in 0..backend.weight.max(1) {
-            weighted_backends.push(backend);
-        }
+        let weight = backend.weight.max(1) as usize;
+        weighted_backends.extend(std::iter::repeat(backend).take(weight));
     }
 
     let start_index = ROUND_ROBIN_COUNTER.fetch_add(1, Ordering::Relaxed);
-    let mut already_checked = FxHashSet::default();
+    let mut already_checked = AHashSet::default();
 
     for i in 0..weighted_backends.len() {
         let index = (start_index + i) % weighted_backends.len();
@@ -262,11 +283,11 @@ async fn try_forward_to_backend(
     let response_result = match proxy_addr {
         Some(proxy) => {
             let client = get_or_build_client_with_proxy(proxy, backend).await;
-            timeout(Duration::from_secs(10), client.request(new_req)).await
+            timeout(Duration::from_millis(1500), client.request(new_req)).await
         }
         None => {
             let client = get_or_build_client(backend).await;
-            timeout(Duration::from_secs(10), client.request(new_req)).await
+            timeout(Duration::from_millis(1500), client.request(new_req)).await
         }
     };
 

@@ -12,13 +12,13 @@
 
 ![Security Score](https://img.shields.io/badge/SECURITY%20SCORE-92%2F100-blue?style=for-the-badge&logo=rust)
 [![Crates.io downloads](https://img.shields.io/crates/d/proxyauth?style=for-the-badge)](https://crates.io/crates/proxyauth)
-![Benchmark](https://img.shields.io/badge/benchmark-+150_000req/s-blue?style=for-the-badge&logo=rust "Benchmark proxyauth on server")
+![Benchmark](https://img.shields.io/badge/benchmark-+180_000req/s-blue?style=for-the-badge&logo=rust "Benchmark proxyauth on server")
 
 
 ProxyAuth secures backend APIs through a fast authentication gateway.
-It encrypts tokens using ChaCha20 + HMAC-SHA256, with config-defined secrets.
+It encrypts tokens using ChaCha20 + HMAC-BLAKE3, with config-defined secrets.
 It features built-in rate limiting (on proxy and auth routes) and uses Argon2 with auto-generated salts for secure password hashing.
-The service is extremely fast, handling 100,000+ requests per second under load.  
+The service is extremely fast, handling ~ 180,000+ requests per second under load.  
 
 **Project based on a other personal project (evolution): <a href="https://github.com/vBlackOut/rust_actixweb_token">rust_actixweb_token</a>
 
@@ -152,7 +152,7 @@ docker compose restart
 
 # ProxyAuth Advantages
 - Centralized access point
-- Secure tokens using CHACHA20 (HMAC SHA-256 + ROTATE)
+- Secure tokens using CHACHA20 (HMAC BLAKE3 + ROTATE)
   just define the same secret across all instances to have the same token calculations (if use the same images).
 - ~Semi-static tokens (refresh_token is only recalculated at intervals defined in the config)~
 - Tokens can be recalculated using a random exponential factor, allowing for further complexity.

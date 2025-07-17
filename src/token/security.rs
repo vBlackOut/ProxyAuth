@@ -4,8 +4,8 @@ use crate::build::build_info::get;
 use crate::timezone::check_date_token;
 use crate::token::crypto::{calcul_factorhash, decrypt, derive_key_from_secret};
 use actix_web::web;
+use blake3;
 use chrono::{Duration, TimeZone, Timelike, Utc};
-use hex;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -189,7 +189,7 @@ pub async fn validate_token(
     let token_generated = generate_token(&user.username, &config, data[1], data[3]);
     let token_hash = calcul_factorhash(token_generated);
 
-    if hex::encode(Sha256::digest(token_hash)) != token_hash_decrypt {
+    if blake3::hash(token_hash.as_bytes()).to_hex().to_string() != token_hash_decrypt {
         warn!("[{}] Invalid token", ip);
         return Err("no valid token".to_string());
     }
