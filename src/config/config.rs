@@ -70,6 +70,7 @@ pub struct User {
     pub username: String,
     pub password: String,
     pub otpkey: Option<String>, // Option<Vec<u8>>
+    pub allow: Option<Vec<String>>,
 }
 
 impl Serialize for User {
@@ -81,6 +82,7 @@ impl Serialize for User {
         state.serialize_field("username", &self.username)?;
         state.serialize_field("password", &self.password)?;
         state.serialize_field("otpkey", &self.otpkey)?;
+        state.serialize_field("allow", &self.allow)?;
         state.end()
     }
 }
