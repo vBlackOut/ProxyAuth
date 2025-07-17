@@ -9,10 +9,8 @@ use chacha20poly1305::{
     aead::{Aead, KeyInit, OsRng},
 };
 use data_encoding::BASE64;
-use hmac::Mac;
 use once_cell::sync::Lazy;
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
 use std::fmt::Write;
 use std::sync::{Mutex, RwLock};
 
