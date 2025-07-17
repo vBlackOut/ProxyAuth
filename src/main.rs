@@ -211,10 +211,12 @@ async fn main() -> std::io::Result<()> {
         Err(err) => warn!("Failed to decrypt keystore: {:?}", err),
     }
 
-    // config connections
+    // config network
     let max_connections = config.max_connections;
-    let pending_connection_limit = config.pending_connection_limit;
+    let pending_connections_limit = config.pending_connections_limit;
     let socket_listen = config.socket_listen;
+    let client_timeout = config.client_timeout;
+    let keep_alive = config.keep_alive;
 
     // configuration proxy ratelimit
     let requests_per_second_proxy_config = config
@@ -312,9 +314,10 @@ async fn main() -> std::io::Result<()> {
                     )
             })
             .workers((config.worker as u8).into())
-            .keep_alive(Duration::from_secs(5))
-            .backlog(pending_connection_limit)
+            .keep_alive(Duration::from_millis(keep_alive))
+            .backlog(pending_connections_limit)
             .max_connections(max_connections)
+            .client_request_timeout(Duration::from_millis(client_timeout))
             .listen_rustls_0_21(listener, load_rustls_config())?
             .run()
             .await
@@ -351,9 +354,10 @@ async fn main() -> std::io::Result<()> {
                     .default_service(web::to(global_proxy))
             })
             .workers((config.worker as u8).into())
-            .keep_alive(Duration::from_secs(5))
-            .backlog(pending_connection_limit)
+            .keep_alive(Duration::from_millis(keep_alive))
+            .backlog(pending_connections_limit)
             .max_connections(max_connections)
+            .client_request_timeout(Duration::from_millis(client_timeout))
             .listen_rustls_0_21(listener, load_rustls_config())?
             .run()
             .await
@@ -400,9 +404,10 @@ async fn main() -> std::io::Result<()> {
                     )
             })
             .workers((config.worker as u8).into())
-            .keep_alive(Duration::from_secs(5))
-            .backlog(pending_connection_limit)
+            .keep_alive(Duration::from_millis(keep_alive))
+            .backlog(pending_connections_limit)
             .max_connections(max_connections)
+            .client_request_timeout(Duration::from_millis(client_timeout))
             .listen_rustls_0_21(listener, load_rustls_config())?
             .run()
             .await
@@ -425,9 +430,10 @@ async fn main() -> std::io::Result<()> {
                     .default_service(web::to(global_proxy))
             })
             .workers((config.worker as u8).into())
-            .keep_alive(Duration::from_secs(5))
-            .backlog(pending_connection_limit)
+            .keep_alive(Duration::from_millis(keep_alive))
+            .backlog(pending_connections_limit)
             .max_connections(max_connections)
+            .client_request_timeout(Duration::from_millis(client_timeout))
             .listen_rustls_0_21(listener, load_rustls_config())?
             .run()
             .await
@@ -450,9 +456,10 @@ async fn main() -> std::io::Result<()> {
                     .default_service(web::to(global_proxy))
             })
             .workers((config.worker as u8).into())
-            .keep_alive(Duration::from_secs(5))
-            .backlog(pending_connection_limit)
+            .keep_alive(Duration::from_millis(keep_alive))
+            .backlog(pending_connections_limit)
             .max_connections(max_connections)
+            .client_request_timeout(Duration::from_millis(client_timeout))
             .listen_rustls_0_21(listener, load_rustls_config())?
             .run()
             .await
