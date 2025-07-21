@@ -2073,7 +2073,7 @@ dependencies = [
 
 [[package]]
 name = "proxyauth"
-version = "0.8.0"
+version = "0.8.1"
 dependencies = [
  "actix-governor",
  "actix-http",
@@ -2102,6 +2102,8 @@ dependencies = [
  "hyper-rustls",
  "hyper-tls",
  "ipnet",
+ "itoa",
+ "lazy_static",
  "memchr",
  "nix",
  "once_cell",

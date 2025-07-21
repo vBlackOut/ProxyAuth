@@ -1,9 +1,7 @@
-use std::fs;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
-use crate::AppConfig;
 use crate::config::config::BackendConfig;
 use ahash::{AHashSet, RandomState};
 use dashmap::DashMap;
@@ -23,12 +21,6 @@ pub enum ForwardError {
 
     #[error(transparent)]
     Hyper(#[from] hyper::Error),
-}
-
-#[allow(dead_code)]
-pub fn load_config(path: &str) -> AppConfig {
-    let content = fs::read_to_string(path).expect("Cannot read config file");
-    serde_yaml::from_str(&content).expect("Invalid YAML format")
 }
 
 type AHasherDashMap<K, V> = DashMap<K, V, RandomState>;
@@ -51,7 +43,7 @@ struct CooldownEntry {
 
 const BACKEND_CACHE_KEY: &str = "service";
 #[allow(dead_code)]
-const BACKEND_VALID_DURATION: Duration = Duration::from_secs(3);
+const BACKEND_VALID_DURATION: Duration = Duration::from_secs(10);
 const COOLDOWN_BASE: Duration = Duration::from_secs(5);
 const COOLDOWN_MAX: Duration = Duration::from_secs(10);
 const BACKEND_RESET_THRESHOLD: Duration = Duration::from_secs(5);
