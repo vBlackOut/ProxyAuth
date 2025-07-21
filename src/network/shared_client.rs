@@ -1,6 +1,6 @@
 use crate::config::config::AppConfig;
+use ahash::{AHashMap, RandomState};
 use dashmap::DashMap;
-use fxhash::FxBuildHasher;
 use hyper::{Body, Client, client::HttpConnector};
 use hyper_proxy::{Intercept, Proxy, ProxyConnector};
 use hyper_rustls::HttpsConnector;
@@ -9,27 +9,26 @@ use rustls::{Certificate, PrivateKey};
 use rustls::{ClientConfig, RootCertStore};
 use rustls_pemfile::{certs, pkcs8_private_keys};
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use std::{fs::File, io::BufReader};
 use webpki_roots::TLS_SERVER_ROOTS;
 
-type FxDashMap<K, V> = DashMap<K, V, FxBuildHasher>;
+type AHashDashMap<K, V> = DashMap<K, V, RandomState>;
 type HttpsClient = Client<HttpsConnector<HttpConnector>>;
-type ThreadCache = HashMap<ClientKey, HttpsClient>;
+type ThreadCache = AHashMap<ClientKey, HttpsClient>;
 
 thread_local! {
-    static THREAD_CLIENT_CACHE: RefCell<ThreadCache> = RefCell::new(HashMap::new());
+    static THREAD_CLIENT_CACHE: RefCell<ThreadCache> = RefCell::new(AHashMap::new());
 }
 
 #[allow(dead_code)]
-static CLIENT_CACHE: Lazy<FxDashMap<ClientKey, Client<HttpsConnector<HttpConnector>>>> =
-    Lazy::new(FxDashMap::default);
+static CLIENT_CACHE: Lazy<AHashDashMap<ClientKey, Client<HttpsConnector<HttpConnector>>>> =
+    Lazy::new(AHashDashMap::default);
 static CLIENT_CACHE_PROXY: Lazy<
-    FxDashMap<ClientKey, Client<ProxyConnector<HttpsConnector<HttpConnector>>>>,
-> = Lazy::new(FxDashMap::default);
+    AHashDashMap<ClientKey, Client<ProxyConnector<HttpsConnector<HttpConnector>>>>,
+> = Lazy::new(AHashDashMap::default);
 
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct ClientOptions {
@@ -54,10 +53,10 @@ impl ClientKey {
     pub fn from_options(opts: &ClientOptions) -> Self {
         ClientKey {
             use_proxy: opts.use_proxy,
-            proxy_addr: opts.proxy_addr.clone().map(|s| s.to_string()),
+            proxy_addr: opts.proxy_addr.clone(),
             use_cert: opts.use_cert,
-            cert_path: opts.cert_path.clone().map(|s| s.to_string()),
-            key_path: opts.key_path.clone().map(|s| s.to_string()),
+            cert_path: opts.cert_path.clone(),
+            key_path: opts.key_path.clone(),
         }
     }
 }
@@ -94,12 +93,10 @@ pub fn get_or_build_client(
         return client.clone();
     }
 
-    let client = {
-        if opts.use_cert {
-            build_hyper_client_cert(opts.clone(), &state)
-        } else {
-            build_hyper_client_normal(&state)
-        }
+    let client = if opts.use_cert {
+        build_hyper_client_cert(opts.clone(), &state)
+    } else {
+        build_hyper_client_normal(&state)
     };
 
     CLIENT_CACHE.insert(key, client.clone());
@@ -126,7 +123,7 @@ pub fn build_hyper_client_cert(
     opts: ClientOptions,
     state: &Arc<AppConfig>,
 ) -> Client<HttpsConnector<HttpConnector>> {
-    let timeout_duration = Duration::from_millis(1000);
+    let timeout_duration = Duration::from_millis(5000);
 
     let mut root_store = RootCertStore::empty();
     root_store.add_trust_anchors(TLS_SERVER_ROOTS.iter().map(|ta| {
@@ -177,7 +174,7 @@ pub fn build_hyper_client_cert(
     http_connector.set_connect_timeout(Some(timeout_duration));
     http_connector.enforce_http(false);
     http_connector.set_nodelay(true);
-    http_connector.set_keepalive(Some(Duration::from_secs(10)));
+    http_connector.set_keepalive(Some(Duration::from_secs(30)));
 
     let tls_config = Arc::new(config);
     let https_connector = HttpsConnector::from((http_connector, tls_config));
@@ -193,7 +190,7 @@ pub fn build_hyper_client_proxy(
     opts: ClientOptions,
     state: &Arc<AppConfig>,
 ) -> Client<ProxyConnector<HttpsConnector<HttpConnector>>> {
-    let timeout_duration = Duration::from_millis(1000);
+    let timeout_duration = Duration::from_millis(5000);
 
     let mut root_store = RootCertStore::empty();
     root_store.add_trust_anchors(TLS_SERVER_ROOTS.iter().map(|ta| {
@@ -244,7 +241,7 @@ pub fn build_hyper_client_proxy(
     http_connector.set_connect_timeout(Some(timeout_duration));
     http_connector.enforce_http(false);
     http_connector.set_nodelay(true);
-    http_connector.set_keepalive(Some(Duration::from_secs(10)));
+    http_connector.set_keepalive(Some(Duration::from_secs(30)));
 
     let tls_config = Arc::new(config);
     let https_connector = HttpsConnector::from((http_connector, tls_config));
@@ -277,7 +274,7 @@ pub fn build_hyper_client_proxy(
 }
 
 pub fn build_hyper_client_normal(state: &Arc<AppConfig>) -> Client<HttpsConnector<HttpConnector>> {
-    let timeout_duration = Duration::from_millis(1000);
+    let timeout_duration = Duration::from_millis(5000);
 
     let mut root_store = RootCertStore::empty();
     root_store.add_trust_anchors(TLS_SERVER_ROOTS.iter().map(|ta| {
@@ -297,7 +294,7 @@ pub fn build_hyper_client_normal(state: &Arc<AppConfig>) -> Client<HttpsConnecto
     http_connector.set_connect_timeout(Some(timeout_duration));
     http_connector.enforce_http(false);
     http_connector.set_nodelay(true);
-    http_connector.set_keepalive(Some(Duration::from_secs(10)));
+    http_connector.set_keepalive(Some(Duration::from_secs(30)));
 
     let tls_config = Arc::new(config);
     let https_connector = HttpsConnector::from((http_connector, tls_config));

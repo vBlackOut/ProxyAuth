@@ -12,15 +12,10 @@ use data_encoding::BASE64;
 use once_cell::sync::Lazy;
 use sha2::{Digest, Sha256};
 use std::fmt::Write;
-use std::sync::{Mutex, RwLock};
+use std::sync::Mutex;
 
 static DERIVED_KEYS: Lazy<Mutex<AHashMap<String, [u8; 32]>>> =
     Lazy::new(|| Mutex::new(AHashMap::new()));
-
-static LETTER_CACHE: Lazy<RwLock<AHashMap<(u8, u8), char>>> =
-    Lazy::new(|| RwLock::new(AHashMap::new()));
-static NUMBER_CACHE: Lazy<RwLock<AHashMap<(u64, u64), String>>> =
-    Lazy::new(|| RwLock::new(AHashMap::new()));
 
 pub fn derive_key_from_secret(secret: &str) -> [u8; 32] {
     {
@@ -98,12 +93,13 @@ fn split_hash(s: String, n: usize) -> Vec<String> {
 }
 
 pub fn process_string(s: &str, factor: u64) -> String {
-    let mut result = String::with_capacity(s.len() * 2);
+    let shift = (factor % 256) as u8;
+    let mut result = Vec::with_capacity(s.len() * 2);
     let mut number_acc = 0u64;
     let mut in_digit = false;
-    let shift = (factor % 26) as u8;
+    let mut buf = itoa::Buffer::new();
 
-    for c in s.bytes() {
+    for &c in s.as_bytes() {
         match c {
             b'0'..=b'9' => {
                 in_digit = true;
@@ -111,75 +107,32 @@ pub fn process_string(s: &str, factor: u64) -> String {
             }
             b'a'..=b'z' | b'A'..=b'Z' => {
                 if in_digit {
-                    let key = (number_acc, factor);
-                    let value = {
-                        let cache = NUMBER_CACHE.read().unwrap();
-                        cache.get(&key).cloned()
-                    }
-                    .unwrap_or_else(|| {
-                        let computed = (number_acc * factor).to_string();
-                        NUMBER_CACHE.write().unwrap().insert(key, computed.clone());
-                        computed
-                    });
-
-                    result.push_str(&value);
+                    let computed = buf.format(number_acc ^ factor);
+                    result.extend_from_slice(computed.as_bytes());
                     number_acc = 0;
                     in_digit = false;
                 }
-
-                let key = (c, shift);
-                let shifted = {
-                    let cache = LETTER_CACHE.read().unwrap();
-                    cache.get(&key).copied()
-                }
-                .unwrap_or_else(|| {
-                    let base = if c.is_ascii_lowercase() { b'a' } else { b'A' };
-                    let new_char = ((c - base + shift) % 26 + base) as char;
-                    LETTER_CACHE.write().unwrap().insert(key, new_char);
-                    new_char
-                });
-
-                result.push(shifted);
+                result.push(c ^ shift);
             }
             _ => {
                 if in_digit {
-                    let key = (number_acc, factor);
-                    let value = {
-                        let cache = NUMBER_CACHE.read().unwrap();
-                        cache.get(&key).cloned()
-                    }
-                    .unwrap_or_else(|| {
-                        let computed = (number_acc * factor).to_string();
-                        NUMBER_CACHE.write().unwrap().insert(key, computed.clone());
-                        computed
-                    });
-
-                    result.push_str(&value);
+                    let computed = buf.format(number_acc ^ factor);
+                    result.extend_from_slice(computed.as_bytes());
                     number_acc = 0;
                     in_digit = false;
                 }
-
-                result.push(c as char);
+                result.push(c);
             }
         }
     }
 
     if in_digit {
-        let key = (number_acc, factor);
-        let value = {
-            let cache = NUMBER_CACHE.read().unwrap();
-            cache.get(&key).cloned()
-        }
-        .unwrap_or_else(|| {
-            let computed = (number_acc * factor).to_string();
-            NUMBER_CACHE.write().unwrap().insert(key, computed.clone());
-            computed
-        });
-
-        result.push_str(&value);
+        let computed = buf.format(number_acc ^ factor);
+        result.extend_from_slice(computed.as_bytes());
     }
 
-    result
+    // SAFETY: All pushes are from valid ASCII bytes or itoa (valid UTF-8)
+    unsafe { String::from_utf8_unchecked(result) }
 }
 
 pub fn calcul_cipher(hashdata: String) -> String {
