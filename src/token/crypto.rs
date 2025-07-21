@@ -1,4 +1,3 @@
-
 use crate::token::security::{get_build_rand, get_build_seed2};
 use ahash::AHashMap;
 use base64::{Engine as _, engine::general_purpose};
@@ -17,7 +16,6 @@ use std::sync::Mutex;
 
 static DERIVED_KEYS: Lazy<Mutex<AHashMap<String, [u8; 32]>>> =
     Lazy::new(|| Mutex::new(AHashMap::new()));
-
 
 pub fn derive_key_from_secret(secret: &str) -> [u8; 32] {
     {
