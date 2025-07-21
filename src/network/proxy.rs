@@ -1,4 +1,4 @@
-use crate::AppState;
+use crate::{AppState, AppConfig};
 use crate::config::config::BackendConfig;
 use crate::config::config::BackendInput;
 use crate::network::loadbalancing::forward_failover;
@@ -9,10 +9,33 @@ use crate::token::security::validate_token;
 use actix_web::{Error, HttpRequest, HttpResponse, error, web};
 use hyper::header::USER_AGENT;
 use hyper::{Body, Method, Request, Uri};
+use hyper::http::request::Builder;
 use std::net::IpAddr;
 use std::str::FromStr;
 use tokio::time::{Duration, timeout};
 use tracing::{info, warn};
+
+
+pub fn inject_header(
+    mut builder: Builder,
+    username: &str,
+    config: &AppConfig,
+) -> Builder {
+    if username.is_empty() {
+        return builder;
+    }
+
+    if let Some(user) = config.users.iter().find(|u| u.username == username) {
+        if let Some(roles) = &user.roles {
+            let roles_str = roles.join(",");
+            if let Ok(val) = hyper::header::HeaderValue::from_str(&roles_str) {
+                builder = builder.header("x-user-roles", val);
+            }
+        }
+    }
+
+    builder
+}
 
 pub fn client_ip(req: &HttpRequest) -> Option<IpAddr> {
     req.headers()
@@ -161,6 +184,8 @@ pub async fn proxy_with_proxy(
                 "Host",
                 uri.authority().map(|a| a.as_str()).unwrap_or("127.0.0.1"),
             );
+
+        request_builder = inject_header(request_builder, &username, &data.config);
 
         let hyper_req = if method == Method::GET || method == Method::HEAD {
             request_builder.body(Body::empty()).map_err(|e| {
@@ -369,6 +394,8 @@ pub async fn proxy_without_proxy(
             uri.host()
                 .ok_or_else(|| error::ErrorInternalServerError("Missing host"))?,
         );
+
+        request_builder = inject_header(request_builder, &username, &data.config);
 
         let hyper_req = if method == Method::GET || method == Method::HEAD {
             request_builder.body(Body::empty()).map_err(|e| {
