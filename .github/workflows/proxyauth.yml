@@ -21,16 +21,13 @@ jobs:
 
       - name: Install dependancy
         run: sudo apt install -y nettle-dev
-          
-      - name: Test ProxyAuth (unittest)
-        run: cargo test
 
       - name: Build the binary
         run: cargo build --release
 
       - name: Prepare User for run proxyauth
-        run: sudo ./target/release/proxyauth prepare
-      
+        run: sudo ./target/release/proxyauth prepare --insecure
+
       - name: Generate self-signed cert for ProxyAuth
         run: |
             sudo mkdir -p /etc/proxyauth/certs
@@ -40,13 +37,20 @@ jobs:
             -out /etc/proxyauth/certs/cert.pem \
             -subj "/CN=localhost"
             sudo chown -R proxyauth:proxyauth /etc/proxyauth/certs
-            
+
+      - name: Test ProxyAuth (unittest)
+        run: cargo test
+
+      - name: Cleanup test database files & Fix permissions
+        run: |
+            sudo rm -rf /opt/proxyauth/db/*
+            sudo chmod 700 -R /opt/proxyauth
+
       - name: Start ProxyAuth in background
         run: |
           sudo -u proxyauth ./target/release/proxyauth &
           echo $! > proxyauth.pid
-          sleep 2  # attendre que le serveur démarre
-
+          sleep 2  # wait start server
       - name: Test HTTP response
         run: curl -k -I https://localhost:8080 || (cat proxyauth.pid | xargs kill && exit 1)
 

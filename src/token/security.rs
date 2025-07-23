@@ -1,6 +1,7 @@
 use crate::AppConfig;
 use crate::AppState;
 use crate::build::build_info::get;
+use crate::revoke::db::is_token_revoked;
 use crate::timezone::check_date_token;
 use crate::token::crypto::{calcul_factorhash, decrypt, derive_key_from_secret};
 use actix_web::web;
@@ -186,12 +187,18 @@ pub async fn validate_token(
         return Err("Bad time token".to_string());
     }
 
+
     let token_generated = generate_token(&user.username, &config, data[1], data[3]);
     let token_hash = calcul_factorhash(token_generated);
 
     if blake3::hash(token_hash.as_bytes()).to_hex().to_string() != token_hash_decrypt {
         warn!("[{}] Invalid token", ip);
         return Err("no valid token".to_string());
+    }
+
+    if is_token_revoked(data[3], &data_app.revoked_tokens) {
+        warn!("[{}] token_id {} is revoked from user {}", ip, data[3], user.username);
+        return Err("revoked token".to_string());
     }
 
     if config.stats {

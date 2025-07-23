@@ -1,6 +1,7 @@
 use crate::adm::method_otp::generate_base32_secret;
 use crate::stats::tokencount::CounterToken;
 use crate::token::auth::generate_random_string;
+use crate::revoke::load::RevokedTokenMap;
 use argon2::password_hash::{SaltString, rand_core::OsRng};
 use argon2::{Argon2, PasswordHasher};
 use hyper::Client;
@@ -185,6 +186,7 @@ pub struct AppState {
     pub client_with_cert: Client<HttpsConnector<HttpConnector>>,
     #[allow(dead_code)]
     pub client_with_proxy: Client<ProxyConnector<HttpsConnector<HttpConnector>>>,
+    pub revoked_tokens: RevokedTokenMap,
 }
 
 #[derive(Deserialize)]

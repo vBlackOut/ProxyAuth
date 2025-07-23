@@ -10,11 +10,13 @@ mod stats;
 mod timezone;
 mod tls;
 mod token;
+mod revoke;
 
 use crate::adm::registry_otp::get_otpauth_uri;
 use crate::build::build_info::update_build_info;
 use crate::cli::prompt::prompt;
 use crate::keystore::import::decrypt_keystore;
+use crate::revoke::load::{start_revoked_token_ttl, load_revoked_tokens};
 use crate::tls::check_port;
 use actix_governor::{Governor, GovernorConfigBuilder};
 use actix_web::{App, HttpServer, web};
@@ -113,6 +115,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let counter_token = Arc::new(CounterToken::new());
 
+    let revoked_tokens = load_revoked_tokens().expect("failed to load revoked token database");
+
     let client_normal = build_hyper_client_normal(&config);
     let client_with_cert = build_hyper_client_cert(
         ClientOptions {
@@ -143,8 +147,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         client_normal,
         client_with_cert,
         client_with_proxy,
+        revoked_tokens
     });
 
+    start_revoked_token_ttl(state.revoked_tokens.clone(), Duration::from_secs(60)).await;
     init_derived_key(&config.secret);
 
     // logs

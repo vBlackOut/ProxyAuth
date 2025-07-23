@@ -7,6 +7,7 @@ pub mod network;
 pub mod stats;
 pub mod timezone;
 pub mod token;
+pub mod revoke;
 
 pub use config::config::{AppConfig, AppState, RouteConfig};
 pub use network::proxy::global_proxy;
