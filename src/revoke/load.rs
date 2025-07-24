@@ -47,17 +47,22 @@ pub fn load_revoked_tokens() -> Result<RevokedTokenMap, anyhow::Error> {
 
     for (key, value) in cursor.iter() {
         let token_id = match std::str::from_utf8(key) {
-            Ok(s) => s,
+            Ok(s) => s.to_string(),
             Err(_) => continue,
         };
 
-        if value.len() == 8 {
-            let exp = match value.try_into().map(u64::from_be_bytes) {
+        let exp = if value.len() == 8 {
+            match value.try_into().map(u64::from_be_bytes) {
                 Ok(exp) => exp,
                 Err(_) => continue,
-            };
-            map.insert(token_id.to_string(), exp);
-        }
+            }
+        } else if value.is_empty() {
+            0
+        } else {
+            continue;
+        };
+
+        map.insert(token_id, exp);
     }
 
     Ok(Arc::new(RwLock::new(map)))
