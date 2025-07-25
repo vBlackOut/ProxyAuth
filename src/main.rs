@@ -165,7 +165,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         revoked_tokens
     });
 
-    start_revoked_token_ttl(state.revoked_tokens.clone(), Duration::from_secs(60)).await;
+    start_revoked_token_ttl(state.revoked_tokens.clone(), Duration::from_secs(15)).await;
     init_derived_key(&config.secret);
 
     // logs

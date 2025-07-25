@@ -18,7 +18,7 @@ pub async fn start_revoked_token_ttl(
     .set_max_dbs(1)
     .set_map_size(1048576000)
     .open(Path::new("/opt/proxyauth/db"))
-    .map_err(|e| anyhow::anyhow!("Failed to open LMDB environment at {}: {}", db_path, e))
+    .map_err(|e| anyhow::anyhow!("Failed to open LMDB environment at {}: {}", "/opt/proxyauth/db", e))
     .expect("Failed to open LMDB environment");
 
     let db = env
@@ -34,17 +34,15 @@ pub async fn start_revoked_token_ttl(
                     let ram_count = map.len();
 
                     if ram_count != db_count {
-                        let before = ram_count;
+                        let _before = ram_count;
                         *map = new_map;
-                        let after = map.len();
+                        let _after = map.len();
                         println!(
                             "[RevokedCleaner] Synchronized token map",
                         );
-                    } else {
-                        println!("[RevokedCleaner] No synchronization needed",);
                     }
 
-                    // Nettoyer les jetons expirés
+                    // clear tokens expires
                     let now = SystemTime::now()
                     .duration_since(UNIX_EPOCH)
                     .unwrap()
@@ -101,16 +99,16 @@ fn load_revoked_tokens_from_db(
 }
 
 pub fn load_revoked_tokens() -> Result<RevokedTokenMap, anyhow::Error> {
-    if !Path::new(db_path).exists() {
+    if !Path::new("/opt/proxyauth/db").exists() {
         std::fs::create_dir_all("/opt/proxyauth/db")
-        .map_err(|e| anyhow::anyhow!("Failed to create directory {}: {}", db_path, e))?;
+        .map_err(|e| anyhow::anyhow!("Failed to create directory {}: {}", "/opt/proxyauth/db", e))?;
     }
 
     let env = Environment::new()
     .set_max_dbs(1)
     .set_map_size(1048576000)
-    .open(Path::new(db_path))
-    .map_err(|e| anyhow::anyhow!("Failed to open LMDB environment at {}: {}", db_path, e))?;
+    .open(Path::new("/opt/proxyauth/db"))
+    .map_err(|e| anyhow::anyhow!("Failed to open LMDB environment at {}: {}", "/opt/proxyauth/db", e))?;
 
     let db = env
     .create_db(Some("revoke"), DatabaseFlags::empty())
