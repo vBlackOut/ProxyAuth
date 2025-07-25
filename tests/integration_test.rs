@@ -2,6 +2,7 @@ use actix_web::{App, HttpResponse, test, web};
 use proxyauth::network::shared_client::{
     ClientOptions, build_hyper_client_cert, build_hyper_client_normal, build_hyper_client_proxy,
 };
+use proxyauth::revoke::load::load_revoked_tokens;
 use proxyauth::{AppConfig, AppState, CounterToken, RouteConfig, auth as auth_handler};
 use serde::de::DeserializeOwned;
 use serde_json::json;
@@ -58,6 +59,7 @@ fn create_app_for_test() -> App<
     );
 
     let counter_token = CounterToken::new();
+    let revoked_tokens = load_revoked_tokens().expect("failed to load revoked token database");
 
     let state = web::Data::new(AppState {
         config: Arc::clone(&config),
@@ -66,6 +68,7 @@ fn create_app_for_test() -> App<
         client_normal,
         client_with_cert,
         client_with_proxy,
+        revoked_tokens
     });
 
     App::new()

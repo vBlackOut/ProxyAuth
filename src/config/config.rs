@@ -1,6 +1,7 @@
 use crate::adm::method_otp::generate_base32_secret;
 use crate::stats::tokencount::CounterToken;
 use crate::token::auth::generate_random_string;
+use crate::revoke::load::RevokedTokenMap;
 use argon2::password_hash::{SaltString, rand_core::OsRng};
 use argon2::{Argon2, PasswordHasher};
 use hyper::Client;
@@ -71,6 +72,7 @@ pub struct User {
     pub password: String,
     pub otpkey: Option<String>, // Option<Vec<u8>>
     pub allow: Option<Vec<String>>,
+    pub roles: Option<Vec<String>>,
 }
 
 impl Serialize for User {
@@ -83,6 +85,7 @@ impl Serialize for User {
         state.serialize_field("password", &self.password)?;
         state.serialize_field("otpkey", &self.otpkey)?;
         state.serialize_field("allow", &self.allow)?;
+        state.serialize_field("roles", &self.allow)?;
         state.end()
     }
 }
@@ -183,6 +186,7 @@ pub struct AppState {
     pub client_with_cert: Client<HttpsConnector<HttpConnector>>,
     #[allow(dead_code)]
     pub client_with_proxy: Client<ProxyConnector<HttpsConnector<HttpConnector>>>,
+    pub revoked_tokens: RevokedTokenMap,
 }
 
 #[derive(Deserialize)]

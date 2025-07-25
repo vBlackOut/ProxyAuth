@@ -2,7 +2,7 @@ use crate::cli::command::{Cli, Commands};
 use crate::config::config::{AppConfig, load_config};
 use crate::config::def_config::{
     ensure_running_as_proxyauth, ensure_running_as_root, ensure_user_proxyauth_exists,
-    setup_proxyauth_directory, switch_to_user,
+    setup_proxyauth_directory, setup_proxyauth_db_directory, switch_to_user,
 };
 use crate::keystore::export::export_as_file;
 use clap::Parser;
@@ -18,11 +18,12 @@ pub async fn prompt() -> Result<(), Box<dyn std::error::Error>> {
     match &cli.command {
         None => return Ok(()),
 
-        Some(Commands::Prepare) => {
+        Some(Commands::Prepare { insecure }) => {
             switch_to_user("root")?;
             ensure_running_as_root();
             ensure_user_proxyauth_exists()?;
             setup_proxyauth_directory()?;
+            setup_proxyauth_db_directory(*insecure)?;
             std::process::exit(0);
         }
 

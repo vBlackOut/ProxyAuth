@@ -1,3 +1,17 @@
+// Copyright 2025 Vladimir Souchet
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 mod adm;
 mod build;
 mod cli;
@@ -10,11 +24,14 @@ mod stats;
 mod timezone;
 mod tls;
 mod token;
+mod revoke;
 
 use crate::adm::registry_otp::get_otpauth_uri;
+use crate::adm::revoke::revoke_route;
 use crate::build::build_info::update_build_info;
 use crate::cli::prompt::prompt;
 use crate::keystore::import::decrypt_keystore;
+use crate::revoke::load::{start_revoked_token_ttl, load_revoked_tokens};
 use crate::tls::check_port;
 use actix_governor::{Governor, GovernorConfigBuilder};
 use actix_web::{App, HttpServer, web};
@@ -113,6 +130,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let counter_token = Arc::new(CounterToken::new());
 
+    let revoked_tokens = load_revoked_tokens().expect("failed to load revoked token database");
+
     let client_normal = build_hyper_client_normal(&config);
     let client_with_cert = build_hyper_client_cert(
         ClientOptions {
@@ -143,8 +162,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         client_normal,
         client_with_cert,
         client_with_proxy,
+        revoked_tokens
     });
 
+    start_revoked_token_ttl(state.revoked_tokens.clone(), Duration::from_secs(60)).await;
     init_derived_key(&config.secret);
 
     // logs
@@ -338,6 +359,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .service(web::resource("/auth").route(web::post().to(auth)))
                         .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
                         .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
+                        .service(web::resource("/adm/revoke").route(web::post().to(revoke_route)))
                         .service(
                             web::resource("/adm/auth/totp/get")
                                 .route(web::post().to(get_otpauth_uri)),
@@ -382,6 +404,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         )
                         .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
                         .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
+                        .service(web::resource("/adm/revoke").route(web::post().to(revoke_route)))
                         .service(
                             web::resource("/adm/auth/totp/get")
                                 .route(web::post().to(get_otpauth_uri)),
@@ -432,6 +455,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         )
                         .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
                         .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
+                        .service(web::resource("/adm/revoke").route(web::post().to(revoke_route)))
                         .service(
                             web::resource("/adm/auth/totp/get")
                                 .route(web::post().to(get_otpauth_uri)),
@@ -462,6 +486,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .service(web::resource("/auth").route(web::post().to(auth)))
                         .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
                         .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
+                        .service(web::resource("/adm/revoke").route(web::post().to(revoke_route)))
                         .service(
                             web::resource("/adm/auth/totp/get")
                                 .route(web::post().to(get_otpauth_uri)),
@@ -490,6 +515,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .service(web::resource("/auth").route(web::post().to(auth)))
                         .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
                         .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
+                        .service(web::resource("/adm/revoke").route(web::post().to(revoke_route)))
                         .service(
                             web::resource("/adm/auth/totp/get")
                                 .route(web::post().to(get_otpauth_uri)),

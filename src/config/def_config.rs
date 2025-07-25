@@ -154,6 +154,45 @@ pub fn setup_proxyauth_directory() -> io::Result<()> {
     Ok(())
 }
 
+pub fn setup_proxyauth_db_directory(insecure: bool) -> io::Result<()> {
+    let path = Path::new("/opt/proxyauth/db");
+
+    if !path.exists() {
+        println!("Creating /opt/proxyauth/db directory...");
+        fs::create_dir_all(path)?;
+    } else {
+        println!("Directory /opt/proxyauth/db already exists.");
+    }
+
+    let status_chown = Command::new("chown")
+    .args(["-R", "proxyauth:proxyauth", "/opt/proxyauth"])
+    .status()?;
+
+    if !status_chown.success() {
+        eprintln!("Failed to change owner of /opt/proxyauth.");
+        std::process::exit(1);
+    }
+
+    let chmod_mode = if insecure { "777" } else { "700" };
+
+    let status_chmod = Command::new("chmod")
+    .args([chmod_mode, "/opt/proxyauth"])
+    .status()?;
+
+    if !status_chmod.success() {
+        eprintln!("Failed to set permissions on /opt/proxyauth.");
+        std::process::exit(1);
+    }
+
+    if insecure {
+        println!("WARN ! Directory /opt/proxyauth/db is set to insecure mode.");
+    } else {
+        println!("Directory /opt/proxyauth/db is secured.");
+    }
+
+    Ok(())
+}
+
 pub fn switch_to_user(username: &str) -> Result<(), Box<dyn std::error::Error>> {
     let user = User::from_name(username)?.ok_or("User not found")?;
     setuid(user.uid)?;

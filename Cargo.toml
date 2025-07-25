@@ -1,6 +1,6 @@
 [package]
 name = "proxyauth"
-version = "0.8.1"
+version = "0.8.2"
 edition = "2024"
 authors = ["Vladimir S"]
 repository = "https://github.com/ProxyAuth/ProxyAuth"
@@ -8,7 +8,7 @@ readme = "README.md"
 license = "Apache-2.0"
 description = "Proxy Authentication Token"
 build = "src/build/build.rs"
-keywords = ["authentification", "proxy", "security", "token", "gateway"]
+keywords = ["auth", "proxy", "security", "token", "network"]
 categories = ["network-programming", "authentication", "api-bindings", "security"]
 documentation = "https://proxyauth.app"
 
@@ -89,3 +89,4 @@ serde_urlencoded = "0.7"
 ahash = "0.8"
 lazy_static = "1.4"
 itoa = "1.0"
+lmdb = "0.8"
