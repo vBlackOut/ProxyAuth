@@ -8,7 +8,7 @@ readme = "README.md"
 license = "Apache-2.0"
 description = "Proxy Authentication Token"
 build = "src/build/build.rs"
-keywords = ["authentification", "proxy", "security", "token", "gateway"]
+keywords = ["auth", "proxy", "security", "token", "network"]
 categories = ["network-programming", "authentication", "api-bindings", "security"]
 documentation = "https://proxyauth.app"
 
