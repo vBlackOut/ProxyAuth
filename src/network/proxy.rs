@@ -1,4 +1,3 @@
-use crate::{AppState, AppConfig};
 use crate::config::config::BackendConfig;
 use crate::config::config::BackendInput;
 use crate::network::loadbalancing::forward_failover;
@@ -6,21 +5,17 @@ use crate::network::shared_client::{
     ClientOptions, get_or_build_client_proxy, get_or_build_thread_client,
 };
 use crate::token::security::validate_token;
+use crate::{AppConfig, AppState};
 use actix_web::{Error, HttpRequest, HttpResponse, error, web};
 use hyper::header::USER_AGENT;
-use hyper::{Body, Method, Request, Uri};
 use hyper::http::request::Builder;
+use hyper::{Body, Method, Request, Uri};
 use std::net::IpAddr;
 use std::str::FromStr;
 use tokio::time::{Duration, timeout};
 use tracing::{info, warn};
 
-
-pub fn inject_header(
-    mut builder: Builder,
-    username: &str,
-    config: &AppConfig,
-) -> Builder {
+pub fn inject_header(mut builder: Builder, username: &str, config: &AppConfig) -> Builder {
     if username.is_empty() {
         return builder;
     }
@@ -139,15 +134,19 @@ pub async fn proxy_with_proxy(
                 .and_then(|s| s.strip_prefix("Bearer "))
                 .ok_or_else(|| error::ErrorUnauthorized("Missing token"))?;
 
-            let (username, token_id) = validate_token(token_header, &data, &data.config, &ip)
-                .await
-                .map_err(|err| {
-                    warn!(
-                        client_ip = %ip,
-                        "Unauthorized token attempt"
-                    );
-                    error::ErrorUnauthorized(err)
-                })?;
+            let (username, token_id) =
+                match validate_token(token_header, &data, &data.config, &ip).await {
+                    Ok(result) => result,
+                    Err(err) => {
+                        warn!(
+                            client_ip = %ip,
+                            "Unauthorized token attempt: {}", err
+                        );
+                        return Ok(HttpResponse::Unauthorized()
+                            .append_header(("server", "ProxyAuth"))
+                            .body("403 Forbidden"));
+                    }
+                };
 
             if !rule.username.contains(&username) {
                 warn!(

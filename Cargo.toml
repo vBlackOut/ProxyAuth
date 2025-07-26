@@ -89,4 +89,5 @@ serde_urlencoded = "0.7"
 ahash = "0.8"
 lazy_static = "1.4"
 itoa = "1.0"
-lmdb = "0.8"
+redis = { version = "0.32", features = ["tokio-comp"] }
+lmdb-rkv = "0.10"
