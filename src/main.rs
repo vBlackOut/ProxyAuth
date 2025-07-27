@@ -192,7 +192,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .map(|v| v.trim_matches('"'))
             .unwrap_or("local");
 
-        let env_filter = EnvFilter::new("proxyauth=trace")
+        let env_filter = EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| EnvFilter::new("proxyauth=trace"))
             .add_directive("actix_web=warn".parse().unwrap())
             .add_directive("actix_server=warn".parse().unwrap());
 

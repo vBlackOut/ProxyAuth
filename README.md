@@ -148,7 +148,7 @@ docker compose restart
 - Log to stdout using `tracing` (Rust log lib) [still being deployed]
 - ~Protect passwords config.json using Argon2.~ [Done v0.4.0]
 - ~Add Loki integration with tracing [needs further exploration]~ [Done >=0.5.2]
-- Add revoke token method.
+- ~Add revoke token method.~ Bonus: multi-cluster via redis [Done v0.8.3]
 
 # ProxyAuth Advantages
 - Centralized access point
