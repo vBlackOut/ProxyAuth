@@ -19,25 +19,26 @@ mod config;
 mod keystore;
 mod logs;
 mod network;
+mod revoke;
 mod start_actix;
 mod stats;
 mod timezone;
 mod tls;
 mod token;
-mod revoke;
 
 use crate::adm::registry_otp::get_otpauth_uri;
 use crate::adm::revoke::revoke_route;
 use crate::build::build_info::update_build_info;
 use crate::cli::prompt::prompt;
 use crate::keystore::import::decrypt_keystore;
-use crate::revoke::load::{start_revoked_token_ttl, load_revoked_tokens};
+use crate::revoke::db::{load_revoked_tokens, start_revoked_token_ttl};
 use crate::tls::check_port;
 use actix_governor::{Governor, GovernorConfigBuilder};
 use actix_web::{App, HttpServer, web};
 use chrono::Local;
 use config::config::{AppConfig, AppState, RouteConfig, load_config};
 use config::def_config::{create_config, ensure_running_as_proxyauth, switch_to_user};
+use dashmap::DashMap;
 use futures_util::future::join_all;
 use logs::{ChannelLogWriter, get_logs, log_collector};
 use network::proxy::global_proxy;
@@ -55,7 +56,7 @@ use tls::load_rustls_config;
 use token::auth::auth;
 use token::security::init_derived_key;
 use tokio::sync::mpsc::unbounded_channel;
-use tracing::warn;
+use tracing::{error, warn};
 use tracing_loki::url::Url;
 use tracing_subscriber::Layer;
 use tracing_subscriber::filter::LevelFilter;
@@ -130,7 +131,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let counter_token = Arc::new(CounterToken::new());
 
-    let revoked_tokens = load_revoked_tokens().expect("failed to load revoked token database");
+    let revoked_tokens = match load_revoked_tokens() {
+        Ok(tokens) => tokens,
+        Err(e) => {
+            error!(
+                "Failed to load revoked token database: {}. Using empty token map.",
+                e
+            );
+            Arc::new(DashMap::new())
+        }
+    };
+
+    start_revoked_token_ttl(
+        revoked_tokens.clone(),
+        std::time::Duration::from_secs(15),
+        config.redis.clone(),
+    )
+    .await;
 
     let client_normal = build_hyper_client_normal(&config);
     let client_with_cert = build_hyper_client_cert(
@@ -162,10 +179,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         client_normal,
         client_with_cert,
         client_with_proxy,
-        revoked_tokens
+        revoked_tokens,
     });
 
-    start_revoked_token_ttl(state.revoked_tokens.clone(), Duration::from_secs(60)).await;
     init_derived_key(&config.secret);
 
     // logs
@@ -176,7 +192,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .map(|v| v.trim_matches('"'))
             .unwrap_or("local");
 
-        let env_filter = EnvFilter::new("proxyauth=trace")
+        let env_filter = EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| EnvFilter::new("proxyauth=trace"))
             .add_directive("actix_web=warn".parse().unwrap())
             .add_directive("actix_server=warn".parse().unwrap());
 

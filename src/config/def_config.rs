@@ -165,8 +165,8 @@ pub fn setup_proxyauth_db_directory(insecure: bool) -> io::Result<()> {
     }
 
     let status_chown = Command::new("chown")
-    .args(["-R", "proxyauth:proxyauth", "/opt/proxyauth"])
-    .status()?;
+        .args(["-R", "proxyauth:proxyauth", "/opt/proxyauth"])
+        .status()?;
 
     if !status_chown.success() {
         eprintln!("Failed to change owner of /opt/proxyauth.");
@@ -176,8 +176,8 @@ pub fn setup_proxyauth_db_directory(insecure: bool) -> io::Result<()> {
     let chmod_mode = if insecure { "777" } else { "700" };
 
     let status_chmod = Command::new("chmod")
-    .args([chmod_mode, "/opt/proxyauth"])
-    .status()?;
+        .args([chmod_mode, "/opt/proxyauth"])
+        .status()?;
 
     if !status_chmod.success() {
         eprintln!("Failed to set permissions on /opt/proxyauth.");
