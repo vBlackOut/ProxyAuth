@@ -18,10 +18,10 @@ pub mod cli;
 pub mod config;
 pub mod keystore;
 pub mod network;
+pub mod revoke;
 pub mod stats;
 pub mod timezone;
 pub mod token;
-pub mod revoke;
 
 pub use config::config::{AppConfig, AppState, RouteConfig};
 pub use network::proxy::global_proxy;

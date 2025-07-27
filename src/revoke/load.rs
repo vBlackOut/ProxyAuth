@@ -1,69 +1,73 @@
-use lmdb::{Environment, Cursor, Transaction};
-use std::path::Path;
-use std::sync::Arc;
-use std::sync::RwLock;
-use std::collections::HashMap;
-use std::time::Duration;
-use std::time::SystemTime;
-use lmdb::DatabaseFlags;
-use std::time::UNIX_EPOCH;
+use crate::revoke::db::{LMDB_ENV, REDIS, RevokedTokenMap};
+use anyhow::Result;
+use lmdb::{Transaction, WriteFlags};
+use redis::Commands;
+use std::time::{SystemTime, UNIX_EPOCH};
 
-pub type RevokedTokenMap = Arc<RwLock<HashMap<String, u64>>>;
+pub fn is_token_revoked(token_id: &str, revoked_tokens: &RevokedTokenMap) -> bool {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    match revoked_tokens.get(token_id) {
+        Some(exp) if *exp == 0 || *exp <= now => true,
+        _ => false,
+    }
+}
 
-pub async fn start_revoked_token_ttl(
-    revoked_tokens: RevokedTokenMap,
-    every: Duration,
-) {
-    tokio::spawn(async move {
-        loop {
-            tokio::time::sleep(every).await;
-
-            let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-
-            let mut map = revoked_tokens.write().unwrap();
-            let before = map.len();
-            map.retain(|_, &mut exp| exp > now);
-            let after = map.len();
-
-            if before != after {
-                println!("[RevokedCleaner] Purged {} expired tokens", before - after);
+fn set_ttl(con: &mut redis::Connection, key: &str, ttl_secs: usize) {
+    if let Ok(ttl) = con.ttl::<_, i64>(key) {
+        if ttl == -1 {
+            if let Ok(ttl_value) = ttl_secs.try_into() {
+                let _: redis::RedisResult<bool> = con.expire(key, ttl_value);
             }
         }
-    });
+    }
 }
 
-pub fn load_revoked_tokens() -> Result<RevokedTokenMap, anyhow::Error> {
-    let env = Environment::new()
-    .set_max_dbs(1)
-    .open(Path::new("/opt/proxyauth/db"))?;
+pub async fn revoke_token(
+    token_id: &str,
+    token_exp: Option<u64>,
+    revoked_tokens: &RevokedTokenMap,
+) -> Result<()> {
+    let value = token_exp.unwrap_or(0);
 
-    let db = env.create_db(Some("revoke"), DatabaseFlags::empty())?;
-    let txn = env.begin_ro_txn()?;
-    let mut map = HashMap::new();
-    let mut cursor = txn.open_ro_cursor(db)?;
+    // Update RAM
+    revoked_tokens.insert(token_id.to_string(), value);
 
-    for (key, value) in cursor.iter() {
-        let token_id = match std::str::from_utf8(key) {
-            Ok(s) => s.to_string(),
-            Err(_) => continue,
-        };
+    // Update Redis
+    if let Some(client) = REDIS.get() {
+        let mut con = client.get_connection()?;
+        let token_key = format!("token:{}", token_id);
 
-        let exp = if value.len() == 8 {
-            match value.try_into().map(u64::from_be_bytes) {
-                Ok(exp) => exp,
-                Err(_) => continue,
-            }
-        } else if value.is_empty() {
-            0
-        } else {
-            continue;
-        };
+        let _: () = con.set(&token_key, value)?;
+        let _: () = con.set(format!("{}_action", token_id), 1)?; // 1 = Add
+        let _: () = con.incr(format!("{}_count", token_id), 1)?;
 
-        map.insert(token_id, exp);
+        // TTL for action max sync 5 mins.
+        set_ttl(&mut con, &token_key, 300);
+
+        return Ok(());
     }
 
-    Ok(Arc::new(RwLock::new(map)))
+    // Update LMDB
+    if let Some(env) = LMDB_ENV.get() {
+        let db = env.open_db(Some("revoke"))?;
+        let mut txn = env.begin_rw_txn()?;
+        let key = token_id.as_bytes();
+
+        let bytes = if value == 0 {
+            &[][..]
+        } else {
+            &value.to_be_bytes()[..]
+        };
+
+        txn.put(db, &key, &bytes, WriteFlags::empty())?;
+        txn.commit()?;
+
+        return Ok(());
+    }
+
+    Err(anyhow::anyhow!("No Redis or LMDB backend configured"))
 }
+

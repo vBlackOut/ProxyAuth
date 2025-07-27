@@ -1,9 +1,11 @@
 use actix_web::{App, HttpResponse, test, web};
+use dashmap::DashMap;
 use proxyauth::network::shared_client::{
     ClientOptions, build_hyper_client_cert, build_hyper_client_normal, build_hyper_client_proxy,
 };
-use proxyauth::revoke::load::load_revoked_tokens;
+use proxyauth::revoke::db::{load_revoked_tokens, start_revoked_token_ttl};
 use proxyauth::{AppConfig, AppState, CounterToken, RouteConfig, auth as auth_handler};
+use tracing::error;
 use serde::de::DeserializeOwned;
 use serde_json::json;
 use std::fs;
@@ -19,7 +21,7 @@ async fn proxy_handler() -> HttpResponse {
     HttpResponse::Ok().body("proxy ok")
 }
 
-fn create_app_for_test() -> App<
+async fn create_app_for_test() -> App<
     impl actix_web::dev::ServiceFactory<
         actix_web::dev::ServiceRequest,
         Response = actix_web::dev::ServiceResponse,
@@ -59,7 +61,23 @@ fn create_app_for_test() -> App<
     );
 
     let counter_token = CounterToken::new();
-    let revoked_tokens = load_revoked_tokens().expect("failed to load revoked token database");
+    let revoked_tokens = match load_revoked_tokens() {
+        Ok(tokens) => tokens,
+        Err(e) => {
+            error!(
+                "Failed to load revoked token database: {}. Using empty token map.",
+                e
+            );
+            Arc::new(DashMap::new())
+        }
+    };
+
+    start_revoked_token_ttl(
+        revoked_tokens.clone(),
+        std::time::Duration::from_secs(15),
+        config.redis.clone(),
+    )
+    .await;
 
     let state = web::Data::new(AppState {
         config: Arc::clone(&config),
@@ -68,7 +86,7 @@ fn create_app_for_test() -> App<
         client_normal,
         client_with_cert,
         client_with_proxy,
-        revoked_tokens
+        revoked_tokens,
     });
 
     App::new()
@@ -79,7 +97,7 @@ fn create_app_for_test() -> App<
 
 #[actix_web::test]
 async fn test_auth_route() {
-    let app = test::init_service(create_app_for_test()).await;
+    let app = test::init_service(create_app_for_test().await).await;
 
     let req = test::TestRequest::post()
         .uri("/auth")

@@ -16,5 +16,7 @@ pub enum Commands {
         insecure: bool,
     },
     Stats,
-    Sync { target: Option<String> },
+    Sync {
+        target: Option<String>,
+    },
 }

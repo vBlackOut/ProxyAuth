@@ -1,7 +1,7 @@
 use crate::adm::method_otp::generate_base32_secret;
+use crate::revoke::db::RevokedTokenMap;
 use crate::stats::tokencount::CounterToken;
 use crate::token::auth::generate_random_string;
-use crate::revoke::load::RevokedTokenMap;
 use argon2::password_hash::{SaltString, rand_core::OsRng};
 use argon2::{Argon2, PasswordHasher};
 use hyper::Client;
@@ -146,6 +146,9 @@ pub struct AppConfig {
 
     #[serde(default = "default_num_instances")]
     pub num_instances: u8,
+
+    #[serde(default)]
+    pub redis: Option<String>,
 }
 
 impl Serialize for AppConfig {
