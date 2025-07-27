@@ -117,7 +117,7 @@ pub async fn start_revoked_token_ttl(
                                     }
                                     revoked_tokens.remove(token_id);
                                 }
-                                other => {
+                                _other => {
                                     //println!("[RevokedSync] Unknown or missing action for {}: {:?}", token_id, other);
                                     continue;
                                 }
@@ -131,7 +131,12 @@ pub async fn start_revoked_token_ttl(
                     if let Ok(db) = env.open_db(Some("revoke")) {
                         if let Ok(txn) = env.begin_ro_txn() {
                             if let Ok(mut cursor) = txn.open_ro_cursor(db) {
-                                for (key, value) in cursor.iter() {
+                                for result in cursor.iter() {
+                                    let (key, value) = match result {
+                                        Ok((key, value)) => (key, value),
+                                        Err(_) => continue,
+                                    };
+
                                     let token_id = match std::str::from_utf8(key) {
                                         Ok(s) => s.to_string(),
                                         Err(_) => continue,
@@ -145,7 +150,7 @@ pub async fn start_revoked_token_ttl(
                                     } else if value.is_empty() {
                                         0
                                     } else {
-                                        continue
+                                        continue;
                                     };
 
                                     revoked_tokens.insert(token_id, exp);
@@ -183,7 +188,15 @@ pub fn load_revoked_tokens() -> Result<Arc<DashMap<String, u64>>, Error> {
         let txn = env.begin_ro_txn()?;
         let mut cursor = txn.open_ro_cursor(db)?;
 
-        for (key, value) in cursor.iter() {
+        for result in cursor.iter() {
+            let (key, value) = match result {
+                Ok((key, value)) => (key, value),
+                Err(e) => {
+                    eprintln!("Error while iterating LMDB: {}", e);
+                    continue;
+                }
+            };
+
             let token_id = match std::str::from_utf8(key) {
                 Ok(s) => s.to_string(),
                 Err(_) => continue,
