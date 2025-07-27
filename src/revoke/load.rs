@@ -15,6 +15,16 @@ pub fn is_token_revoked(token_id: &str, revoked_tokens: &RevokedTokenMap) -> boo
     }
 }
 
+fn set_ttl(con: &mut redis::Connection, key: &str, ttl_secs: usize) {
+    if let Ok(ttl) = con.ttl::<_, i64>(key) {
+        if ttl == -1 {
+            if let Ok(ttl_value) = ttl_secs.try_into() {
+                let _: redis::RedisResult<bool> = con.expire(key, ttl_value);
+            }
+        }
+    }
+}
+
 pub async fn revoke_token(
     token_id: &str,
     token_exp: Option<u64>,
@@ -28,9 +38,15 @@ pub async fn revoke_token(
     // Update Redis
     if let Some(client) = REDIS.get() {
         let mut con = client.get_connection()?;
-        let _: () = con.set(format!("token:{}", token_id), value)?;
+        let token_key = format!("token:{}", token_id);
+
+        let _: () = con.set(&token_key, value)?;
         let _: () = con.set(format!("{}_action", token_id), 1)?; // 1 = Add
         let _: () = con.incr(format!("{}_count", token_id), 1)?;
+
+        // TTL for action max sync 5 mins.
+        set_ttl(&mut con, &token_key, 300);
+
         return Ok(());
     }
 
@@ -54,3 +70,4 @@ pub async fn revoke_token(
 
     Err(anyhow::anyhow!("No Redis or LMDB backend configured"))
 }
+

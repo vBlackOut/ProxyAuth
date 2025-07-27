@@ -50,7 +50,6 @@ use socket2::{Domain, Protocol, Socket, Type};
 use start_actix::mode_actix_web;
 use stats::stats::stats as metric_stats;
 pub use stats::tokencount::CounterToken;
-use std::collections::HashMap;
 use std::net::TcpListener;
 use std::{fs, process, sync::Arc, time::Duration};
 use tls::load_rustls_config;
@@ -193,7 +192,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .map(|v| v.trim_matches('"'))
             .unwrap_or("local");
 
-        let env_filter = EnvFilter::new("proxyauth=trace")
+        let env_filter = EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| EnvFilter::new("proxyauth=trace"))
             .add_directive("actix_web=warn".parse().unwrap())
             .add_directive("actix_server=warn".parse().unwrap());
 

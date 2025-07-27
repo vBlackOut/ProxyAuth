@@ -8,12 +8,12 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use lmdb::WriteFlags;
 use once_cell::sync::OnceCell;
 use redis::{Client, Commands};
+use tracing::{debug, error};
 
 pub static REDIS: OnceCell<Client> = OnceCell::new();
 pub static LMDB_ENV: OnceCell<lmdb::Environment> = OnceCell::new();
 
 pub type RevokedTokenMap = Arc<DashMap<String, u64>>;
-
 
 pub async fn start_revoked_token_ttl(
     revoked_tokens: RevokedTokenMap,
@@ -43,11 +43,14 @@ pub async fn start_revoked_token_ttl(
         thread::spawn(move || {
             loop {
                 // Redis -> LMDB + RAM
+
+                debug!("[RevokedSync] Fetched tokens from Redis");
+
                 if let Some(client) = REDIS.get() {
                     if let Ok(mut con) = client.get_connection() {
                         let action_keys: Vec<String> = match con.scan_match::<String, String>("*_action".to_string()) {
                             Ok(iter) => iter.collect::<Vec<String>>(),
-                      Err(_) => Vec::new(),
+                            Err(_) => Vec::new(),
                         };
 
                         for action_key in action_keys {
@@ -86,7 +89,7 @@ pub async fn start_revoked_token_ttl(
                                             if let Ok(db) = env.open_db(Some("revoke")) {
                                                 if let Ok(mut txn) = env.begin_rw_txn() {
                                                     if let Err(e) = txn.put::<&[u8], &[u8]>(db, &key, &value, WriteFlags::empty()) {
-                                                        eprintln!("[RevokedSync] LMDB put error for {}: {}", token_id, e);
+                                                        error!("[RevokedSync] LMDB put error for {}: {}", token_id, e);
                                                     }
                                                     let _ = txn.commit();
                                                 }
@@ -110,15 +113,15 @@ pub async fn start_revoked_token_ttl(
                                             if let Ok(mut txn) = env.begin_rw_txn() {
                                                 let key = token_id.as_bytes();
                                                 let _ = txn.del::<&[u8]>(db, &key, None)
-                                                .map_err(|e| eprintln!("[RevokedSync] LMDB delete error for {}: {}", token_id, e));
+                                                .map_err(|e| error!("[RevokedSync] LMDB delete error for {}: {}", token_id, e));
                                                 let _ = txn.commit();
                                             }
                                         }
                                     }
                                     revoked_tokens.remove(token_id);
                                 }
-                                other => {
-                                    //println!("[RevokedSync] Unknown or missing action for {}: {:?}", token_id, other);
+                                _other => {
+                                    //debug!("[RevokedSync] Unknown or missing action for {}: {:?}", token_id, other);
                                     continue;
                                 }
                             }
@@ -131,7 +134,12 @@ pub async fn start_revoked_token_ttl(
                     if let Ok(db) = env.open_db(Some("revoke")) {
                         if let Ok(txn) = env.begin_ro_txn() {
                             if let Ok(mut cursor) = txn.open_ro_cursor(db) {
-                                for (key, value) in cursor.iter() {
+                                for result in cursor.iter() {
+                                    let (key, value) = match result {
+                                        Ok((key, value)) => (key, value),
+                                        Err(_) => continue,
+                                    };
+
                                     let token_id = match std::str::from_utf8(key) {
                                         Ok(s) => s.to_string(),
                                         Err(_) => continue,
@@ -145,7 +153,7 @@ pub async fn start_revoked_token_ttl(
                                     } else if value.is_empty() {
                                         0
                                     } else {
-                                        continue
+                                        continue;
                                     };
 
                                     revoked_tokens.insert(token_id, exp);
@@ -165,7 +173,7 @@ pub async fn start_revoked_token_ttl(
                 let after = revoked_tokens.len();
 
                 if before != after {
-                    println!("[RevokedSync] Purged {} expired tokens", before - after);
+                    debug!("[RevokedSync] Purged {} expired tokens", before - after);
                 }
 
                 sleep(every);
@@ -183,7 +191,15 @@ pub fn load_revoked_tokens() -> Result<Arc<DashMap<String, u64>>, Error> {
         let txn = env.begin_ro_txn()?;
         let mut cursor = txn.open_ro_cursor(db)?;
 
-        for (key, value) in cursor.iter() {
+        for result in cursor.iter() {
+            let (key, value) = match result {
+                Ok((key, value)) => (key, value),
+                Err(e) => {
+                    error!("Error while iterating LMDB: {}", e);
+                    continue;
+                }
+            };
+
             let token_id = match std::str::from_utf8(key) {
                 Ok(s) => s.to_string(),
                 Err(_) => continue,
