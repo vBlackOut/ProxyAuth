@@ -144,7 +144,13 @@ docker compose restart
 
 </details>
 
-## TODO
+## TODO v1.x 🚀
+- Replace Actix Web with Hyper to <code>gain full low-level control over HTTP handling</code>
+- Re-implement the rate-limiting mechanism directly in Hyper, with per-route control for <code>better flexibility</code>
+- Migrating to Hyper 1.6 is possible, but the process is complex and requires <code>significant refactoring</code>
+
+
+## TODO <= 1.0 [Full Done]
 - Log to stdout using `tracing` (Rust log lib) [still being deployed]
 - ~Protect passwords config.json using Argon2.~ [Done v0.4.0]
 - ~Add Loki integration with tracing [needs further exploration]~ [Done >=0.5.2]
