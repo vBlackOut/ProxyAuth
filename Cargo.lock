@@ -2221,11 +2221,12 @@ dependencies = [
 
 [[package]]
 name = "proxyauth"
-version = "0.8.4-beta0"
+version = "0.8.4"
 dependencies = [
  "actix-governor",
  "actix-http",
  "actix-rt",
+ "actix-service",
  "actix-web",
  "ahash",
  "anyhow",
@@ -2263,6 +2264,7 @@ dependencies = [
  "reqwest 0.11.27",
  "rustc-hash",
  "rustls",
+ "rustls-native-certs",
  "rustls-pemfile",
  "sequoia-openpgp",
  "serde",

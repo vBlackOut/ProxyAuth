@@ -7,6 +7,7 @@ use hyper_rustls::HttpsConnector;
 use once_cell::sync::Lazy;
 use rustls::{Certificate, PrivateKey};
 use rustls::{ClientConfig, RootCertStore};
+use rustls_native_certs::load_native_certs;
 use rustls_pemfile::{certs, pkcs8_private_keys};
 use std::cell::RefCell;
 use std::str::FromStr;
@@ -14,6 +15,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::{fs::File, io::BufReader};
 use webpki_roots::TLS_SERVER_ROOTS;
+
 
 type AHashDashMap<K, V> = DashMap<K, V, RandomState>;
 type HttpsClient = Client<HttpsConnector<HttpConnector>>;
@@ -277,18 +279,38 @@ pub fn build_hyper_client_normal(state: &Arc<AppConfig>) -> Client<HttpsConnecto
     let timeout_duration = Duration::from_millis(5000);
 
     let mut root_store = RootCertStore::empty();
-    root_store.add_trust_anchors(TLS_SERVER_ROOTS.iter().map(|ta| {
-        rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
-            ta.subject,
-            ta.spki,
-            ta.name_constraints,
-        )
-    }));
+
+    if let Ok(native) = load_native_certs() {
+        for cert in native {
+            if let Err(e) = root_store.add(&Certificate(cert.0)) {
+                tracing::warn!("Failed to add system cert: {}", e);
+            }
+        }
+        root_store.add_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.iter().map(|ta| {
+            rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
+                ta.subject,
+                ta.spki,
+                ta.name_constraints,
+            )
+        }));
+        tracing::debug!("Loaded system trust store");
+    } else {
+        tracing::warn!("Falling back to webpki-roots trust store");
+        root_store.add_trust_anchors(
+            TLS_SERVER_ROOTS
+            .iter()
+            .map(|ta| rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
+                ta.subject,
+                ta.spki,
+                ta.name_constraints,
+            ))
+        );
+    }
 
     let config = ClientConfig::builder()
-        .with_safe_defaults()
-        .with_root_certificates(root_store)
-        .with_no_client_auth();
+    .with_safe_defaults()
+    .with_root_certificates(root_store)
+    .with_no_client_auth();
 
     let mut http_connector = HttpConnector::new();
     http_connector.set_connect_timeout(Some(timeout_duration));
@@ -300,8 +322,8 @@ pub fn build_hyper_client_normal(state: &Arc<AppConfig>) -> Client<HttpsConnecto
     let https_connector = HttpsConnector::from((http_connector, tls_config));
 
     Client::builder()
-        .pool_idle_timeout(Some(timeout_duration))
-        .pool_max_idle_per_host(state.max_idle_per_host.into())
-        .http2_adaptive_window(true)
-        .build::<_, Body>(https_connector)
+    .pool_idle_timeout(Some(timeout_duration))
+    .pool_max_idle_per_host(state.max_idle_per_host.into())
+    .http2_adaptive_window(true)
+    .build::<_, Body>(https_connector)
 }

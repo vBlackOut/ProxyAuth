@@ -4,7 +4,7 @@ use crate::config::config::{AuthRequest, User};
 use crate::network::proxy::client_ip;
 use crate::token::crypto::{calcul_cipher, derive_key_from_secret, encrypt};
 use crate::token::security::generate_token;
-use actix_web::{HttpRequest, HttpResponse, Responder, web};
+use actix_web::{HttpRequest, http::header, HttpResponse, Responder, web};
 use argon2::Argon2;
 use argon2::password_hash::{PasswordHash, PasswordVerifier};
 use blake3;
@@ -113,11 +113,39 @@ pub fn get_expiry_with_timezone_format(
     local_expiry.format("%Y-%m-%d %H:%M:%S").to_string()
 }
 
+pub async fn auth_options(req: HttpRequest, data: web::Data<AppState>) -> impl Responder {
+    let origin_header = req.headers().get(header::ORIGIN);
+    let origin = origin_header.and_then(|v| v.to_str().ok());
+
+    let allowed = data.config.cors_origins.as_ref();
+
+    let is_allowed = match (origin, allowed) {
+        (Some(o), Some(list)) => {
+            let origin_normalized = o.trim_end_matches('/');
+            list.iter()
+            .any(|allowed| allowed.trim_end_matches('/') == origin_normalized)
+        }
+        _ => false,
+    };
+
+    if let (Some(origin_str), true) = (origin, is_allowed) {
+        HttpResponse::Ok()
+        .insert_header((header::ACCESS_CONTROL_ALLOW_ORIGIN, origin_str))
+        .insert_header((header::ACCESS_CONTROL_ALLOW_METHODS, "POST, OPTIONS"))
+        .insert_header((header::ACCESS_CONTROL_ALLOW_HEADERS, "Authorization, Content-Type, Accept"))
+        .insert_header((header::ACCESS_CONTROL_MAX_AGE, "3600"))
+        .finish()
+    } else {
+        HttpResponse::Forbidden().body("CORS origin not allowed")
+    }
+}
+
 pub async fn auth(
     req: HttpRequest,
     auth: web::Json<AuthRequest>,
     data: web::Data<AppState>,
 ) -> impl Responder {
+
     let ip = client_ip(&req).expect("?").to_string();
 
     if let Some(index_user) = data
@@ -216,6 +244,7 @@ pub async fn auth(
             "[{}] new token generated for user {} expirated at {}",
             ip, user.username, expires_at_str
         );
+
         HttpResponse::Ok()
             .append_header(("server", "ProxyAuth"))
             .json(serde_json::json!({

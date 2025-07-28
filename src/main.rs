@@ -33,8 +33,9 @@ use crate::cli::prompt::prompt;
 use crate::keystore::import::decrypt_keystore;
 use crate::revoke::db::{load_revoked_tokens, start_revoked_token_ttl};
 use crate::tls::check_port;
+use crate::network::cors::CorsMiddleware;
 use actix_governor::{Governor, GovernorConfigBuilder};
-use actix_web::{App, HttpServer, web};
+use actix_web::{App, HttpServer, http::Method, web};
 use chrono::Local;
 use config::config::{AppConfig, AppState, RouteConfig, load_config};
 use config::def_config::{create_config, ensure_running_as_proxyauth, switch_to_user};
@@ -53,7 +54,7 @@ pub use stats::tokencount::CounterToken;
 use std::net::TcpListener;
 use std::{fs, process, sync::Arc, time::Duration};
 use tls::load_rustls_config;
-use token::auth::auth;
+use token::auth::{auth, auth_options};
 use token::security::init_derived_key;
 use tokio::sync::mpsc::unbounded_channel;
 use tracing::{error, warn};
@@ -312,13 +313,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .try_into()
         .expect("bad burst_proxy value");
 
-    let delay_block_proxy_config = config
-        .ratelimit_proxy
-        .get("block_delay")
-        .copied()
-        .unwrap_or(0)
-        .try_into()
-        .expect("bad delay_proxy value");
 
     // configuration auth ratelimit
     let requests_per_second_auth_config = config
@@ -334,14 +328,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or(0)
         .try_into()
         .expect("bad burst_auth value");
-
-    let delay_block_auth_config = config
-        .ratelimit_auth
-        .get("block_delay")
-        .copied()
-        .unwrap_or(0)
-        .try_into()
-        .expect("bad delay_auth value");
 
     let mode_actix = mode_actix_web(
         &requests_per_second_auth_config,
@@ -375,18 +361,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         match mode_actix {
             "NO_RATELIMIT_AUTH" => {
+
+                let seconds_per_request = Duration::from_secs_f64(1.0 / requests_per_second_proxy_config as f64);
+
                 let governor_proxy_conf = GovernorConfigBuilder::default()
-                    .seconds_per_request(requests_per_second_proxy_config)
                     .burst_size(burst_proxy_config)
                     .key_extractor(UserToken)
-                    .period(std::time::Duration::from_millis(delay_block_proxy_config))
+                    .period(seconds_per_request)
                     .finish()
                     .unwrap();
 
                 let server = HttpServer::new(move || {
                     App::new()
                         .app_data(state_cloned.clone())
-                        .service(web::resource("/auth").route(web::post().to(auth)))
+                        .wrap(CorsMiddleware {
+                            config: state_cloned.clone(),
+                        })
+                        .service(web::resource("/auth")
+                            .route(web::post().to(auth))
+                            .route(web::method(Method::OPTIONS).to(auth_options))
+                        )
                         .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
                         .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
                         .service(web::resource("/adm/revoke").route(web::post().to(revoke_route)))
@@ -410,23 +404,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             "NO_RATELIMIT_PROXY" => {
+
+                let seconds_per_request = Duration::from_secs_f64(1.0 / requests_per_second_auth_config as f64);
+
                 let governor_auth_conf = GovernorConfigBuilder::default()
-                    .seconds_per_request(requests_per_second_auth_config)
                     .burst_size(burst_auth_config)
                     .use_headers()
-                    .period(std::time::Duration::from_millis(delay_block_auth_config))
+                    .period(seconds_per_request)
                     .finish()
                     .unwrap();
 
                 let server = HttpServer::new(move || {
                     App::new()
                         .app_data(state_cloned.clone())
+                        .wrap(CorsMiddleware {
+                            config: state_cloned.clone(),
+                        })
                         .service(
                             web::resource("/auth").route(
-                                web::post()
-                                    .to(auth)
-                                    .wrap(Governor::new(&governor_auth_conf)),
-                            ),
+                                web::post().to(auth).wrap(Governor::new(&governor_auth_conf)),
+                            )
+                            .route(
+                                 web::method(Method::OPTIONS).to(auth_options),
+                            )
                         )
                         .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
                         .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
@@ -449,31 +449,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             "RATELIMIT_GLOBAL_ON" => {
+                let seconds_per_request_auth = Duration::from_secs_f64(1.0 / requests_per_second_auth_config as f64);
+
                 let governor_auth_conf = GovernorConfigBuilder::default()
-                    .seconds_per_request(requests_per_second_auth_config)
                     .burst_size(burst_auth_config)
                     .use_headers()
-                    .period(std::time::Duration::from_millis(delay_block_auth_config))
+                    .period(seconds_per_request_auth)
                     .finish()
                     .unwrap();
 
+                let seconds_per_request_proxy = Duration::from_secs_f64(1.0 / requests_per_second_proxy_config as f64);
+
                 let governor_proxy_conf = GovernorConfigBuilder::default()
-                    .seconds_per_request(requests_per_second_proxy_config)
                     .burst_size(burst_proxy_config)
                     .key_extractor(UserToken)
-                    .period(std::time::Duration::from_millis(delay_block_proxy_config))
+                    .period(seconds_per_request_proxy)
                     .finish()
                     .unwrap();
 
                 let server = HttpServer::new(move || {
                     App::new()
                         .app_data(state_cloned.clone())
-                        .service(
-                            web::resource("/auth").route(
-                                web::post()
-                                    .to(auth)
-                                    .wrap(Governor::new(&governor_auth_conf)),
-                            ),
+                        .wrap(CorsMiddleware {
+                            config: state_cloned.clone(),
+                        })
+                        .service(web::resource("/auth")
+                            .route(
+                                web::post().to(auth).wrap(Governor::new(&governor_auth_conf)),
+                            )
+                            .route(
+                                 web::method(Method::OPTIONS).to(auth_options),
+                            )
                         )
                         .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
                         .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
@@ -501,7 +507,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let server = HttpServer::new(move || {
                     App::new()
                         .app_data(state_cloned.clone())
-                        .service(web::resource("/auth").route(web::post().to(auth)))
+                        .wrap(CorsMiddleware {
+                            config: state_cloned.clone(),
+                        })
+                        .service(web::resource("/auth")
+                            .route(web::post().to(auth))
+                            .route(web::method(Method::OPTIONS).to(auth_options))
+                        )
                         .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
                         .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
                         .service(web::resource("/adm/revoke").route(web::post().to(revoke_route)))
@@ -526,7 +538,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let server = HttpServer::new(move || {
                     App::new()
                         .app_data(state_cloned.clone())
-                        .service(web::resource("/auth").route(web::post().to(auth)))
+                        .wrap(CorsMiddleware {
+                            config: state_cloned.clone(),
+                        })
+                        .service(web::resource("/auth")
+                            .route(web::post().to(auth))
+                            .route(web::method(Method::OPTIONS).to(auth_options))
+                        )
                         .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
                         .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
                         .service(web::resource("/adm/revoke").route(web::post().to(revoke_route)))
