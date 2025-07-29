@@ -2,11 +2,11 @@ use crate::AppConfig;
 use crate::AppState;
 use crate::build::build_info::get;
 use crate::revoke::load::is_token_revoked;
-use crate::timezone::check_date_token;
 use crate::token::crypto::{calcul_factorhash, decrypt, derive_key_from_secret};
 use actix_web::web;
 use blake3;
-use chrono::{Duration, TimeZone, Timelike, Utc};
+use chrono::{DateTime, Duration, TimeZone, Timelike, Utc};
+use chrono_tz::Tz;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -64,6 +64,42 @@ fn format_long_date(seconds: u128) -> String {
 pub fn init_derived_key(secret: &str) {
     let key = derive_key_from_secret(secret);
     DERIVED_KEY.set(key).expect("Key already initialized");
+}
+
+pub fn check_date_token(
+    time_str: &str,
+    username: &str,
+    ip: &str,
+    timezone: &str,
+) -> Result<u64, ()> {
+    let tz: Tz = timezone.parse().map_err(|_| {
+        warn!("[{}] invalid timezone '{}'", ip, timezone);
+        ()
+    })?;
+
+    let expire_time = time_str
+    .parse::<DateTime<Utc>>()
+    .or_else(|_| {
+        time_str
+        .parse::<i64>()
+        .map(|ts| Utc.timestamp_opt(ts, 0).single().unwrap())
+    })
+    .map_err(|_| {
+        warn!("[{}] failed to parse expiration time: {}", ip, time_str);
+        ()
+    })?;
+
+    // Convert to local time
+    let expire_local = expire_time.with_timezone(&tz);
+    let now_local = Utc::now().with_timezone(&tz);
+
+    if now_local.timestamp() >= expire_local.timestamp() {
+        warn!("[{}] token is expired for user {}", ip, username);
+        return Err(());
+    }
+
+    let diff = expire_local.timestamp() - now_local.timestamp();
+    diff.try_into().map_err(|_| ())
 }
 
 pub fn generate_secret(secret: &str, token_expiry_seconds: &i64) -> String {

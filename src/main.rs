@@ -22,7 +22,6 @@ mod network;
 mod revoke;
 mod start_actix;
 mod stats;
-mod timezone;
 mod tls;
 mod token;
 

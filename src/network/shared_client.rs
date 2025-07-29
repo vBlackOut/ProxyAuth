@@ -195,13 +195,32 @@ pub fn build_hyper_client_proxy(
     let timeout_duration = Duration::from_millis(5000);
 
     let mut root_store = RootCertStore::empty();
-    root_store.add_trust_anchors(TLS_SERVER_ROOTS.iter().map(|ta| {
-        rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
-            ta.subject,
-            ta.spki,
-            ta.name_constraints,
-        )
-    }));
+
+    if let Ok(native) = load_native_certs() {
+        for cert in native {
+            if let Err(e) = root_store.add(&Certificate(cert.0)) {
+                tracing::warn!("Failed to add system cert: {}", e);
+            }
+        }
+        root_store.add_trust_anchors(webpki_roots::TLS_SERVER_ROOTS.iter().map(|ta| {
+            rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
+                ta.subject,
+                ta.spki,
+                ta.name_constraints,
+            )
+        }));
+    } else {
+        tracing::warn!("Falling back to webpki-roots trust store");
+        root_store.add_trust_anchors(
+            TLS_SERVER_ROOTS
+            .iter()
+            .map(|ta| rustls::OwnedTrustAnchor::from_subject_spki_name_constraints(
+                ta.subject,
+                ta.spki,
+                ta.name_constraints,
+            ))
+        );
+    }
 
     let config = if opts.use_cert {
         let cert_path = opts.cert_path.expect("cert_path required");
@@ -293,7 +312,6 @@ pub fn build_hyper_client_normal(state: &Arc<AppConfig>) -> Client<HttpsConnecto
                 ta.name_constraints,
             )
         }));
-        tracing::debug!("Loaded system trust store");
     } else {
         tracing::warn!("Falling back to webpki-roots trust store");
         root_store.add_trust_anchors(
