@@ -20,7 +20,6 @@ pub mod keystore;
 pub mod network;
 pub mod revoke;
 pub mod stats;
-pub mod timezone;
 pub mod token;
 
 pub use config::config::{AppConfig, AppState, RouteConfig};

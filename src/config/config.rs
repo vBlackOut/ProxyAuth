@@ -149,6 +149,15 @@ pub struct AppConfig {
 
     #[serde(default)]
     pub redis: Option<String>,
+
+    #[serde(default)]
+    pub cors_origins: Option<Vec<String>>,
+
+    #[serde(default = "default_session_cookie")]
+    pub session_cookie: bool,
+
+    #[serde(default = "default_max_age_session_cookie")]
+    pub max_age_session_cookie: i64,
 }
 
 impl Serialize for AppConfig {
@@ -163,6 +172,7 @@ impl Serialize for AppConfig {
         state.serialize_field("host", &self.host)?;
         state.serialize_field("port", &self.port)?;
         state.serialize_field("log", &self.log)?;
+        state.serialize_field("cors_origins", &self.cors_origins)?;
         state.serialize_field("login_via_otp", &self.login_via_otp)?;
         state.serialize_field("max_connections", &self.max_connections)?;
         state.serialize_field("pending_connections_limit", &self.pending_connections_limit)?;
@@ -267,7 +277,16 @@ fn default_max_idle_per_host() -> u16 {
     50
 }
 
+fn default_max_age_session_cookie() -> i64 {
+    3600
+}
+
+
 fn default_login_via_otp() -> bool {
+    false
+}
+
+fn default_session_cookie() -> bool {
     false
 }
 
