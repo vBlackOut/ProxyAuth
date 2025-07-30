@@ -155,7 +155,7 @@ pub async fn auth(
     if data.config.session_cookie {
         if let Some(cookie) = req.cookie("session_token") {
             let session_token = cookie.value();
-            info!("[{}] Found session cookie: {}", ip, session_token);
+            //info!("[{}] Found session cookie: {}", ip, session_token);
 
             if let Ok((username, _token_id, expires_at)) = validate_token(
                 session_token,

@@ -82,6 +82,17 @@ pub async fn global_proxy(
     }
 
     let path = req.path();
+    let method = req.method().as_str();
+    let ip = req
+    .peer_addr()
+    .map(|a| a.ip().to_string())
+    .unwrap_or_else(|| "-".to_string());
+    let user_agent = req
+    .headers()
+    .get("User-Agent")
+    .and_then(|h| h.to_str().ok())
+    .unwrap_or("-");
+
     if let Some(rule) = data
         .routes
         .routes
@@ -94,6 +105,10 @@ pub async fn global_proxy(
             proxy_without_proxy(req, body, data).await
         }
     } else {
+        info!(
+            "{} 404 {} {} {}",
+            ip, method, path, user_agent
+        );
         Ok(HttpResponse::NotFound()
             .append_header(("server", "ProxyAuth"))
             .body("404 Not Found"))
@@ -523,6 +538,9 @@ pub async fn proxy_without_proxy(
                     })
                 })
                 .ok_or_else(|| {
+                    info!(
+                        "[{}] {} {} 401 Unauthorized token attempt {}", ip, path, method, user_agent
+                    );
                     let mut resp = HttpResponse::Unauthorized();
                     resp.append_header(("server", "ProxyAuth"));
                     add_cors_headers(&mut resp, &req);
@@ -531,21 +549,25 @@ pub async fn proxy_without_proxy(
 
                 let (username, token_id, _expiry) = match validate_token(token_header, &data, &data.config, &ip).await {
                     Ok(result) => result,
-                    Err(err) => {
-                        warn!(client_ip = %ip, "Unauthorized token attempt");
-
+                    Err(_err) => {
+                        info!(
+                            "[{}] {} {} 401 Unauthorized token attempt {}", ip, path, method, user_agent
+                        );
                         let mut resp = HttpResponse::Unauthorized();
                         resp.append_header(("server", "ProxyAuth"));
                         add_cors_headers(&mut resp, &req);
-                        return Ok(resp.body(err));
+                        return Ok(resp.body("401 Unauthorized"));
                     }
                 };
 
                 if !rule.username.contains(&username) {
+                    info!(
+                        "[{}] {} {} 401 Unauthorized token attempt {}", ip, path, method, user_agent
+                    );
                     let mut resp = HttpResponse::Unauthorized();
                     resp.append_header(("server", "ProxyAuth"));
                     add_cors_headers(&mut resp, &req);
-                    return Ok(resp.body("403 Forbidden"));
+                    return Ok(resp.body("401 Unauthorized"));
                 }
 
                 (username, token_id)
@@ -566,8 +588,7 @@ pub async fn proxy_without_proxy(
 
         request_builder = request_builder.header(USER_AGENT, "ProxyAuth").header(
             "Host",
-            uri.host()
-                .ok_or_else(|| error::ErrorInternalServerError("Missing host"))?,
+            uri.host().ok_or_else(|| error::ErrorInternalServerError("Missing host"))?,
         );
 
         request_builder = inject_header(request_builder, &username, &data.config);
@@ -705,7 +726,7 @@ pub async fn proxy_without_proxy(
         })?;
 
         info!(
-            "{} - {} {} {} {} {} [tid:{}] {}",
+            "[{}] - {} {} {} {} {} [tid:{}] {}",
             ip,
             path,
             method,
@@ -721,7 +742,16 @@ pub async fn proxy_without_proxy(
             .append_header(("server", "ProxyAuth"))
             .body(body_bytes))
     } else {
-
+        let user_agent = req
+        .headers()
+        .get("User-Agent")
+        .and_then(|h| h.to_str().ok())
+        .unwrap_or("-");
+        let method = req.method().as_str();
+        let path = req.path();
+        info!(
+            "[{}] {} {} 404 {}", ip, path, method, user_agent
+        );
         let mut not_found_resp = HttpResponse::NotFound();
         add_cors_headers(&mut not_found_resp, &req);
         Ok(HttpResponse::NotFound()

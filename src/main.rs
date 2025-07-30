@@ -42,7 +42,7 @@ use dashmap::DashMap;
 use futures_util::future::join_all;
 use logs::{ChannelLogWriter, get_logs, log_collector};
 use network::proxy::global_proxy;
-use network::ratelimit::UserToken;
+use network::ratelimit::{UserToken, RateLimitLogger};
 use network::shared_client::{
     ClientOptions, build_hyper_client_cert, build_hyper_client_normal, build_hyper_client_proxy,
 };
@@ -374,6 +374,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let server = HttpServer::new(move || {
                     App::new()
                         .app_data(state_cloned.clone())
+                        .wrap(RateLimitLogger)
                         .wrap(CorsMiddleware {
                             config: state_cloned.clone(),
                         })
@@ -422,6 +423,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let server = HttpServer::new(move || {
                     App::new()
                         .app_data(state_cloned.clone())
+                        .wrap(RateLimitLogger)
                         .wrap(CorsMiddleware {
                             config: state_cloned.clone(),
                         })
@@ -480,6 +482,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let server = HttpServer::new(move || {
                     App::new()
                         .app_data(state_cloned.clone())
+                        .wrap(RateLimitLogger)
                         .wrap(CorsMiddleware {
                             config: state_cloned.clone(),
                         })
