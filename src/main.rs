@@ -54,6 +54,7 @@ use std::net::TcpListener;
 use std::{fs, process, sync::Arc, time::Duration};
 use tls::load_rustls_config;
 use token::auth::{auth, auth_options};
+use token::logout::{logout_session, logout_options};
 use token::security::init_derived_key;
 use tokio::sync::mpsc::unbounded_channel;
 use tracing::{error, warn};
@@ -384,6 +385,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
                         .service(web::resource("/adm/revoke").route(web::post().to(revoke_route)))
                         .service(
+                            web::resource("/logout")
+                            .route(web::get().to(logout_session))
+                            .route(web::method(Method::OPTIONS).to(logout_options)),
+                        )
+                        .service(
                             web::resource("/adm/auth/totp/get")
                                 .route(web::post().to(get_otpauth_uri)),
                         )
@@ -430,6 +436,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
                         .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
                         .service(web::resource("/adm/revoke").route(web::post().to(revoke_route)))
+                        .service(
+                            web::resource("/logout")
+                            .route(web::get().to(logout_session))
+                            .route(web::method(Method::OPTIONS).to(logout_options)),
+                        )
                         .service(
                             web::resource("/adm/auth/totp/get")
                                 .route(web::post().to(get_otpauth_uri)),
@@ -484,6 +495,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
                         .service(web::resource("/adm/revoke").route(web::post().to(revoke_route)))
                         .service(
+                            web::resource("/logout")
+                            .route(web::get().to(logout_session))
+                            .route(web::method(Method::OPTIONS).to(logout_options)),
+                        )
+                        .service(
                             web::resource("/adm/auth/totp/get")
                                 .route(web::post().to(get_otpauth_uri)),
                         )
@@ -517,6 +533,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
                         .service(web::resource("/adm/revoke").route(web::post().to(revoke_route)))
                         .service(
+                            web::resource("/logout")
+                            .route(web::get().to(logout_session))
+                            .route(web::method(Method::OPTIONS).to(logout_options)),
+                        )
+                        .service(
                             web::resource("/adm/auth/totp/get")
                                 .route(web::post().to(get_otpauth_uri)),
                         )
@@ -547,6 +568,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
                         .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
                         .service(web::resource("/adm/revoke").route(web::post().to(revoke_route)))
+                        .service(
+                            web::resource("/logout")
+                            .route(web::get().to(logout_session))
+                            .route(web::method(Method::OPTIONS).to(logout_options)),
+                        )
                         .service(
                             web::resource("/adm/auth/totp/get")
                                 .route(web::post().to(get_otpauth_uri)),

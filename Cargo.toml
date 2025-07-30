@@ -39,6 +39,7 @@ serde_json = "1"
 [dependencies]
 actix-web = { version = "4.10.2", features = ["rustls-0_21"] }
 actix-service = "2"
+cookie = "0.18"
 reqwest = { version = "0.11", features = ["native-tls", "json", "blocking"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.9.33"
@@ -93,4 +94,5 @@ lazy_static = "1.4"
 itoa = "1.0"
 redis = { version = "0.32", features = ["tokio-comp"] }
 lmdb-rkv = "0.14"
+time = "0.3"
 

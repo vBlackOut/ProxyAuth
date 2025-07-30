@@ -3,8 +3,9 @@ use crate::AppState;
 use crate::config::config::{AuthRequest, User};
 use crate::network::proxy::client_ip;
 use crate::token::crypto::{calcul_cipher, derive_key_from_secret, encrypt};
-use crate::token::security::generate_token;
+use crate::token::security::{generate_token, validate_token};
 use actix_web::{HttpRequest, http::header, HttpResponse, Responder, web};
+use actix_web::cookie::{Cookie, SameSite};
 use argon2::Argon2;
 use argon2::password_hash::{PasswordHash, PasswordVerifier};
 use blake3;
@@ -17,6 +18,7 @@ use rand::seq::SliceRandom;
 use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
+use time::OffsetDateTime;
 use totp_rs::{Algorithm, TOTP};
 use tracing::{info, warn};
 
@@ -110,7 +112,7 @@ pub fn get_expiry_with_timezone_format(
 
     let local_expiry: DateTime<Tz> = utc_expiry.with_timezone(&tz);
 
-    local_expiry.format("%Y-%m-%d %H:%M:%S").to_string()
+    local_expiry.format("%Y-%m-%d %H:%M:%S %:z").to_string()
 }
 
 pub async fn auth_options(req: HttpRequest, data: web::Data<AppState>) -> impl Responder {
@@ -147,6 +149,28 @@ pub async fn auth(
 ) -> impl Responder {
 
     let ip = client_ip(&req).expect("?").to_string();
+
+    // Check if session_cookie is enabled
+    if data.config.session_cookie {
+        if let Some(cookie) = req.cookie("session_token") {
+            let session_token = cookie.value();
+
+            if let Ok((username, expires_at)) = validate_token(
+                session_token,
+                &data,
+                &data.config,
+                &ip,
+            ).await {
+                return HttpResponse::Ok()
+                .append_header(("server", "ProxyAuth"))
+                .json(serde_json::json!({
+                    "message": "Session already active",
+                    "user": username,
+                    "expires_at": expires_at,
+                }));
+            }
+        }
+    }
 
     if let Some(index_user) = data
         .config
@@ -245,12 +269,33 @@ pub async fn auth(
             ip, user.username, expires_at_str
         );
 
-        HttpResponse::Ok()
-            .append_header(("server", "ProxyAuth"))
-            .json(serde_json::json!({
-                "token": token_encrypt,
-                "expires_at": expires_at_str,
-            }))
+        let mut resp = HttpResponse::Ok();
+        resp.append_header(("server", "ProxyAuth"));
+
+        if data.config.session_cookie {
+            let seconds = expiry
+            .signed_duration_since(Utc::now())
+            .num_seconds()
+            .clamp(60, data.config.max_age_session_cookie);
+
+            let cookie_expiry = Utc::now() + Duration::seconds(seconds);
+            let cookie_expiry_time = OffsetDateTime::from_unix_timestamp(cookie_expiry.timestamp()).unwrap();
+
+            let cookie = Cookie::build("session_token", token_encrypt.clone())
+            .path("/")
+            .secure(true)
+            .http_only(true)
+            .same_site(SameSite::Strict)
+            .expires(cookie_expiry_time)
+            .finish();
+
+            resp.cookie(cookie);
+        }
+
+        resp.json(serde_json::json!({
+            "token": token_encrypt,
+            "expires_at": expires_at_str,
+        }))
     } else {
         warn!("Invalid credential for enter user {}.", auth.username);
         return HttpResponse::Unauthorized()

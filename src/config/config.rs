@@ -152,6 +152,12 @@ pub struct AppConfig {
 
     #[serde(default)]
     pub cors_origins: Option<Vec<String>>,
+
+    #[serde(default = "default_session_cookie")]
+    pub session_cookie: bool,
+
+    #[serde(default = "default_max_age_session_cookie")]
+    pub max_age_session_cookie: i64,
 }
 
 impl Serialize for AppConfig {
@@ -271,7 +277,16 @@ fn default_max_idle_per_host() -> u16 {
     50
 }
 
+fn default_max_age_session_cookie() -> i64 {
+    3600
+}
+
+
 fn default_login_via_otp() -> bool {
+    false
+}
+
+fn default_session_cookie() -> bool {
     false
 }
 
