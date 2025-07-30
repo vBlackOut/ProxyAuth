@@ -1,5 +1,6 @@
 use std::task::{Context, Poll};
 use actix_service::{Service, Transform};
+use actix_web::http::header;
 use actix_web::dev::{ServiceRequest, ServiceResponse};
 use actix_web::http::header::{HeaderValue, ACCESS_CONTROL_ALLOW_ORIGIN, SERVER};
 use actix_web::{web, Error};
@@ -78,7 +79,8 @@ B: 'static,
 
             res.headers_mut()
                 .insert(SERVER, HeaderValue::from_static("ProxyAuth"));
-
+            res.headers_mut()
+                .insert(header::ACCESS_CONTROL_ALLOW_CREDENTIALS, HeaderValue::from_static("true"));
             Ok(res)
         })
     }

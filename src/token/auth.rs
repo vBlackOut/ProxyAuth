@@ -135,6 +135,7 @@ pub async fn auth_options(req: HttpRequest, data: web::Data<AppState>) -> impl R
         .insert_header((header::ACCESS_CONTROL_ALLOW_ORIGIN, origin_str))
         .insert_header((header::ACCESS_CONTROL_ALLOW_METHODS, "POST, OPTIONS"))
         .insert_header((header::ACCESS_CONTROL_ALLOW_HEADERS, "Authorization, Content-Type, Accept"))
+        .insert_header((header::ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"))
         .insert_header((header::ACCESS_CONTROL_MAX_AGE, "3600"))
         .finish()
     } else {
@@ -154,17 +155,33 @@ pub async fn auth(
     if data.config.session_cookie {
         if let Some(cookie) = req.cookie("session_token") {
             let session_token = cookie.value();
+            info!("[{}] Found session cookie: {}", ip, session_token);
 
-            if let Ok((username, expires_at)) = validate_token(
+            if let Ok((username, _token_id, expires_at)) = validate_token(
                 session_token,
                 &data,
                 &data.config,
                 &ip,
             ).await {
-                return HttpResponse::Ok()
-                .append_header(("server", "ProxyAuth"))
-                .json(serde_json::json!({
-                    "message": "Session already active",
+                let mut resp = HttpResponse::Ok();
+                resp.append_header(("server", "ProxyAuth"));
+
+                // CORS check
+                if let Some(origin_header) = req.headers().get(header::ORIGIN) {
+                    if let Ok(origin_str) = origin_header.to_str() {
+                        if let Some(cors_origins) = &data.config.cors_origins {
+                            let origin_normalized = origin_str.trim_end_matches('/');
+
+                            if cors_origins.iter().any(|allowed| allowed.trim_end_matches('/') == origin_normalized) {
+                                resp.append_header((header::ACCESS_CONTROL_ALLOW_ORIGIN, origin_str));
+                                resp.append_header((header::ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"));
+                                resp.append_header((header::ACCESS_CONTROL_MAX_AGE, "3600"));
+                            }
+                        }
+                    }
+                }
+
+                return resp.json(serde_json::json!({
                     "user": username,
                     "expires_at": expires_at,
                 }));
@@ -273,10 +290,16 @@ pub async fn auth(
         resp.append_header(("server", "ProxyAuth"));
 
         if data.config.session_cookie {
+
+            let session_max_age = data
+            .config
+            .max_age_session_cookie
+            .min(data.config.token_expiry_seconds);
+
             let seconds = expiry
             .signed_duration_since(Utc::now())
             .num_seconds()
-            .clamp(60, data.config.max_age_session_cookie);
+            .clamp(60, session_max_age);
 
             let cookie_expiry = Utc::now() + Duration::seconds(seconds);
             let cookie_expiry_time = OffsetDateTime::from_unix_timestamp(cookie_expiry.timestamp()).unwrap();
@@ -289,13 +312,30 @@ pub async fn auth(
             .expires(cookie_expiry_time)
             .finish();
 
+            // check cors
+            if let Some(origin_header) = req.headers().get(header::ORIGIN) {
+                if let Ok(origin_str) = origin_header.to_str() {
+                    if let Some(cors_origins) = &data.config.cors_origins {
+                        let origin_normalized = origin_str.trim_end_matches('/');
+
+                        if cors_origins.iter().any(|allowed| allowed.trim_end_matches('/') == origin_normalized) {
+                            resp.insert_header((header::ACCESS_CONTROL_ALLOW_ORIGIN, origin_str));
+                            resp.insert_header((header::ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"));
+                            resp.insert_header((header::ACCESS_CONTROL_MAX_AGE, "3600"));
+                        }
+                    }
+                }
+            }
+
             resp.cookie(cookie);
+
         }
 
         resp.json(serde_json::json!({
             "token": token_encrypt,
             "expires_at": expires_at_str,
         }))
+
     } else {
         warn!("Invalid credential for enter user {}.", auth.username);
         return HttpResponse::Unauthorized()

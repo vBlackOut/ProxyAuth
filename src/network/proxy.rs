@@ -220,7 +220,7 @@ pub async fn proxy_with_proxy(
                     error::InternalError::from_response("Missing token", resp.finish())
                 })?;
 
-                let (username, token_id) = match validate_token(token_header, &data, &data.config, &ip).await {
+                let (username, token_id, _expiry) = match validate_token(token_header, &data, &data.config, &ip).await {
                     Ok(result) => result,
                     Err(err) => {
                         warn!(
@@ -529,7 +529,7 @@ pub async fn proxy_without_proxy(
                     error::InternalError::from_response("Missing token", resp.finish())
                 })?;
 
-                let (username, token_id) = match validate_token(token_header, &data, &data.config, &ip).await {
+                let (username, token_id, _expiry) = match validate_token(token_header, &data, &data.config, &ip).await {
                     Ok(result) => result,
                     Err(err) => {
                         warn!(client_ip = %ip, "Unauthorized token attempt");

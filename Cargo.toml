@@ -95,4 +95,5 @@ itoa = "1.0"
 redis = { version = "0.32", features = ["tokio-comp"] }
 lmdb-rkv = "0.14"
 time = "0.3"
+mime = "0.3"
 

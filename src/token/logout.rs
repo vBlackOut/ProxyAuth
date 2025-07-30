@@ -1,4 +1,5 @@
-use actix_web::{cookie::{Cookie, SameSite}, HttpRequest, HttpResponse, Responder, web, http::header};
+use actix_web::{HttpRequest, HttpResponse, web, http::header,  http::header::ContentType};
+use time::{OffsetDateTime, format_description::well_known::Rfc2822};
 use crate::AppState;
 
 pub async fn logout_options(req: HttpRequest, data: web::Data<AppState>) -> impl actix_web::Responder {
@@ -28,27 +29,26 @@ pub async fn logout_options(req: HttpRequest, data: web::Data<AppState>) -> impl
     }
 }
 
-pub async fn logout_session(req: HttpRequest) -> impl Responder {
-    let origin = req.headers().get(header::ORIGIN).and_then(|v| v.to_str().ok());
 
+pub async fn logout_session(req: HttpRequest) -> HttpResponse {
+    let expires_str = OffsetDateTime::UNIX_EPOCH
+    .format(&Rfc2822)
+    .unwrap();
+
+    let raw_cookie = format!(
+        "session_token=; Expires={}; Path=/; HttpOnly; Secure; SameSite=Strict",
+        expires_str
+    );
     let mut resp = HttpResponse::Ok();
 
-    if let Some(origin_value) = origin {
-        resp.append_header((header::ACCESS_CONTROL_ALLOW_ORIGIN, origin_value));
-        resp.append_header((header::ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"));
-        resp.append_header((header::ACCESS_CONTROL_ALLOW_HEADERS, "Authorization, Content-Type"));
-        resp.append_header((header::ACCESS_CONTROL_ALLOW_METHODS, "GET, POST, OPTIONS"));
-        resp.append_header((header::ACCESS_CONTROL_MAX_AGE, "3600"));
+    resp.insert_header((header::ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"));
+
+    if let Some(origin) = req.headers().get(header::ORIGIN).and_then(|v| v.to_str().ok()) {
+        resp.insert_header((header::ACCESS_CONTROL_ALLOW_ORIGIN, origin));
     }
 
-    let expired_cookie = Cookie::build("session_token", "")
-    .path("/")
-    .secure(true)
-    .http_only(true)
-    .same_site(SameSite::Strict)
-    .max_age(time::Duration::seconds(0))
-    .finish();
-
-    resp.cookie(expired_cookie);
-    resp.body("Session cookie cleared")
+    resp
+    .insert_header(("Set-Cookie", raw_cookie))
+    .insert_header(ContentType::plaintext())
+    .body("Session cookie cleared")
 }
