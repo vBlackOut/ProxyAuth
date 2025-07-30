@@ -1,6 +1,6 @@
 [package]
 name = "proxyauth"
-version = "0.8.3"
+version = "0.8.4"
 edition = "2024"
 authors = ["Vladimir S"]
 repository = "https://github.com/ProxyAuth/ProxyAuth"
@@ -38,6 +38,8 @@ serde_json = "1"
 
 [dependencies]
 actix-web = { version = "4.10.2", features = ["rustls-0_21"] }
+actix-service = "2"
+cookie = "0.18"
 reqwest = { version = "0.11", features = ["native-tls", "json", "blocking"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.9.33"
@@ -67,6 +69,7 @@ hyper = { version = "0.14", features = ["client", "http1", "http2", "tcp"] }
 hyper-tls = "0.5"
 hyper-rustls = "0.24"
 rustls = "0.21.10"
+rustls-native-certs = "0.6"
 rustls-pemfile = "1.0"
 webpki-roots = "0.25"
 hyper-proxy = "0.9"
@@ -91,3 +94,6 @@ lazy_static = "1.4"
 itoa = "1.0"
 redis = { version = "0.32", features = ["tokio-comp"] }
 lmdb-rkv = "0.14"
+time = "0.3"
+mime = "0.3"
+

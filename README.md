@@ -15,12 +15,12 @@
 ![Benchmark](https://img.shields.io/badge/benchmark-+180_000req/s-blue?style=for-the-badge&logo=rust "Benchmark proxyauth on server")
 
 
-ProxyAuth secures backend APIs through a fast authentication gateway.
+💣 ProxyAuth is now a universal reverse proxy system, capable of handling authentication and access control for any backend application or dashboard.
+
+ProxyAuth secures backend APIs/Dashboard through a fast authentication gateway.
 It encrypts tokens using ChaCha20 + HMAC-BLAKE3, with config-defined secrets.
 It features built-in rate limiting (on proxy and auth routes) and uses Argon2 with auto-generated salts for secure password hashing.
 The service is extremely fast, handling ~ 180,000+ requests per second under load.  
-
-**Project based on a other personal project (evolution): <a href="https://github.com/vBlackOut/rust_actixweb_token">rust_actixweb_token</a>
 
 ## Documentation
 <a href="http://proxyauth.app">Views the documentation</a>  

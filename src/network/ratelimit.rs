@@ -9,6 +9,7 @@ use actix_web::http::header::ContentType;
 use actix_web::web;
 use actix_web::{HttpResponse, HttpResponseBuilder};
 use std::net::IpAddr;
+//use tracing::{info, warn};
 
 #[derive(Clone)]
 pub struct UserToken;
@@ -49,12 +50,41 @@ impl KeyExtractor for UserToken {
 
         // key ratelimite: user extract inside the token
         let user_or_ip = req
-            .headers()
-            .get("Authorization")
-            .and_then(|h| h.to_str().ok())
-            .and_then(|s| s.strip_prefix("Bearer "))
-            .and_then(|token| extract_token_user(token, &app_data.config, ip.clone()).ok())
-            .unwrap_or_else(|| ip.clone());
+        .headers()
+        .get("Authorization")
+        .and_then(|h| h.to_str().ok())
+        .and_then(|s| s.strip_prefix("Bearer "))
+        .and_then(|token| {
+            //info!("Authorization header found: {}", token);
+            extract_token_user(token, &app_data.config, ip.clone()).ok()
+        })
+        .or_else(|| {
+            if app_data.config.session_cookie {
+                match req.cookie("session_token") {
+                    Some(cookie) => {
+                        let value = cookie.value();
+                        //info!("Cookie 'session_token' found: {}", value);
+                        match extract_token_user(value, &app_data.config, ip.clone()) {
+                            Ok(user) => Some(user),
+                            Err(_err) => {
+                                //warn!("Failed to extract user from cookie: {:?}", err);
+                                None
+                            }
+                        }
+                    }
+                    None => {
+                        //warn!("No 'session_token' cookie found");
+                        None
+                    }
+                }
+            } else {
+                None
+            }
+        })
+        .unwrap_or_else(|| {
+            //warn!("Falling back to IP: {}", ip);
+            ip.clone()
+        });
 
         // key ratelimit: path request
         let path = req.path().to_string();
