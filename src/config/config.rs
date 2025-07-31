@@ -158,6 +158,9 @@ pub struct AppConfig {
 
     #[serde(default = "default_max_age_session_cookie")]
     pub max_age_session_cookie: i64,
+
+    #[serde(default)]
+    pub login_redirect_url: Option<String>,
 }
 
 impl Serialize for AppConfig {

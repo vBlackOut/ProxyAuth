@@ -153,38 +153,48 @@ pub async fn auth(
 
     // Check if session_cookie is enabled
     if data.config.session_cookie {
-        if let Some(cookie) = req.cookie("session_token") {
-            let session_token = cookie.value();
-            //info!("[{}] Found session cookie: {}", ip, session_token);
 
-            if let Ok((username, _token_id, expires_at)) = validate_token(
-                session_token,
-                &data,
-                &data.config,
-                &ip,
-            ).await {
-                let mut resp = HttpResponse::Ok();
-                resp.append_header(("server", "ProxyAuth"));
+        let redirect_target = data.config.login_redirect_url.as_deref().unwrap_or("/");
 
-                // CORS check
-                if let Some(origin_header) = req.headers().get(header::ORIGIN) {
-                    if let Ok(origin_str) = origin_header.to_str() {
-                        if let Some(cors_origins) = &data.config.cors_origins {
-                            let origin_normalized = origin_str.trim_end_matches('/');
+        match req.cookie("session_token") {
+            Some(cookie) => {
+                let session_token = cookie.value();
 
-                            if cors_origins.iter().any(|allowed| allowed.trim_end_matches('/') == origin_normalized) {
-                                resp.append_header((header::ACCESS_CONTROL_ALLOW_ORIGIN, origin_str));
-                                resp.append_header((header::ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"));
-                                resp.append_header((header::ACCESS_CONTROL_MAX_AGE, "3600"));
+                if let Ok((username, _token_id, expires_at)) = validate_token(
+                    session_token,
+                    &data,
+                    &data.config,
+                    &ip,
+                ).await {
+                    let mut resp = HttpResponse::Ok();
+                    resp.append_header(("server", "ProxyAuth"));
+
+                    // CORS headers
+                    if let Some(origin_header) = req.headers().get(header::ORIGIN) {
+                        if let Ok(origin_str) = origin_header.to_str() {
+                            if let Some(cors_origins) = &data.config.cors_origins {
+                                let origin_normalized = origin_str.trim_end_matches('/');
+                                if cors_origins.iter().any(|allowed| allowed.trim_end_matches('/') == origin_normalized) {
+                                    resp.append_header((header::ACCESS_CONTROL_ALLOW_ORIGIN, origin_str));
+                                    resp.append_header((header::ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"));
+                                    resp.append_header((header::ACCESS_CONTROL_MAX_AGE, "3600"));
+                                }
                             }
                         }
                     }
-                }
 
-                return resp.json(serde_json::json!({
-                    "user": username,
-                    "expires_at": expires_at,
-                }));
+                    return resp.json(serde_json::json!({
+                        "user": username,
+                        "expires_at": expires_at,
+                    }));
+                }
+            }
+            None => {
+                if !redirect_target.starts_with('/') {
+                    return HttpResponse::BadRequest()
+                    .append_header(("server", "ProxyAuth"))
+                    .body("Invalid redirect URL");
+                }
             }
         }
     }
@@ -337,9 +347,30 @@ pub async fn auth(
         }))
 
     } else {
-        warn!("Invalid credential for enter user {}.", auth.username);
+        let ip = req
+        .headers()
+        .get("x-forwarded-for")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.split(',').next())
+        .map(|s| s.trim().to_string())
+        .or_else(|| req.connection_info().realip_remote_addr().map(|s| s.to_string()))
+        .unwrap_or_else(|| "-".to_string());
+
+        let user_agent = req
+        .headers()
+        .get("User-Agent")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("-");
+
+        let method = req.method().as_str();
+        let path = req.path();
+
+        warn!(
+            "[{}] - {} {} Invalid {} credentials provided {}", ip, path, method, auth?username, user_agent
+        );
+
         return HttpResponse::Unauthorized()
-            .append_header(("server", "ProxyAuth"))
-            .body("Invalid credentials");
+        .append_header(("server", "ProxyAuth"))
+        .body("Invalid credentials");
     }
 }
