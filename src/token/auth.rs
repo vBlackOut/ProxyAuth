@@ -366,7 +366,7 @@ pub async fn auth(
         let path = req.path();
 
         warn!(
-            "[{}] - {} {} Invalid {} credentials provided {}", ip, path, method, auth?username, user_agent
+            "[{}] - {} {} Invalid {} credentials provided {}", ip, path, method, auth.username, user_agent
         );
 
         return HttpResponse::Unauthorized()

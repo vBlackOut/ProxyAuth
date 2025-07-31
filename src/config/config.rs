@@ -161,6 +161,9 @@ pub struct AppConfig {
 
     #[serde(default)]
     pub login_redirect_url: Option<String>,
+
+    #[serde(default = "default_tls")]
+    pub tls: bool,
 }
 
 impl Serialize for AppConfig {
@@ -256,8 +259,12 @@ fn default_backends() -> Vec<BackendInput> {
     Vec::new()
 }
 
-fn default_secure() -> bool {
+fn default_tls() -> bool {
     true
+}
+
+fn default_secure() -> bool {
+    false
 }
 
 fn default_worker() -> u8 {
