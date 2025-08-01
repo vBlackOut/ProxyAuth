@@ -4,7 +4,7 @@ use crate::config::config::{AuthRequest, User};
 use crate::network::proxy::client_ip;
 use crate::token::crypto::{calcul_cipher, derive_key_from_secret, encrypt};
 use crate::token::security::{generate_token, validate_token};
-use actix_web::{dev::Payload, FromRequest, error::ErrorBadRequest, HttpRequest, http::header, HttpResponse, Responder, web::{self, Json, Form}, Error as ActixError};
+use actix_web::{dev::Payload, FromRequest, error::ErrorBadRequest, HttpRequest, http::{header, StatusCode}, HttpResponse, Responder, web::{self, Json, Form}, Error as ActixError};
 use actix_web::cookie::{Cookie, SameSite};
 use futures_util::FutureExt;
 use futures_util::future::{ready, LocalBoxFuture};
@@ -235,13 +235,6 @@ pub async fn auth(
                 }
             }
         }
-
-        if redirect_target.starts_with('/') {
-            return HttpResponse::SeeOther()
-            .insert_header(("location", redirect_target))
-            .insert_header(("server", "ProxyAuth"))
-            .finish();
-        }
     }
 
     if let Some(index_user) = data
@@ -384,6 +377,15 @@ pub async fn auth(
 
             resp.cookie(cookie);
 
+            let redirect_target = data.config.login_redirect_url.as_deref().unwrap_or("/");
+
+            if redirect_target.starts_with('/') {
+                return resp
+                .insert_header(("location", redirect_target))
+                .insert_header(("server", "ProxyAuth"))
+                .status(StatusCode::SEE_OTHER)
+                .finish();
+            }
         }
 
         resp.json(serde_json::json!({
