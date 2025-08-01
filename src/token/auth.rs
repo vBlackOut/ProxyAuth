@@ -4,8 +4,10 @@ use crate::config::config::{AuthRequest, User};
 use crate::network::proxy::client_ip;
 use crate::token::crypto::{calcul_cipher, derive_key_from_secret, encrypt};
 use crate::token::security::{generate_token, validate_token};
-use actix_web::{HttpRequest, http::header, HttpResponse, Responder, web};
+use actix_web::{dev::Payload, FromRequest, error::ErrorBadRequest, HttpRequest, http::header, HttpResponse, Responder, web::{self, Json, Form}, Error as ActixError};
 use actix_web::cookie::{Cookie, SameSite};
+use futures_util::FutureExt;
+use futures_util::future::{ready, LocalBoxFuture};
 use argon2::Argon2;
 use argon2::password_hash::{PasswordHash, PasswordVerifier};
 use blake3;
@@ -21,6 +23,37 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use time::OffsetDateTime;
 use totp_rs::{Algorithm, TOTP};
 use tracing::{info, warn};
+
+pub enum EitherAuth {
+    Json(AuthRequest),
+    Form(AuthRequest),
+}
+
+impl FromRequest for EitherAuth {
+    type Error = ActixError;
+    type Future = LocalBoxFuture<'static, Result<Self, Self::Error>>;
+
+    fn from_request(req: &HttpRequest, payload: &mut Payload) -> Self::Future {
+        let content_type = req
+        .headers()
+        .get("Content-Type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_lowercase();
+
+        if content_type.contains("application/json") {
+            Json::<AuthRequest>::from_request(req, payload)
+            .map(|res| res.map(|json| EitherAuth::Json(json.into_inner())))
+            .boxed_local()
+        } else if content_type.contains("application/x-www-form-urlencoded") {
+            Form::<AuthRequest>::from_request(req, payload)
+            .map(|res| res.map(|form| EitherAuth::Form(form.into_inner())))
+            .boxed_local()
+        } else {
+            ready(Err(ErrorBadRequest("Unsupported Content-Type"))).boxed_local()
+        }
+    }
+}
 
 pub fn is_ip_allowed(ip_str: &str, user: &User) -> bool {
     let Ok(ip) = ip_str.parse::<IpAddr>() else {
@@ -145,9 +178,14 @@ pub async fn auth_options(req: HttpRequest, data: web::Data<AppState>) -> impl R
 
 pub async fn auth(
     req: HttpRequest,
-    auth: web::Json<AuthRequest>,
     data: web::Data<AppState>,
+    payload: EitherAuth,
 ) -> impl Responder {
+
+    let auth = match payload {
+        EitherAuth::Json(j) => j,
+        EitherAuth::Form(f) => f,
+    };
 
     let ip = client_ip(&req).expect("?").to_string();
 
@@ -196,6 +234,13 @@ pub async fn auth(
                     .body("Invalid redirect URL");
                 }
             }
+        }
+
+        if redirect_target.starts_with('/') {
+            return HttpResponse::SeeOther()
+            .insert_header(("location", redirect_target))
+            .insert_header(("server", "ProxyAuth"))
+            .finish();
         }
     }
 
