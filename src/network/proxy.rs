@@ -163,11 +163,18 @@ pub async fn proxy_with_proxy(
     {
         // fix allow redirect pârams inside the GET method.
         let original_uri = req.uri();
-        let raw_forward = req.path().strip_prefix(&rule.prefix).unwrap_or("");
-        let forward_path = if raw_forward.starts_with('/') {
-            raw_forward.to_string()
+        let raw_forward = req
+        .path()
+        .strip_prefix(&rule.prefix)
+        .unwrap_or("")
+        .trim_start_matches('/');
+
+        let cleaned = raw_forward.trim_end_matches('/');
+
+        let forward_path = if cleaned.is_empty() {
+            "".to_string()
         } else {
-            format!("/{}", raw_forward)
+            format!("/{}", cleaned)
         };
 
         let mut user_agent = "";
@@ -457,12 +464,19 @@ pub async fn proxy_without_proxy(
         .find(|r| path.starts_with(&r.prefix))
     {
         let original_uri = req.uri();
-        let forward_path = req.path().strip_prefix(&rule.prefix).unwrap_or("");
 
-        let forward_path = if forward_path.starts_with('/') {
-            forward_path.to_string()
+        let raw_forward = req
+        .path()
+        .strip_prefix(&rule.prefix)
+        .unwrap_or("")
+        .trim_start_matches('/');
+
+        let cleaned = raw_forward.trim_end_matches('/');
+
+        let forward_path = if cleaned.is_empty() {
+            "".to_string()
         } else {
-            format!("/{}", forward_path)
+            format!("/{}", cleaned)
         };
 
         let mut user_agent = "";

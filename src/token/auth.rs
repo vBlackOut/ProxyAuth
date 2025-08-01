@@ -198,7 +198,7 @@ pub async fn auth(
             Some(cookie) => {
                 let session_token = cookie.value();
 
-                if let Ok((username, _token_id, expires_at)) = validate_token(
+                if let Ok((_username, _token_id, _expires_at)) = validate_token(
                     session_token,
                     &data,
                     &data.config,
@@ -221,10 +221,15 @@ pub async fn auth(
                         }
                     }
 
-                    return resp.json(serde_json::json!({
-                        "user": username,
-                        "expires_at": expires_at,
-                    }));
+                    let redirect_target = data.config.login_redirect_url.as_deref().unwrap_or("/");
+
+                    if redirect_target.starts_with('/') {
+                        return resp
+                        .insert_header(("location", redirect_target))
+                        .insert_header(("server", "ProxyAuth"))
+                        .status(StatusCode::SEE_OTHER)
+                        .finish();
+                    }
                 }
             }
             None => {
