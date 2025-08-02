@@ -162,6 +162,9 @@ pub struct AppConfig {
     #[serde(default)]
     pub login_redirect_url: Option<String>,
 
+    #[serde(default)]
+    pub logout_redirect_url: Option<String>,
+
     #[serde(default = "default_tls")]
     pub tls: bool,
 }
@@ -295,6 +298,7 @@ fn default_max_age_session_cookie() -> i64 {
 fn default_login_via_otp() -> bool {
     false
 }
+
 
 fn default_session_cookie() -> bool {
     false
