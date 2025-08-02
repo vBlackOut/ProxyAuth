@@ -30,7 +30,10 @@ pub async fn logout_options(req: HttpRequest, data: web::Data<AppState>) -> impl
 }
 
 
-pub async fn logout_session(req: HttpRequest) -> HttpResponse {
+pub async fn logout_session(
+    req: HttpRequest,
+    data: web::Data<AppState>,
+) -> HttpResponse {
     let expires_str = OffsetDateTime::UNIX_EPOCH
     .format(&Rfc2822)
     .unwrap();
@@ -39,16 +42,30 @@ pub async fn logout_session(req: HttpRequest) -> HttpResponse {
         "session_token=; Expires={}; Path=/; HttpOnly; Secure; SameSite=Strict",
         expires_str
     );
-    let mut resp = HttpResponse::Ok();
 
+    let mut resp = if let Some(url) = &data.config.logout_redirect_url {
+        if !url.is_empty() {
+            let mut r = HttpResponse::Found();
+            r.insert_header((header::LOCATION, url.as_str()));
+            r
+        } else {
+            HttpResponse::Ok()
+        }
+    } else {
+        HttpResponse::Ok()
+    };
+
+    resp.insert_header((header::SET_COOKIE, raw_cookie));
     resp.insert_header((header::ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"));
 
     if let Some(origin) = req.headers().get(header::ORIGIN).and_then(|v| v.to_str().ok()) {
         resp.insert_header((header::ACCESS_CONTROL_ALLOW_ORIGIN, origin));
     }
 
-    resp
-    .insert_header(("Set-Cookie", raw_cookie))
-    .insert_header(ContentType::plaintext())
-    .body("Session cookie cleared")
+    if data.config.logout_redirect_url.as_ref().map_or(true, |s| s.is_empty()) {
+        resp.insert_header(ContentType::plaintext());
+        resp.body("Session cookie cleared")
+    } else {
+        resp.finish()
+    }
 }
