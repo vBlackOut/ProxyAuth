@@ -1,12 +1,12 @@
 [package]
 name = "proxyauth"
-version = "0.8.4"
+version = "0.8.5"
 edition = "2024"
 authors = ["Vladimir S"]
 repository = "https://github.com/ProxyAuth/ProxyAuth"
 readme = "README.md"
 license = "Apache-2.0"
-description = "Proxy Authentication Token"
+description = "Universal Proxy Authentication"
 build = "src/build/build.rs"
 keywords = ["auth", "proxy", "security", "token", "network"]
 categories = ["network-programming", "authentication", "api-bindings", "security"]

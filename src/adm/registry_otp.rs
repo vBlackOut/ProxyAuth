@@ -2,7 +2,7 @@ use crate::AppState;
 use crate::adm::method_otp::generate_otpauth_uri;
 use crate::config::config::add_otpkey;
 use crate::token::auth::{is_ip_allowed, verify_password};
-use actix_web::{HttpRequest, HttpResponse, Responder, web};
+use actix_web::{HttpRequest, HttpResponse, HttpResponseBuilder, http::header, Responder, web};
 use serde::{Deserialize, Serialize};
 use totp_rs::Algorithm;
 use tracing::warn;
@@ -17,6 +17,24 @@ pub struct OtpRequest {
 pub struct OtpAuthUriResponse {
     pub otpauth_uri: String,
     pub otpkey: String,
+}
+
+fn cors_response(mut resp: HttpResponseBuilder, req: &HttpRequest) -> HttpResponseBuilder {
+    if let Some(origin) = req.headers().get(header::ORIGIN) {
+        if let Ok(origin_str) = origin.to_str() {
+            if let Some(cors_origins) = &req.app_data::<web::Data<AppState>>()
+                .and_then(|data| data.config.cors_origins.as_ref())
+                {
+                    let origin_clean = origin_str.trim_end_matches('/');
+                    if cors_origins.iter().any(|o| o.trim_end_matches('/') == origin_clean) {
+                        resp.append_header((header::ACCESS_CONTROL_ALLOW_ORIGIN, origin_str));
+                        resp.append_header((header::ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"));
+                        resp.append_header((header::ACCESS_CONTROL_MAX_AGE, "3600"));
+                    }
+                }
+        }
+    }
+    resp
 }
 
 pub async fn get_otpauth_uri(
@@ -102,7 +120,7 @@ pub async fn get_otpauth_uri(
             30,
         );
 
-        return HttpResponse::Ok().json(OtpAuthUriResponse {
+        return cors_response(HttpResponse::Ok(), &req).json(OtpAuthUriResponse {
             otpauth_uri: uri,
             otpkey: otpkey.expect(""),
         });

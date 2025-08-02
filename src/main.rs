@@ -34,7 +34,7 @@ use crate::revoke::db::{load_revoked_tokens, start_revoked_token_ttl};
 use crate::tls::check_port;
 use crate::network::cors::CorsMiddleware;
 use actix_governor::{Governor, GovernorConfigBuilder};
-use actix_web::{App, HttpServer, http::Method, web};
+use actix_web::{App, http::Method, web};
 use chrono::Local;
 use config::config::{AppConfig, AppState, RouteConfig, load_config};
 use config::def_config::{create_config, ensure_running_as_proxyauth, switch_to_user};
@@ -42,7 +42,7 @@ use dashmap::DashMap;
 use futures_util::future::join_all;
 use logs::{ChannelLogWriter, get_logs, log_collector};
 use network::proxy::global_proxy;
-use network::ratelimit::UserToken;
+use network::ratelimit::{UserToken, RateLimitLogger};
 use network::shared_client::{
     ClientOptions, build_hyper_client_cert, build_hyper_client_normal, build_hyper_client_proxy,
 };
@@ -52,7 +52,7 @@ use stats::stats::stats as metric_stats;
 pub use stats::tokencount::CounterToken;
 use std::net::TcpListener;
 use std::{fs, process, sync::Arc, time::Duration};
-use tls::load_rustls_config;
+use tls::bind_server;
 use token::auth::{auth, auth_options};
 use token::logout::{logout_session, logout_options};
 use token::security::init_derived_key;
@@ -292,12 +292,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(err) => warn!("Failed to decrypt keystore: {:?}", err),
     }
 
-    // config network
-    let max_connections = config.max_connections;
-    let pending_connections_limit = config.pending_connections_limit;
-    let client_timeout = config.client_timeout;
-    let keep_alive = config.keep_alive;
-
     // configuration proxy ratelimit
     let requests_per_second_proxy_config = config
         .ratelimit_proxy
@@ -342,7 +336,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let num_instances = config.num_instances;
-    let worker_per_instance = config.worker;
 
     let mut server_futures = Vec::new();
 
@@ -359,27 +352,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let state_cloned = state.clone();
 
-        match mode_actix {
+        match  mode_actix.as_ref()  {
             "NO_RATELIMIT_AUTH" => {
-
                 let seconds_per_request = Duration::from_secs_f64(1.0 / requests_per_second_proxy_config as f64);
-
                 let governor_proxy_conf = GovernorConfigBuilder::default()
-                    .burst_size(burst_proxy_config)
-                    .key_extractor(UserToken)
-                    .period(seconds_per_request)
-                    .finish()
-                    .unwrap();
+                .burst_size(burst_proxy_config)
+                .key_extractor(UserToken)
+                .period(seconds_per_request)
+                .finish()
+                .unwrap();
 
-                let server = HttpServer::new(move || {
-                    App::new()
+                let server = bind_server(
+                    move || {
+                        App::new()
                         .app_data(state_cloned.clone())
+                        .wrap(RateLimitLogger)
                         .wrap(CorsMiddleware {
                             config: state_cloned.clone(),
                         })
-                        .service(web::resource("/auth")
+                        .service(
+                            web::resource("/auth")
                             .route(web::post().to(auth))
-                            .route(web::method(Method::OPTIONS).to(auth_options))
+                            .route(web::method(Method::OPTIONS).to(auth_options)),
                         )
                         .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
                         .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
@@ -391,47 +385,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         )
                         .service(
                             web::resource("/adm/auth/totp/get")
-                                .route(web::post().to(get_otpauth_uri)),
+                            .route(web::post().to(get_otpauth_uri)),
                         )
-                        .default_service(
-                            web::to(global_proxy).wrap(Governor::new(&governor_proxy_conf)),
-                        )
-                })
-                .workers(worker_per_instance.into())
-                .keep_alive(Duration::from_millis(keep_alive))
-                .backlog(pending_connections_limit)
-                .max_connections(max_connections)
-                .client_request_timeout(Duration::from_millis(client_timeout))
-                .listen_rustls_0_21(listener, load_rustls_config())?
-                .run();
+                        .default_service(web::to(global_proxy).wrap(Governor::new(&governor_proxy_conf)))
+                    },
+                    listener,
+                    &config,
+                )?;
 
                 server_futures.push(tokio::spawn(server));
             }
 
             "NO_RATELIMIT_PROXY" => {
-
                 let seconds_per_request = Duration::from_secs_f64(1.0 / requests_per_second_auth_config as f64);
-
                 let governor_auth_conf = GovernorConfigBuilder::default()
-                    .burst_size(burst_auth_config)
-                    .use_headers()
-                    .period(seconds_per_request)
-                    .finish()
-                    .unwrap();
+                .burst_size(burst_auth_config)
+                .use_headers()
+                .period(seconds_per_request)
+                .finish()
+                .unwrap();
 
-                let server = HttpServer::new(move || {
-                    App::new()
+                let server = bind_server(
+                    move || {
+                        App::new()
                         .app_data(state_cloned.clone())
+                        .wrap(RateLimitLogger)
                         .wrap(CorsMiddleware {
                             config: state_cloned.clone(),
                         })
                         .service(
-                            web::resource("/auth").route(
-                                web::post().to(auth).wrap(Governor::new(&governor_auth_conf)),
-                            )
-                            .route(
-                                 web::method(Method::OPTIONS).to(auth_options),
-                            )
+                            web::resource("/auth")
+                            .route(web::post().to(auth).wrap(Governor::new(&governor_auth_conf)))
+                            .route(web::method(Method::OPTIONS).to(auth_options)),
                         )
                         .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
                         .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
@@ -443,53 +428,46 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         )
                         .service(
                             web::resource("/adm/auth/totp/get")
-                                .route(web::post().to(get_otpauth_uri)),
+                            .route(web::post().to(get_otpauth_uri)),
                         )
                         .default_service(web::to(global_proxy))
-                })
-                .workers(worker_per_instance.into())
-                .keep_alive(Duration::from_millis(keep_alive))
-                .backlog(pending_connections_limit)
-                .max_connections(max_connections)
-                .client_request_timeout(Duration::from_millis(client_timeout))
-                .listen_rustls_0_21(listener, load_rustls_config())?
-                .run();
+                    },
+                    listener,
+                    &config,
+                )?;
 
                 server_futures.push(tokio::spawn(server));
             }
 
             "RATELIMIT_GLOBAL_ON" => {
                 let seconds_per_request_auth = Duration::from_secs_f64(1.0 / requests_per_second_auth_config as f64);
-
                 let governor_auth_conf = GovernorConfigBuilder::default()
-                    .burst_size(burst_auth_config)
-                    .use_headers()
-                    .period(seconds_per_request_auth)
-                    .finish()
-                    .unwrap();
+                .burst_size(burst_auth_config)
+                .use_headers()
+                .period(seconds_per_request_auth)
+                .finish()
+                .unwrap();
 
                 let seconds_per_request_proxy = Duration::from_secs_f64(1.0 / requests_per_second_proxy_config as f64);
-
                 let governor_proxy_conf = GovernorConfigBuilder::default()
-                    .burst_size(burst_proxy_config)
-                    .key_extractor(UserToken)
-                    .period(seconds_per_request_proxy)
-                    .finish()
-                    .unwrap();
+                .burst_size(burst_proxy_config)
+                .key_extractor(UserToken)
+                .period(seconds_per_request_proxy)
+                .finish()
+                .unwrap();
 
-                let server = HttpServer::new(move || {
-                    App::new()
+                let server = bind_server(
+                    move || {
+                        App::new()
                         .app_data(state_cloned.clone())
+                        .wrap(RateLimitLogger)
                         .wrap(CorsMiddleware {
                             config: state_cloned.clone(),
                         })
-                        .service(web::resource("/auth")
-                            .route(
-                                web::post().to(auth).wrap(Governor::new(&governor_auth_conf)),
-                            )
-                            .route(
-                                 web::method(Method::OPTIONS).to(auth_options),
-                            )
+                        .service(
+                            web::resource("/auth")
+                            .route(web::post().to(auth).wrap(Governor::new(&governor_auth_conf)))
+                            .route(web::method(Method::OPTIONS).to(auth_options)),
                         )
                         .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
                         .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
@@ -501,33 +479,48 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         )
                         .service(
                             web::resource("/adm/auth/totp/get")
-                                .route(web::post().to(get_otpauth_uri)),
+                            .route(web::post().to(get_otpauth_uri)),
                         )
                         .default_service(
                             web::to(global_proxy).wrap(Governor::new(&governor_proxy_conf)),
                         )
-                })
-                .workers(worker_per_instance.into())
-                .keep_alive(Duration::from_millis(keep_alive))
-                .backlog(pending_connections_limit)
-                .max_connections(max_connections)
-                .client_request_timeout(Duration::from_millis(client_timeout))
-                .listen_rustls_0_21(listener, load_rustls_config())?
-                .run();
+                    },
+                    listener,
+                    &config,
+                )?;
 
                 server_futures.push(tokio::spawn(server));
             }
 
             "RATELIMIT_GLOBAL_OFF" => {
-                let server = HttpServer::new(move || {
-                    App::new()
+                let seconds_per_request_auth = Duration::from_secs_f64(1.0 / requests_per_second_auth_config as f64);
+                let governor_auth_conf = GovernorConfigBuilder::default()
+                .burst_size(burst_auth_config)
+                .use_headers()
+                .period(seconds_per_request_auth)
+                .finish()
+                .unwrap();
+
+                let seconds_per_request_proxy = Duration::from_secs_f64(1.0 / requests_per_second_proxy_config as f64);
+                let governor_proxy_conf = GovernorConfigBuilder::default()
+                .burst_size(burst_proxy_config)
+                .key_extractor(UserToken)
+                .period(seconds_per_request_proxy)
+                .finish()
+                .unwrap();
+
+                let server = bind_server(
+                    move || {
+                        App::new()
                         .app_data(state_cloned.clone())
+                        .wrap(RateLimitLogger)
                         .wrap(CorsMiddleware {
                             config: state_cloned.clone(),
                         })
-                        .service(web::resource("/auth")
-                            .route(web::post().to(auth))
-                            .route(web::method(Method::OPTIONS).to(auth_options))
+                        .service(
+                            web::resource("/auth")
+                            .route(web::post().to(auth).wrap(Governor::new(&governor_auth_conf)))
+                            .route(web::method(Method::OPTIONS).to(auth_options)),
                         )
                         .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
                         .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
@@ -539,31 +532,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         )
                         .service(
                             web::resource("/adm/auth/totp/get")
-                                .route(web::post().to(get_otpauth_uri)),
+                            .route(web::post().to(get_otpauth_uri)),
                         )
-                        .default_service(web::to(global_proxy))
-                })
-                .workers(worker_per_instance.into())
-                .keep_alive(Duration::from_millis(keep_alive))
-                .backlog(pending_connections_limit)
-                .max_connections(max_connections)
-                .client_request_timeout(Duration::from_millis(client_timeout))
-                .listen_rustls_0_21(listener, load_rustls_config())?
-                .run();
+                        .default_service(
+                            web::to(global_proxy).wrap(Governor::new(&governor_proxy_conf)),
+                        )
+                    },
+                    listener,
+                    &config,
+                )?;
 
                 server_futures.push(tokio::spawn(server));
             }
 
             _ => {
-                let server = HttpServer::new(move || {
-                    App::new()
+                let server = bind_server(
+                    move || {
+                        App::new()
                         .app_data(state_cloned.clone())
                         .wrap(CorsMiddleware {
                             config: state_cloned.clone(),
                         })
-                        .service(web::resource("/auth")
+                        .service(
+                            web::resource("/auth")
                             .route(web::post().to(auth))
-                            .route(web::method(Method::OPTIONS).to(auth_options))
+                            .route(web::method(Method::OPTIONS).to(auth_options)),
                         )
                         .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
                         .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
@@ -574,18 +567,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             .route(web::method(Method::OPTIONS).to(logout_options)),
                         )
                         .service(
-                            web::resource("/adm/auth/totp/get")
-                                .route(web::post().to(get_otpauth_uri)),
+                            web::resource("/adm/auth/totp/get").route(web::post().to(get_otpauth_uri)),
                         )
                         .default_service(web::to(global_proxy))
-                })
-                .workers(worker_per_instance.into())
-                .keep_alive(Duration::from_millis(keep_alive))
-                .backlog(pending_connections_limit)
-                .max_connections(max_connections)
-                .client_request_timeout(Duration::from_millis(client_timeout))
-                .listen_rustls_0_21(listener, load_rustls_config())?
-                .run();
+                    },
+                    listener,
+                    &config,
+                )?;
 
                 server_futures.push(tokio::spawn(server));
             }

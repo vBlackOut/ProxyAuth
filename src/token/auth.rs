@@ -4,8 +4,10 @@ use crate::config::config::{AuthRequest, User};
 use crate::network::proxy::client_ip;
 use crate::token::crypto::{calcul_cipher, derive_key_from_secret, encrypt};
 use crate::token::security::{generate_token, validate_token};
-use actix_web::{HttpRequest, http::header, HttpResponse, Responder, web};
+use actix_web::{dev::Payload, FromRequest, error::ErrorBadRequest, HttpRequest, http::{header, StatusCode}, HttpResponse, Responder, web::{self, Json, Form}, Error as ActixError};
 use actix_web::cookie::{Cookie, SameSite};
+use futures_util::FutureExt;
+use futures_util::future::{ready, LocalBoxFuture};
 use argon2::Argon2;
 use argon2::password_hash::{PasswordHash, PasswordVerifier};
 use blake3;
@@ -21,6 +23,37 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use time::OffsetDateTime;
 use totp_rs::{Algorithm, TOTP};
 use tracing::{info, warn};
+
+pub enum EitherAuth {
+    Json(AuthRequest),
+    Form(AuthRequest),
+}
+
+impl FromRequest for EitherAuth {
+    type Error = ActixError;
+    type Future = LocalBoxFuture<'static, Result<Self, Self::Error>>;
+
+    fn from_request(req: &HttpRequest, payload: &mut Payload) -> Self::Future {
+        let content_type = req
+        .headers()
+        .get("Content-Type")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_lowercase();
+
+        if content_type.contains("application/json") {
+            Json::<AuthRequest>::from_request(req, payload)
+            .map(|res| res.map(|json| EitherAuth::Json(json.into_inner())))
+            .boxed_local()
+        } else if content_type.contains("application/x-www-form-urlencoded") {
+            Form::<AuthRequest>::from_request(req, payload)
+            .map(|res| res.map(|form| EitherAuth::Form(form.into_inner())))
+            .boxed_local()
+        } else {
+            ready(Err(ErrorBadRequest("Unsupported Content-Type"))).boxed_local()
+        }
+    }
+}
 
 pub fn is_ip_allowed(ip_str: &str, user: &User) -> bool {
     let Ok(ip) = ip_str.parse::<IpAddr>() else {
@@ -145,46 +178,66 @@ pub async fn auth_options(req: HttpRequest, data: web::Data<AppState>) -> impl R
 
 pub async fn auth(
     req: HttpRequest,
-    auth: web::Json<AuthRequest>,
     data: web::Data<AppState>,
+    payload: EitherAuth,
 ) -> impl Responder {
+
+    let auth = match payload {
+        EitherAuth::Json(j) => j,
+        EitherAuth::Form(f) => f,
+    };
 
     let ip = client_ip(&req).expect("?").to_string();
 
     // Check if session_cookie is enabled
     if data.config.session_cookie {
-        if let Some(cookie) = req.cookie("session_token") {
-            let session_token = cookie.value();
-            info!("[{}] Found session cookie: {}", ip, session_token);
 
-            if let Ok((username, _token_id, expires_at)) = validate_token(
-                session_token,
-                &data,
-                &data.config,
-                &ip,
-            ).await {
-                let mut resp = HttpResponse::Ok();
-                resp.append_header(("server", "ProxyAuth"));
+        let redirect_target = data.config.login_redirect_url.as_deref().unwrap_or("/");
 
-                // CORS check
-                if let Some(origin_header) = req.headers().get(header::ORIGIN) {
-                    if let Ok(origin_str) = origin_header.to_str() {
-                        if let Some(cors_origins) = &data.config.cors_origins {
-                            let origin_normalized = origin_str.trim_end_matches('/');
+        match req.cookie("session_token") {
+            Some(cookie) => {
+                let session_token = cookie.value();
 
-                            if cors_origins.iter().any(|allowed| allowed.trim_end_matches('/') == origin_normalized) {
-                                resp.append_header((header::ACCESS_CONTROL_ALLOW_ORIGIN, origin_str));
-                                resp.append_header((header::ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"));
-                                resp.append_header((header::ACCESS_CONTROL_MAX_AGE, "3600"));
+                if let Ok((_username, _token_id, _expires_at)) = validate_token(
+                    session_token,
+                    &data,
+                    &data.config,
+                    &ip,
+                ).await {
+                    let mut resp = HttpResponse::Ok();
+                    resp.append_header(("server", "ProxyAuth"));
+
+                    // CORS headers
+                    if let Some(origin_header) = req.headers().get(header::ORIGIN) {
+                        if let Ok(origin_str) = origin_header.to_str() {
+                            if let Some(cors_origins) = &data.config.cors_origins {
+                                let origin_normalized = origin_str.trim_end_matches('/');
+                                if cors_origins.iter().any(|allowed| allowed.trim_end_matches('/') == origin_normalized) {
+                                    resp.append_header((header::ACCESS_CONTROL_ALLOW_ORIGIN, origin_str));
+                                    resp.append_header((header::ACCESS_CONTROL_ALLOW_CREDENTIALS, "true"));
+                                    resp.append_header((header::ACCESS_CONTROL_MAX_AGE, "3600"));
+                                }
                             }
                         }
                     }
-                }
 
-                return resp.json(serde_json::json!({
-                    "user": username,
-                    "expires_at": expires_at,
-                }));
+                    let redirect_target = data.config.login_redirect_url.as_deref().unwrap_or("/");
+
+                    if redirect_target.starts_with('/') {
+                        return resp
+                        .insert_header(("location", redirect_target))
+                        .insert_header(("server", "ProxyAuth"))
+                        .status(StatusCode::SEE_OTHER)
+                        .finish();
+                    }
+                }
+            }
+            None => {
+                if !redirect_target.starts_with('/') {
+                    return HttpResponse::BadRequest()
+                    .append_header(("server", "ProxyAuth"))
+                    .body("Invalid redirect URL");
+                }
             }
         }
     }
@@ -329,6 +382,15 @@ pub async fn auth(
 
             resp.cookie(cookie);
 
+            let redirect_target = data.config.login_redirect_url.as_deref().unwrap_or("/");
+
+            if redirect_target.starts_with('/') {
+                return resp
+                .insert_header(("location", redirect_target))
+                .insert_header(("server", "ProxyAuth"))
+                .status(StatusCode::SEE_OTHER)
+                .finish();
+            }
         }
 
         resp.json(serde_json::json!({
@@ -337,9 +399,30 @@ pub async fn auth(
         }))
 
     } else {
-        warn!("Invalid credential for enter user {}.", auth.username);
+        let ip = req
+        .headers()
+        .get("x-forwarded-for")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|s| s.split(',').next())
+        .map(|s| s.trim().to_string())
+        .or_else(|| req.connection_info().realip_remote_addr().map(|s| s.to_string()))
+        .unwrap_or_else(|| "-".to_string());
+
+        let user_agent = req
+        .headers()
+        .get("User-Agent")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("-");
+
+        let method = req.method().as_str();
+        let path = req.path();
+
+        warn!(
+            "[{}] - {} {} Invalid {} credentials provided {}", ip, path, method, auth.username, user_agent
+        );
+
         return HttpResponse::Unauthorized()
-            .append_header(("server", "ProxyAuth"))
-            .body("Invalid credentials");
+        .append_header(("server", "ProxyAuth"))
+        .body("Invalid credentials");
     }
 }

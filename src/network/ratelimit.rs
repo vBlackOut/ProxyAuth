@@ -8,6 +8,14 @@ use actix_web::http::StatusCode;
 use actix_web::http::header::ContentType;
 use actix_web::web;
 use actix_web::{HttpResponse, HttpResponseBuilder};
+use actix_web::{
+    dev::{Service, ServiceResponse, Transform},
+    Error,
+};
+use futures_util::future::{LocalBoxFuture, Ready};
+use std::task::{Context, Poll};
+use tracing::warn;
+
 use std::net::IpAddr;
 //use tracing::{info, warn};
 
@@ -108,5 +116,72 @@ impl KeyExtractor for UserToken {
                 r#"{{"code":429, "error": "TooManyRequests", "message": "Too Many Requests", "after": {wait_time}}}"#
             )
         )
+    }
+}
+
+pub struct RateLimitLogger;
+
+impl<S> Transform<S, ServiceRequest> for RateLimitLogger
+where
+S: Service<ServiceRequest, Response = ServiceResponse, Error = Error> + 'static,
+{
+    type Response = ServiceResponse;
+    type Error = Error;
+    type InitError = ();
+    type Transform = RateLimitLoggerMiddleware<S>;
+    type Future = Ready<Result<Self::Transform, Self::InitError>>;
+
+    fn new_transform(&self, service: S) -> Self::Future {
+        futures_util::future::ready(Ok(RateLimitLoggerMiddleware { service }))
+    }
+}
+
+pub struct RateLimitLoggerMiddleware<S> {
+    service: S,
+}
+
+impl<S> Service<ServiceRequest> for RateLimitLoggerMiddleware<S>
+where
+S: Service<ServiceRequest, Response = ServiceResponse, Error = Error> + 'static,
+{
+    type Response = ServiceResponse;
+    type Error = Error;
+    type Future = LocalBoxFuture<'static, Result<ServiceResponse, Error>>;
+
+    fn poll_ready(&self, ctx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.service.poll_ready(ctx)
+    }
+
+    fn call(&self, req: ServiceRequest) -> Self::Future {
+        let method = req.method().clone();
+        let path = req.path().to_string();
+        let user_agent = req
+        .headers()
+        .get("User-Agent")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("-")
+        .to_string();
+        let ip = req
+        .peer_addr()
+        .map(|a| a.ip().to_string())
+        .unwrap_or("-".to_string());
+
+        let fut = self.service.call(req);
+
+        Box::pin(async move {
+            let res = fut.await?;
+
+            if res.status() == StatusCode::TOO_MANY_REQUESTS {
+                warn!(
+                    client_ip = %ip,
+                    method = %method,
+                    path = %path,
+                    user_agent = %user_agent,
+                    "Rate limit exceeded (429)"
+                );
+            }
+
+            Ok(res)
+        })
     }
 }

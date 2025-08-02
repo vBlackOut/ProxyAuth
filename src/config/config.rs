@@ -158,6 +158,15 @@ pub struct AppConfig {
 
     #[serde(default = "default_max_age_session_cookie")]
     pub max_age_session_cookie: i64,
+
+    #[serde(default)]
+    pub login_redirect_url: Option<String>,
+
+    #[serde(default)]
+    pub logout_redirect_url: Option<String>,
+
+    #[serde(default = "default_tls")]
+    pub tls: bool,
 }
 
 impl Serialize for AppConfig {
@@ -253,8 +262,12 @@ fn default_backends() -> Vec<BackendInput> {
     Vec::new()
 }
 
-fn default_secure() -> bool {
+fn default_tls() -> bool {
     true
+}
+
+fn default_secure() -> bool {
+    false
 }
 
 fn default_worker() -> u8 {
@@ -285,6 +298,7 @@ fn default_max_age_session_cookie() -> i64 {
 fn default_login_via_otp() -> bool {
     false
 }
+
 
 fn default_session_cookie() -> bool {
     false
