@@ -73,6 +73,21 @@ impl FormatTime for LocalTime {
     }
 }
 
+fn print_launcher(mode: &str, version: &str, worker: u8, addr: &str) {
+    let msg = match mode {
+        "NO_RATELIMIT_AUTH" => "ratelimit On (Proxy)",
+        "NO_RATELIMIT_PROXY" => "ratelimit On (Auth)",
+        "RATELIMIT_GLOBAL_ON" => "ratelimit On (Proxy, Auth)",
+        "RATELIMIT_GLOBAL_OFF" => "ratelimit Off",
+        _ => "ratelimit Off (No config)",
+    };
+
+    println!(
+        "\nlaunch ProxyAuth v{} \n{}\nstarting service: \"proxyauth-service\" worker: {} listening on {}",
+        version, msg, worker, addr
+    );
+}
+
 async fn create_listener(
     addr: &str,
     send_buf_size: usize,
@@ -345,6 +360,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let mut server_futures = Vec::new();
 
+    print_launcher(mode_actix, VERSION, config.worker, &addr.to_string());
+
     for _instance_id in 0..num_instances {
         let listener = create_listener(
             &format!("{}:{}", config.host, config.port),
@@ -366,10 +383,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .finish()
                     .unwrap();
 
-                println!(
-                    "\nlaunch ProxyAuth v{} \nratelimit On, (Proxy)\nstarting service: \"proxyauth-service\" worker: {} listening on {}",
-                    VERSION, config.worker, addr
-                );
                 let server = HttpServer::new(move || {
                     App::new()
                         .app_data(state_cloned.clone())
@@ -405,10 +418,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .finish()
                     .unwrap();
 
-                println!(
-                    "\nlaunch ProxyAuth v{} \nratelimit On (Auth)\nstarting service: \"proxyauth-service\" worker: {} listening on {}",
-                    VERSION, config.worker, addr
-                );
                 let server = HttpServer::new(move || {
                     App::new()
                         .app_data(state_cloned.clone())
@@ -456,10 +465,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .finish()
                     .unwrap();
 
-                println!(
-                    "\nlaunch ProxyAuth v{} \nratelimit On, (Proxy, Auth)\nstarting service: \"proxyauth-service\" worker: {} listening on {}",
-                    VERSION, config.worker, addr
-                );
                 let server = HttpServer::new(move || {
                     App::new()
                         .app_data(state_cloned.clone())
@@ -493,10 +498,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             "RATELIMIT_GLOBAL_OFF" => {
-                println!(
-                    "\nlaunch ProxyAuth v{} \nratelimit Off\nstarting service: \"proxyauth-service\" worker: {} listening on {}",
-                    VERSION, config.worker, addr
-                );
                 let server = HttpServer::new(move || {
                     App::new()
                         .app_data(state_cloned.clone())
@@ -522,10 +523,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             _ => {
-                println!(
-                    "\nlaunch ProxyAuth v{} \nratelimit Off (No config)\nstarting service: \"proxyauth-service\" worker: {} listening on {}",
-                    VERSION, config.worker, addr
-                );
                 let server = HttpServer::new(move || {
                     App::new()
                         .app_data(state_cloned.clone())
