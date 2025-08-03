@@ -25,7 +25,7 @@ mod stats;
 mod tls;
 mod token;
 
-use crate::adm::registry_otp::get_otpauth_uri;
+use crate::adm::registry_otp::{get_otpauth_uri, get_otpauth_uri_option};
 use crate::adm::revoke::revoke_route;
 use crate::build::build_info::update_build_info;
 use crate::cli::prompt::prompt;
@@ -385,7 +385,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         )
                         .service(
                             web::resource("/adm/auth/totp/get")
-                            .route(web::post().to(get_otpauth_uri)),
+                            .route(web::post().to(get_otpauth_uri))
+                            .route(web::method(Method::OPTIONS).to(get_otpauth_uri_option)),
                         )
                         .default_service(web::to(global_proxy).wrap(Governor::new(&governor_proxy_conf)))
                     },
@@ -428,7 +429,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         )
                         .service(
                             web::resource("/adm/auth/totp/get")
-                            .route(web::post().to(get_otpauth_uri)),
+                            .route(web::post().to(get_otpauth_uri))
+                            .route(web::method(Method::OPTIONS).to(get_otpauth_uri_option)),
                         )
                         .default_service(web::to(global_proxy))
                     },
@@ -479,7 +481,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         )
                         .service(
                             web::resource("/adm/auth/totp/get")
-                            .route(web::post().to(get_otpauth_uri)),
+                            .route(web::post().to(get_otpauth_uri))
+                            .route(web::method(Method::OPTIONS).to(get_otpauth_uri_option)),
                         )
                         .default_service(
                             web::to(global_proxy).wrap(Governor::new(&governor_proxy_conf)),
@@ -532,7 +535,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         )
                         .service(
                             web::resource("/adm/auth/totp/get")
-                            .route(web::post().to(get_otpauth_uri)),
+                            .route(web::post().to(get_otpauth_uri))
+                            .route(web::method(Method::OPTIONS).to(get_otpauth_uri_option)),
                         )
                         .default_service(
                             web::to(global_proxy).wrap(Governor::new(&governor_proxy_conf)),
@@ -567,7 +571,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             .route(web::method(Method::OPTIONS).to(logout_options)),
                         )
                         .service(
-                            web::resource("/adm/auth/totp/get").route(web::post().to(get_otpauth_uri)),
+                            web::resource("/adm/auth/totp/get")
+                            .route(web::post().to(get_otpauth_uri))
+                            .route(web::method(Method::OPTIONS).to(get_otpauth_uri_option)),
                         )
                         .default_service(web::to(global_proxy))
                     },
