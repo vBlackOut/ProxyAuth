@@ -5,6 +5,7 @@ use crate::network::shared_client::{
     ClientOptions, get_or_build_client_proxy, get_or_build_thread_client,
 };
 use crate::token::security::validate_token;
+use crate::token::csrf::{inject_csrf_token, validate_csrf_token};
 use crate::{AppConfig, AppState};
 use actix_web::{Error, http::header,  HttpRequest, HttpResponse, HttpResponseBuilder, error, web};
 use hyper::header::USER_AGENT;
@@ -158,6 +159,27 @@ pub async fn proxy_with_proxy(
             }
         }
     };
+
+    // verify csrf token
+    if data.config.session_cookie && data.config.csrf_token {
+        if !validate_csrf_token(method, &req, &body, &data.config.secret) {
+            use actix_web::{HttpResponse, http::StatusCode};
+
+            let html = r#"<!doctype html>
+            <html lang="en">
+            <head><meta charset="utf-8"><title>401 Unauthorized</title></head>
+            <body><h1>invalid csrf request</h1></body>
+            </html>"#;
+
+            let mut resp = HttpResponse::build(StatusCode::UNAUTHORIZED);
+            resp.insert_header(("server", "ProxyAuth"));
+            resp.insert_header((header::CONTENT_TYPE, "text/html; charset=utf-8"));
+            resp.insert_header((header::CACHE_CONTROL, "no-store, max-age=0"));
+            add_cors_headers(&mut resp, &req);
+
+            return Ok(resp.body(html));
+        }
+    }
 
     if let Some(rule) = data
         .routes
@@ -380,13 +402,16 @@ pub async fn proxy_with_proxy(
         }
 
         let mut client_resp = HttpResponse::build(status);
+
         for (key, value) in response_result.headers() {
             if key != USER_AGENT && key.as_str() != "authorization" && key.as_str() != "server" {
                 client_resp.append_header((key.clone(), value.clone()));
             }
         }
 
-        let body_bytes = hyper::body::to_bytes(response_result.into_body())
+        let headers = response_result.headers().clone();
+
+        let mut body_bytes = hyper::body::to_bytes(response_result.into_body())
         .await
         .map_err(|e| {
             warn!(client_ip = %ip, target = %full_url, "Body read error: {}", e);
@@ -396,6 +421,15 @@ pub async fn proxy_with_proxy(
             add_cors_headers(&mut resp, &req);
             error::InternalError::from_response("500 Internal Server Error", resp.finish())
         })?;
+
+        if data.config.session_cookie && data.config.csrf_token {
+            if let Some((new_body, new_len)) =
+                inject_csrf_token(&headers, &body_bytes, &data.config.secret)
+                {
+                    body_bytes = new_body;
+                    client_resp.insert_header((header::CONTENT_LENGTH, new_len.to_string()));
+                }
+        }
 
         info!(
             "{} - {} {} {} {} {} [tid:{}] {}",
@@ -460,6 +494,27 @@ pub async fn proxy_without_proxy(
             }
         }
     };
+
+    // verify csrf token
+    if data.config.session_cookie && data.config.csrf_token {
+        if !validate_csrf_token(method, &req, &body, &data.config.secret) {
+            use actix_web::{HttpResponse, http::StatusCode};
+
+            let html = r#"<!doctype html>
+            <html lang="en">
+            <head><meta charset="utf-8"><title>401 Unauthorized</title></head>
+            <body><h1>invalid csrf request</h1></body>
+            </html>"#;
+
+            let mut resp = HttpResponse::build(StatusCode::UNAUTHORIZED);
+            resp.insert_header(("server", "ProxyAuth"));
+            resp.insert_header((header::CONTENT_TYPE, "text/html; charset=utf-8"));
+            resp.insert_header((header::CACHE_CONTROL, "no-store, max-age=0"));
+            add_cors_headers(&mut resp, &req);
+
+            return Ok(resp.body(html));
+        }
+    }
 
     if let Some(rule) = data
         .routes
@@ -734,14 +789,20 @@ pub async fn proxy_without_proxy(
             }
         }
 
-        let body_bytes = hyper::body::to_bytes(body).await.map_err(|e| {
-            warn!(
-                client_ip = %ip,
-                target = %full_url,
-                "Body read error: {}", e
-            );
+        let mut body_bytes = hyper::body::to_bytes(body).await.map_err(|e| {
+            warn!(client_ip = %ip, target = %full_url, "Body read error: {}", e);
             error::ErrorInternalServerError("500 Internal Server Error")
         })?;
+
+        if data.config.session_cookie && data.config.csrf_token {
+            if let Some((new_body, new_len)) =
+                inject_csrf_token(&headers, &body_bytes, &data.config.secret)
+                {
+                    body_bytes = new_body;
+                    client_resp.insert_header((header::CONTENT_LENGTH, new_len.to_string()));
+                }
+        }
+
 
         info!(
             "[{}] - {} {} {} {} {} [tid:{}] {}",

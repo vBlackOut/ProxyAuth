@@ -96,4 +96,5 @@ redis = { version = "0.32", features = ["tokio-comp"] }
 lmdb-rkv = "0.14"
 time = "0.3"
 mime = "0.3"
-
+flate2 = "1"
+subtle = "2"

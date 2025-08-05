@@ -4,6 +4,7 @@ use crate::config::config::{AuthRequest, User};
 use crate::network::proxy::client_ip;
 use crate::token::crypto::{calcul_cipher, derive_key_from_secret, encrypt};
 use crate::token::security::{generate_token, validate_token};
+use crate::token::csrf::verify_csrf_token;
 use actix_web::{dev::Payload, FromRequest, error::ErrorBadRequest, HttpRequest, http::{header, StatusCode}, HttpResponse, Responder, web::{self, Json, Form}, Error as ActixError};
 use actix_web::cookie::{Cookie, SameSite};
 use futures_util::FutureExt;
@@ -54,6 +55,25 @@ impl FromRequest for EitherAuth {
         }
     }
 }
+
+fn validate_csrf(req: &HttpRequest, payload: &EitherAuth, secret: &str) -> bool {
+    let m = req.method();
+    if matches!(m, &actix_web::http::Method::GET | &actix_web::http::Method::HEAD | &actix_web::http::Method::OPTIONS) {
+        return true;
+    }
+
+    let t_opt = match *payload {
+        EitherAuth::Json(ref j) => j.csrf_token.as_deref(),
+        EitherAuth::Form(ref f) => f.csrf_token.as_deref(),
+    };
+
+    if let Some(t) = t_opt {
+        return verify_csrf_token(secret, t);
+    }
+
+    false
+}
+
 
 pub fn is_ip_allowed(ip_str: &str, user: &User) -> bool {
     let Ok(ip) = ip_str.parse::<IpAddr>() else {
@@ -181,6 +201,13 @@ pub async fn auth(
     data: web::Data<AppState>,
     payload: EitherAuth,
 ) -> impl Responder {
+
+    if data.config.session_cookie && data.config.csrf_token &&!validate_csrf(&req, &payload, &data.config.secret) {
+        return HttpResponse::Unauthorized()
+        .insert_header(("server", "ProxyAuth"))
+        .insert_header((header::CONTENT_TYPE, "text/html; charset=utf-8"))
+        .body("<h1>invalid csrf request</h1>");
+    }
 
     let auth = match payload {
         EitherAuth::Json(j) => j,

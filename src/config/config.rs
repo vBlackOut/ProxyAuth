@@ -167,6 +167,9 @@ pub struct AppConfig {
 
     #[serde(default = "default_tls")]
     pub tls: bool,
+
+    #[serde(default = "default_csrf_token")]
+    pub csrf_token: bool,
 }
 
 impl Serialize for AppConfig {
@@ -216,6 +219,7 @@ pub struct AuthRequest {
     pub username: String,
     pub password: String,
     pub totp_code: Option<String>,
+    pub csrf_token: Option<String>,
 }
 
 fn default_host() -> String {
@@ -263,6 +267,10 @@ fn default_backends() -> Vec<BackendInput> {
 }
 
 fn default_tls() -> bool {
+    true
+}
+
+fn default_csrf_token() -> bool {
     true
 }
 
