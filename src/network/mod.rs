@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+pub mod cors;
 pub mod loadbalancing;
 pub mod proxy;
 pub mod ratelimit;
 pub mod shared_client;
-pub mod cors;

@@ -41,6 +41,9 @@ pub struct RouteRule {
 
     #[serde(default = "default_backends")]
     pub backends: Vec<BackendInput>,
+
+    #[serde(default = "default_need_csrf")]
+    pub need_csrf: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -274,6 +277,10 @@ fn default_csrf_token() -> bool {
     true
 }
 
+fn default_need_csrf() -> bool {
+    true
+}
+
 fn default_secure() -> bool {
     false
 }
@@ -302,11 +309,9 @@ fn default_max_age_session_cookie() -> i64 {
     3600
 }
 
-
 fn default_login_via_otp() -> bool {
     false
 }
-
 
 fn default_session_cookie() -> bool {
     false

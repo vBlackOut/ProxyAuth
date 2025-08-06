@@ -5,12 +5,12 @@ use proxyauth::network::shared_client::{
 };
 use proxyauth::revoke::db::{load_revoked_tokens, start_revoked_token_ttl};
 use proxyauth::{AppConfig, AppState, CounterToken, RouteConfig, auth as auth_handler};
-use tracing::error;
 use serde::de::DeserializeOwned;
 use serde_json::json;
 use std::fs;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::sync::Arc;
+use tracing::error;
 
 fn load_config<T: DeserializeOwned>(path: &str) -> T {
     let data = fs::read_to_string(path).expect("Failed to read config file");

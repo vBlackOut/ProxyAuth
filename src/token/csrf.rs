@@ -1,20 +1,20 @@
+use actix_web::HttpRequest;
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD as B64};
+use blake3;
 use bytes::Bytes;
-use base64::{engine::general_purpose::URL_SAFE_NO_PAD as B64, Engine};
 use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
-use rand::RngCore;
-use time::{OffsetDateTime, Duration};
-use blake3;
-use once_cell::sync::Lazy;
-use tokio::spawn;
-use tokio::time::{interval, Duration as TokioDuration};
-use actix_web::HttpRequest;
-use hyper::header::{CONTENT_TYPE, CONTENT_ENCODING};
+use flate2::{Compression, read::GzDecoder, write::GzEncoder};
+use hyper::header::{CONTENT_ENCODING, CONTENT_TYPE};
 use memchr::memmem;
-use flate2::{read::GzDecoder, write::GzEncoder, Compression};
+use once_cell::sync::Lazy;
+use rand::RngCore;
 use std::io::{Read, Write};
-use subtle::ConstantTimeEq;
 use std::sync::Arc;
+use subtle::ConstantTimeEq;
+use time::{Duration, OffsetDateTime};
+use tokio::spawn;
+use tokio::time::{Duration as TokioDuration, interval};
 
 #[derive(Clone)]
 pub struct CsrfNonceStore {
@@ -29,7 +29,9 @@ pub static CSRF_STORE: Lazy<CsrfNonceStore> = Lazy::new(|| {
 
 impl CsrfNonceStore {
     pub fn new() -> Self {
-        Self { used: Arc::new(DashMap::new()) }
+        Self {
+            used: Arc::new(DashMap::new()),
+        }
     }
 
     pub fn try_consume(&self, nonce: &[u8], exp: i64) -> bool {
@@ -40,7 +42,10 @@ impl CsrfNonceStore {
 
         match self.used.entry(nonce.to_vec()) {
             Entry::Occupied(_) => false,
-            Entry::Vacant(v) => { v.insert(exp); true }
+            Entry::Vacant(v) => {
+                v.insert(exp);
+                true
+            }
         }
     }
 
@@ -60,49 +65,62 @@ pub fn spawn_csrf_purger(store: CsrfNonceStore) {
     });
 }
 
-pub fn validate_csrf_token(method: &actix_web::http::Method, req: &HttpRequest, body: &Bytes, secret: &str) -> bool {
-    if matches!(method, &actix_web::http::Method::GET | &actix_web::http::Method::HEAD | &actix_web::http::Method::OPTIONS) {
+pub fn validate_csrf_token(
+    method: &actix_web::http::Method,
+    req: &HttpRequest,
+    body: &Bytes,
+    secret: &str,
+) -> bool {
+    if matches!(
+        method,
+        &actix_web::http::Method::GET
+            | &actix_web::http::Method::HEAD
+            | &actix_web::http::Method::OPTIONS
+    ) {
         return true;
     }
 
-    if let Some(header_token) = req.headers().get("X-CSRF-Token")
+    if let Some(header_token) = req
+        .headers()
+        .get("X-CSRF-Token")
         .or_else(|| req.headers().get("X-CSRFToken"))
-        {
-            if let Ok(token_str) = header_token.to_str() {
-                if verify_csrf_token(secret, token_str) {
-                    return true;
-                }
+    {
+        if let Ok(token_str) = header_token.to_str() {
+            if verify_csrf_token(secret, token_str) {
+                return true;
             }
         }
+    }
 
-        let content_type = req.headers()
+    let content_type = req
+        .headers()
         .get(CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
 
-        let ct_lower = content_type.to_ascii_lowercase();
+    let ct_lower = content_type.to_ascii_lowercase();
 
-        if ct_lower.starts_with("application/x-www-form-urlencoded") {
-            if let Ok(body_str) = std::str::from_utf8(body) {
-                if let Some(token) = get_form_param(body_str, "csrf_token") {
-                    return verify_csrf_token(secret, &token);
-                }
+    if ct_lower.starts_with("application/x-www-form-urlencoded") {
+        if let Ok(body_str) = std::str::from_utf8(body) {
+            if let Some(token) = get_form_param(body_str, "csrf_token") {
+                return verify_csrf_token(secret, &token);
             }
         }
+    }
 
-        if ct_lower.starts_with("application/json") {
-            if let Ok(body_str) = std::str::from_utf8(body) {
-                if let Some(token) = extract_json_csrf_token(body_str) {
-                    return verify_csrf_token(secret, &token);
-                }
+    if ct_lower.starts_with("application/json") {
+        if let Ok(body_str) = std::str::from_utf8(body) {
+            if let Some(token) = extract_json_csrf_token(body_str) {
+                return verify_csrf_token(secret, &token);
             }
         }
+    }
 
-        if ct_lower.starts_with("multipart/form-data") {
-            return false;
-        }
+    if ct_lower.starts_with("multipart/form-data") {
+        return false;
+    }
 
-        false
+    false
 }
 
 fn extract_json_csrf_token(json_str: &str) -> Option<String> {
@@ -133,8 +151,8 @@ pub fn make_csrf_token(secret: &str) -> String {
     format!(
         "{}.{}.{}",
         B64.encode(&nonce),
-            B64.encode(exp_b),
-            B64.encode(sig.as_bytes())
+        B64.encode(exp_b),
+        B64.encode(sig.as_bytes())
     )
 }
 
@@ -144,9 +162,18 @@ pub fn verify_csrf_token(secret: &str, token: &str) -> bool {
     let e_b64 = it.next().unwrap_or("");
     let s_b64 = it.next().unwrap_or("");
 
-    let nonce = match B64.decode(n_b64) { Ok(v) => v, Err(_) => return false };
-    let exp_b = match B64.decode(e_b64) { Ok(v) => v, Err(_) => return false };
-    let sig_b = match B64.decode(s_b64) { Ok(v) => v, Err(_) => return false };
+    let nonce = match B64.decode(n_b64) {
+        Ok(v) => v,
+        Err(_) => return false,
+    };
+    let exp_b = match B64.decode(e_b64) {
+        Ok(v) => v,
+        Err(_) => return false,
+    };
+    let sig_b = match B64.decode(s_b64) {
+        Ok(v) => v,
+        Err(_) => return false,
+    };
 
     if nonce.len() != 32 || exp_b.len() != 8 || sig_b.len() != 32 {
         return false;
@@ -189,18 +216,23 @@ pub fn inject_csrf_token(
     const P1: &[u8] = b"{{ csrf_token }}";
     const P2: &[u8] = b"{{csrf_token}}";
 
-    let ct = headers.get(CONTENT_TYPE).and_then(|v| v.to_str().ok()).unwrap_or("");
+    let ct = headers
+        .get(CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
     let ct_l = ct.to_ascii_lowercase();
     let ct_main = ct_l.split(';').next().unwrap_or("").trim();
-    let allow = ct_main == "text/html"
-    || ct_main.ends_with("+html")
-    || ct_main.starts_with("text/html");
+    let allow =
+        ct_main == "text/html" || ct_main.ends_with("+html") || ct_main.starts_with("text/html");
 
     if !allow {
         return None;
     }
 
-    let enc = headers.get(CONTENT_ENCODING).and_then(|v| v.to_str().ok()).map(|s| s.to_ascii_lowercase());
+    let enc = headers
+        .get(CONTENT_ENCODING)
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_ascii_lowercase());
 
     let replace_in = |plain: &[u8]| -> Option<Vec<u8>> {
         if memmem::find(plain, P1).is_none() && memmem::find(plain, P2).is_none() {
@@ -243,7 +275,9 @@ pub fn inject_csrf_token(
             }
             let out = replace_in(&plain)?;
             let mut enc = GzEncoder::new(Vec::new(), Compression::default());
-            if enc.write_all(&out).is_err() { return None; }
+            if enc.write_all(&out).is_err() {
+                return None;
+            }
             let compressed = enc.finish().ok()?;
             let len = compressed.len();
             Some((Bytes::from(compressed), len))
