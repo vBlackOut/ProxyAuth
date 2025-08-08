@@ -13,6 +13,7 @@
 // limitations under the License.
 
 pub mod cors;
+pub mod error;
 pub mod loadbalancing;
 pub mod proxy;
 pub mod ratelimit;

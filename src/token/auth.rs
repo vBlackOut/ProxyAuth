@@ -2,6 +2,7 @@ use crate::AppConfig;
 use crate::AppState;
 use crate::config::config::{AuthRequest, User};
 use crate::network::proxy::client_ip;
+use crate::network::error::render_error_page;
 use crate::token::crypto::{calcul_cipher, derive_key_from_secret, encrypt};
 use crate::token::csrf::verify_csrf_token;
 use crate::token::security::{generate_token, validate_token};
@@ -214,14 +215,12 @@ pub async fn auth(
     data: web::Data<AppState>,
     payload: EitherAuth,
 ) -> impl Responder {
+
     if data.config.session_cookie
         && data.config.csrf_token
         && !validate_csrf(&req, &payload, &data.config.secret)
     {
-        return HttpResponse::Unauthorized()
-            .insert_header(("server", "ProxyAuth"))
-            .insert_header((header::CONTENT_TYPE, "text/html; charset=utf-8"))
-            .body("<h1>invalid csrf request</h1>");
+        return render_error_page(&req, "invalid csrf request").await;
     }
 
     let auth = match payload {
@@ -302,9 +301,7 @@ pub async fn auth(
 
         if !is_ip_allowed(&ip, &user) {
             warn!("[{}] Access ip denied for user {}", ip, user.username);
-            return HttpResponse::Forbidden()
-                .append_header(("server", "ProxyAuth"))
-                .body("Access denied");
+            return render_error_page(&req, "Access denied").await;
         }
 
         // totp method
@@ -313,9 +310,7 @@ pub async fn auth(
                 Some(code) => code.trim(),
                 None => {
                     warn!("[{}] Missing TOTP code for user {}", ip, user.username);
-                    return HttpResponse::Unauthorized()
-                        .append_header(("server", "ProxyAuth"))
-                        .body("Missing TOTP code");
+                    return render_error_page(&req, "Missing TOTP code").await;
                 }
             };
 
@@ -323,9 +318,8 @@ pub async fn auth(
                 Some(key) => key,
                 None => {
                     warn!("[{}] Missing TOTP secret for user {}", ip, user.username);
-                    return HttpResponse::InternalServerError()
-                        .append_header(("server", "ProxyAuth"))
-                        .body("Missing TOTP secret");
+                    return render_error_page(&req, "Missing TOTP secret").await;
+
                 }
             };
 
@@ -334,9 +328,8 @@ pub async fn auth(
                     Some(bytes) => bytes,
                     None => {
                         warn!("Invalid base32 TOTP secret for user {}", user.username);
-                        return HttpResponse::InternalServerError()
-                            .append_header(("server", "ProxyAuth"))
-                            .body("Internal TOTP error");
+                        return render_error_page(&req, "Internal TOTP error").await;
+
                     }
                 };
 
@@ -353,9 +346,7 @@ pub async fn auth(
 
             if !is_valid {
                 warn!("Invalid TOTP code for user {}", user.username);
-                return HttpResponse::Unauthorized()
-                    .append_header(("server", "ProxyAuth"))
-                    .body("Invalid TOTP code");
+                return render_error_page(&req, "Invalid TOTP code").await;
             }
         }
 
@@ -474,8 +465,6 @@ pub async fn auth(
             ip, path, method, auth.username, user_agent
         );
 
-        return HttpResponse::Unauthorized()
-            .append_header(("server", "ProxyAuth"))
-            .body("Invalid credentials");
+        return render_error_page(&req, "Invalid credentials").await;
     }
 }

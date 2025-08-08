@@ -44,6 +44,9 @@ pub struct RouteRule {
 
     #[serde(default = "default_need_csrf")]
     pub need_csrf: bool,
+
+    #[serde(default = "default_cache")]
+    pub cache: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -235,6 +238,10 @@ fn default_timezone() -> String {
 
 fn default_port() -> u16 {
     8080
+}
+
+fn default_cache() -> bool {
+    true
 }
 
 fn default_username() -> Vec<String> {

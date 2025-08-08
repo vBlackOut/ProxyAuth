@@ -185,7 +185,9 @@ pub async fn proxy_with_proxy(
                 let mut resp = HttpResponse::build(StatusCode::UNAUTHORIZED);
                 resp.insert_header(("server", "ProxyAuth"));
                 resp.insert_header((header::CONTENT_TYPE, "text/html; charset=utf-8"));
-                resp.insert_header((header::CACHE_CONTROL, "no-store, max-age=0"));
+                resp.insert_header((header::CACHE_CONTROL, "no-store, no-cache, must-revalidate, max-age=0"));
+                resp.insert_header(("Pragma", "no-cache"));
+                resp.insert_header(("Expires", "0"));
                 add_cors_headers(&mut resp, &req);
 
                 return Ok(resp.body(html));
@@ -425,6 +427,13 @@ pub async fn proxy_with_proxy(
                 error::InternalError::from_response("500 Internal Server Error", resp.finish())
             })?;
 
+        if !rule.cache {
+            client_resp.insert_header((header::CONTENT_TYPE, "text/html; charset=utf-8"));
+            client_resp.insert_header((header::CACHE_CONTROL, "no-store, no-cache, must-revalidate, max-age=0"));
+            client_resp.insert_header(("Pragma", "no-cache"));
+            client_resp.insert_header(("Expires", "0"));
+        }
+
         if data.config.session_cookie && data.config.csrf_token {
             if let Some((new_body, new_len)) =
                 inject_csrf_token(&headers, &body_bytes, &data.config.secret)
@@ -523,7 +532,9 @@ pub async fn proxy_without_proxy(
                 let mut resp = HttpResponse::build(StatusCode::UNAUTHORIZED);
                 resp.insert_header(("server", "ProxyAuth"));
                 resp.insert_header((header::CONTENT_TYPE, "text/html; charset=utf-8"));
-                resp.insert_header((header::CACHE_CONTROL, "no-store, max-age=0"));
+                resp.insert_header((header::CACHE_CONTROL, "no-store, no-cache, must-revalidate, max-age=0"));
+                resp.insert_header(("Pragma", "no-cache"));
+                resp.insert_header(("Expires", "0"));
                 add_cors_headers(&mut resp, &req);
 
                 return Ok(resp.body(html));
@@ -803,6 +814,13 @@ pub async fn proxy_without_proxy(
             warn!(client_ip = %ip, target = %full_url, "Body read error: {}", e);
             error::ErrorInternalServerError("500 Internal Server Error")
         })?;
+
+        if !rule.cache {
+            client_resp.insert_header((header::CONTENT_TYPE, "text/html; charset=utf-8"));
+            client_resp.insert_header((header::CACHE_CONTROL, "no-store, no-cache, must-revalidate, max-age=0"));
+            client_resp.insert_header(("Pragma", "no-cache"));
+            client_resp.insert_header(("Expires", "0"));
+        }
 
         if data.config.session_cookie && data.config.csrf_token {
             if let Some((new_body, new_len)) =
