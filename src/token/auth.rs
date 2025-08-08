@@ -220,7 +220,7 @@ pub async fn auth(
         && data.config.csrf_token
         && !validate_csrf(&req, &payload, &data.config.secret)
     {
-        return render_error_page(&req, "invalid csrf request").await;
+        return render_error_page(&req, data.clone(), "invalid csrf request").await;
     }
 
     let auth = match payload {
@@ -301,7 +301,7 @@ pub async fn auth(
 
         if !is_ip_allowed(&ip, &user) {
             warn!("[{}] Access ip denied for user {}", ip, user.username);
-            return render_error_page(&req, "Access denied").await;
+            return render_error_page(&req, data.clone(), "Access denied").await;
         }
 
         // totp method
@@ -310,7 +310,7 @@ pub async fn auth(
                 Some(code) => code.trim(),
                 None => {
                     warn!("[{}] Missing TOTP code for user {}", ip, user.username);
-                    return render_error_page(&req, "Missing TOTP code").await;
+                    return render_error_page(&req, data.clone(), "Missing TOTP code").await;
                 }
             };
 
@@ -318,7 +318,7 @@ pub async fn auth(
                 Some(key) => key,
                 None => {
                     warn!("[{}] Missing TOTP secret for user {}", ip, user.username);
-                    return render_error_page(&req, "Missing TOTP secret").await;
+                    return render_error_page(&req, data.clone(), "Missing TOTP secret").await;
 
                 }
             };
@@ -328,7 +328,7 @@ pub async fn auth(
                     Some(bytes) => bytes,
                     None => {
                         warn!("Invalid base32 TOTP secret for user {}", user.username);
-                        return render_error_page(&req, "Internal TOTP error").await;
+                        return render_error_page(&req, data.clone(), "Internal TOTP error").await;
 
                     }
                 };
@@ -346,7 +346,7 @@ pub async fn auth(
 
             if !is_valid {
                 warn!("Invalid TOTP code for user {}", user.username);
-                return render_error_page(&req, "Invalid TOTP code").await;
+                return render_error_page(&req, data.clone(), "Invalid TOTP code").await;
             }
         }
 
@@ -465,6 +465,6 @@ pub async fn auth(
             ip, path, method, auth.username, user_agent
         );
 
-        return render_error_page(&req, "Invalid credentials").await;
+        return render_error_page(&req, data.clone(), "Invalid credentials").await;
     }
 }

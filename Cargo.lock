@@ -44,7 +44,7 @@ dependencies = [
  "actix-utils",
  "base64 0.22.1",
  "bitflags 2.9.0",
- "brotli",
+ "brotli 7.0.0",
  "bytes",
  "bytestring",
  "derive_more",
@@ -496,13 +496,34 @@ dependencies = [
 
 [[package]]
 name = "brotli"
+version = "3.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d640d25bc63c50fb1f0b545ffd80207d2e10a4c965530809b40ba3386825c391"
+dependencies = [
+ "alloc-no-stdlib",
+ "alloc-stdlib",
+ "brotli-decompressor 2.5.1",
+]
+
+[[package]]
+name = "brotli"
 version = "7.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cc97b8f16f944bba54f0433f07e30be199b6dc2bd25937444bbad560bcea29bd"
 dependencies = [
  "alloc-no-stdlib",
  "alloc-stdlib",
- "brotli-decompressor",
+ "brotli-decompressor 4.0.2",
+]
+
+[[package]]
+name = "brotli-decompressor"
+version = "2.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4e2e4afe60d7dd600fdd3de8d0f08c2b7ec039712e3b6137ff98b7004e82de4f"
+dependencies = [
+ "alloc-no-stdlib",
+ "alloc-stdlib",
 ]
 
 [[package]]
@@ -2244,6 +2265,7 @@ dependencies = [
  "base32 0.4.0",
  "base64 0.21.7",
  "blake3",
+ "brotli 3.5.0",
  "bytes",
  "chacha20poly1305",
  "chrono",
