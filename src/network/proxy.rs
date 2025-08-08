@@ -1,10 +1,11 @@
 use crate::config::config::BackendConfig;
 use crate::config::config::BackendInput;
+use crate::config::config::RouteRule;
 use crate::network::loadbalancing::forward_failover;
 use crate::network::shared_client::{
     ClientOptions, get_or_build_client_proxy, get_or_build_thread_client,
 };
-use crate::token::csrf::{inject_csrf_token, validate_csrf_token};
+use crate::token::csrf::{inject_csrf_token, validate_csrf_token, fix_mime_actix};
 use crate::token::security::validate_token;
 use crate::{AppConfig, AppState};
 use actix_web::{Error, HttpRequest, HttpResponse, HttpResponseBuilder, error, http::header, web};
@@ -15,6 +16,27 @@ use std::net::IpAddr;
 use std::str::FromStr;
 use tokio::time::{Duration, timeout};
 use tracing::{info, warn};
+use once_cell::sync::OnceCell;
+
+static ORDERED_ROUTE_IDX: OnceCell<Vec<usize>> = OnceCell::new();
+
+pub fn init_routes(routes: &[RouteRule]) {
+    let mut idx: Vec<usize> = (0..routes.len()).collect();
+    idx.sort_by_key(|&i| (routes[i].prefix == "/") as u8);
+    ORDERED_ROUTE_IDX.set(idx).ok();
+}
+
+pub fn match_route<'a>(path: &str, routes: &'a [RouteRule]) -> Option<&'a RouteRule> {
+    let idx = ORDERED_ROUTE_IDX.get().expect("route order not initialized");
+    for &i in idx {
+        let r = &routes[i];
+        if path.starts_with(&r.prefix) {
+            return Some(r);
+        }
+    }
+    None
+}
+
 
 pub fn inject_header(mut builder: Builder, username: &str, config: &AppConfig) -> Builder {
     if username.is_empty() {
@@ -164,12 +186,7 @@ pub async fn proxy_with_proxy(
         }
     };
 
-    if let Some(rule) = data
-        .routes
-        .routes
-        .iter()
-        .find(|r| path.starts_with(&r.prefix))
-    {
+   if let Some(rule) = match_route(path, &data.routes.routes) {
 
         // verify csrf token
         if data.config.session_cookie && data.config.csrf_token && rule.need_csrf {
@@ -456,6 +473,7 @@ pub async fn proxy_with_proxy(
         );
 
         add_cors_headers(&mut client_resp, &req);
+        fix_mime_actix(req.uri().path(), &mut client_resp, status);
         Ok(client_resp
             .append_header(("server", "ProxyAuth"))
             .body(body_bytes))
@@ -511,12 +529,7 @@ pub async fn proxy_without_proxy(
         }
     };
 
-    if let Some(rule) = data
-        .routes
-        .routes
-        .iter()
-        .find(|r| path.starts_with(&r.prefix))
-    {
+    if let Some(rule) = match_route(path, &data.routes.routes) {
 
         // verify csrf token
         if data.config.session_cookie && data.config.csrf_token && rule.need_csrf {
@@ -844,6 +857,7 @@ pub async fn proxy_without_proxy(
         );
 
         add_cors_headers(&mut client_resp, &req);
+        fix_mime_actix(req.uri().path(), &mut client_resp, status);
         Ok(client_resp
             .append_header(("server", "ProxyAuth"))
             .body(body_bytes))

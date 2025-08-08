@@ -19,7 +19,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct RouteRule {
     pub prefix: String,
     pub target: String,

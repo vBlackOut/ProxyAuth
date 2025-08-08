@@ -33,6 +33,7 @@ use crate::keystore::import::decrypt_keystore;
 use crate::network::cors::CorsMiddleware;
 use crate::revoke::db::{load_revoked_tokens, start_revoked_token_ttl};
 use crate::tls::check_port;
+use crate::network::proxy::init_routes;
 use actix_governor::{Governor, GovernorConfigBuilder};
 use actix_web::{App, http::Method, web};
 use chrono::Local;
@@ -198,6 +199,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         revoked_tokens,
     });
 
+    init_routes(&state.routes.routes.clone());
     init_derived_key(&config.secret);
 
     // logs

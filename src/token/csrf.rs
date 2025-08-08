@@ -15,6 +15,8 @@ use subtle::ConstantTimeEq;
 use time::{Duration, OffsetDateTime};
 use tokio::spawn;
 use tokio::time::{Duration as TokioDuration, interval};
+use actix_web::HttpResponseBuilder;
+use actix_web::http::{header::{CONTENT_TYPE as CONTENT_TYPE_ACTIX, HeaderValue as HeaderValue_ACTIX}, StatusCode};
 
 #[derive(Clone)]
 pub struct CsrfNonceStore {
@@ -71,11 +73,16 @@ pub fn validate_csrf_token(
     body: &Bytes,
     secret: &str,
 ) -> bool {
+    let p = req.uri().path();
+    if is_static_asset(p) {
+        return true;
+    }
+
     if matches!(
         method,
         &actix_web::http::Method::GET
-            | &actix_web::http::Method::HEAD
-            | &actix_web::http::Method::OPTIONS
+        | &actix_web::http::Method::HEAD
+        | &actix_web::http::Method::OPTIONS
     ) {
         return true;
     }
@@ -84,43 +91,43 @@ pub fn validate_csrf_token(
         .headers()
         .get("X-CSRF-Token")
         .or_else(|| req.headers().get("X-CSRFToken"))
-    {
-        if let Ok(token_str) = header_token.to_str() {
-            if verify_csrf_token(secret, token_str) {
-                return true;
+        {
+            if let Ok(token_str) = header_token.to_str() {
+                if verify_csrf_token(secret, token_str) {
+                    return true;
+                }
             }
         }
-    }
 
-    let content_type = req
+        let content_type = req
         .headers()
         .get(CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
         .unwrap_or("");
 
-    let ct_lower = content_type.to_ascii_lowercase();
+        let ct_lower = content_type.to_ascii_lowercase();
 
-    if ct_lower.starts_with("application/x-www-form-urlencoded") {
-        if let Ok(body_str) = std::str::from_utf8(body) {
-            if let Some(token) = get_form_param(body_str, "csrf_token") {
-                return verify_csrf_token(secret, &token);
+        if ct_lower.starts_with("application/x-www-form-urlencoded") {
+            if let Ok(body_str) = std::str::from_utf8(body) {
+                if let Some(token) = get_form_param(body_str, "csrf_token") {
+                    return verify_csrf_token(secret, &token);
+                }
             }
         }
-    }
 
-    if ct_lower.starts_with("application/json") {
-        if let Ok(body_str) = std::str::from_utf8(body) {
-            if let Some(token) = extract_json_csrf_token(body_str) {
-                return verify_csrf_token(secret, &token);
+        if ct_lower.starts_with("application/json") {
+            if let Ok(body_str) = std::str::from_utf8(body) {
+                if let Some(token) = extract_json_csrf_token(body_str) {
+                    return verify_csrf_token(secret, &token);
+                }
             }
         }
-    }
 
-    if ct_lower.starts_with("multipart/form-data") {
-        return false;
-    }
+        if ct_lower.starts_with("multipart/form-data") {
+            return false;
+        }
 
-    false
+        false
 }
 
 fn extract_json_csrf_token(json_str: &str) -> Option<String> {
@@ -151,8 +158,8 @@ pub fn make_csrf_token(secret: &str) -> String {
     format!(
         "{}.{}.{}",
         B64.encode(&nonce),
-        B64.encode(exp_b),
-        B64.encode(sig.as_bytes())
+            B64.encode(exp_b),
+            B64.encode(sig.as_bytes())
     )
 }
 
@@ -217,22 +224,22 @@ pub fn inject_csrf_token(
     const P2: &[u8] = b"{{csrf_token}}";
 
     let ct = headers
-        .get(CONTENT_TYPE)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("");
+    .get(CONTENT_TYPE)
+    .and_then(|v| v.to_str().ok())
+    .unwrap_or("");
     let ct_l = ct.to_ascii_lowercase();
     let ct_main = ct_l.split(';').next().unwrap_or("").trim();
     let allow =
-        ct_main == "text/html" || ct_main.ends_with("+html") || ct_main.starts_with("text/html");
+    ct_main == "text/html" || ct_main.ends_with("+html") || ct_main.starts_with("text/html");
 
     if !allow {
         return None;
     }
 
     let enc = headers
-        .get(CONTENT_ENCODING)
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.to_ascii_lowercase());
+    .get(CONTENT_ENCODING)
+    .and_then(|v| v.to_str().ok())
+    .map(|s| s.to_ascii_lowercase());
 
     let replace_in = |plain: &[u8]| -> Option<Vec<u8>> {
         if memmem::find(plain, P1).is_none() && memmem::find(plain, P2).is_none() {
@@ -288,5 +295,29 @@ pub fn inject_csrf_token(
             let len = b.len();
             Some((b, len))
         }
+    }
+}
+
+fn is_static_asset(path: &str) -> bool {
+    path.starts_with("/assets/")
+    || path.ends_with(".css")
+    || path.ends_with(".js")
+    || path.ends_with(".png")
+    || path.ends_with(".jpg")
+    || path.ends_with(".jpeg")
+    || path.ends_with(".svg")
+    || path.ends_with(".ico")
+    || path.ends_with(".webp")
+}
+
+pub fn fix_mime_actix(req_path: &str, resp: &mut HttpResponseBuilder, _status: StatusCode) {
+    if req_path.ends_with(".css") {
+        resp.insert_header((CONTENT_TYPE_ACTIX, HeaderValue_ACTIX::from_static("text/css; charset=utf-8")));
+    }
+    if req_path.ends_with(".js") {
+        resp.insert_header((CONTENT_TYPE_ACTIX, HeaderValue_ACTIX::from_static("text/javascript; charset=utf-8")));
+    }
+    if req_path.ends_with(".html") {
+        resp.insert_header((CONTENT_TYPE_ACTIX, HeaderValue_ACTIX::from_static("text/html; charset=utf-8")));
     }
 }
