@@ -19,7 +19,7 @@ use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct RouteRule {
     pub prefix: String,
     pub target: String,
@@ -41,6 +41,12 @@ pub struct RouteRule {
 
     #[serde(default = "default_backends")]
     pub backends: Vec<BackendInput>,
+
+    #[serde(default = "default_need_csrf")]
+    pub need_csrf: bool,
+
+    #[serde(default = "default_cache")]
+    pub cache: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -167,6 +173,9 @@ pub struct AppConfig {
 
     #[serde(default = "default_tls")]
     pub tls: bool,
+
+    #[serde(default = "default_csrf_token")]
+    pub csrf_token: bool,
 }
 
 impl Serialize for AppConfig {
@@ -216,6 +225,7 @@ pub struct AuthRequest {
     pub username: String,
     pub password: String,
     pub totp_code: Option<String>,
+    pub csrf_token: Option<String>,
 }
 
 fn default_host() -> String {
@@ -228,6 +238,10 @@ fn default_timezone() -> String {
 
 fn default_port() -> u16 {
     8080
+}
+
+fn default_cache() -> bool {
+    true
 }
 
 fn default_username() -> Vec<String> {
@@ -266,6 +280,14 @@ fn default_tls() -> bool {
     true
 }
 
+fn default_csrf_token() -> bool {
+    true
+}
+
+fn default_need_csrf() -> bool {
+    true
+}
+
 fn default_secure() -> bool {
     false
 }
@@ -294,11 +316,9 @@ fn default_max_age_session_cookie() -> i64 {
     3600
 }
 
-
 fn default_login_via_otp() -> bool {
     false
 }
-
 
 fn default_session_cookie() -> bool {
     false

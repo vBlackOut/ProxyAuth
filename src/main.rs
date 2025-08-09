@@ -25,14 +25,15 @@ mod stats;
 mod tls;
 mod token;
 
-use crate::adm::registry_otp::get_otpauth_uri;
+use crate::adm::registry_otp::{get_otpauth_uri, get_otpauth_uri_option};
 use crate::adm::revoke::revoke_route;
 use crate::build::build_info::update_build_info;
 use crate::cli::prompt::prompt;
 use crate::keystore::import::decrypt_keystore;
+use crate::network::cors::CorsMiddleware;
 use crate::revoke::db::{load_revoked_tokens, start_revoked_token_ttl};
 use crate::tls::check_port;
-use crate::network::cors::CorsMiddleware;
+use crate::network::proxy::init_routes;
 use actix_governor::{Governor, GovernorConfigBuilder};
 use actix_web::{App, http::Method, web};
 use chrono::Local;
@@ -42,7 +43,7 @@ use dashmap::DashMap;
 use futures_util::future::join_all;
 use logs::{ChannelLogWriter, get_logs, log_collector};
 use network::proxy::global_proxy;
-use network::ratelimit::{UserToken, RateLimitLogger};
+use network::ratelimit::{RateLimitLogger, UserToken};
 use network::shared_client::{
     ClientOptions, build_hyper_client_cert, build_hyper_client_normal, build_hyper_client_proxy,
 };
@@ -54,7 +55,7 @@ use std::net::TcpListener;
 use std::{fs, process, sync::Arc, time::Duration};
 use tls::bind_server;
 use token::auth::{auth, auth_options};
-use token::logout::{logout_session, logout_options};
+use token::logout::{logout_options, logout_session};
 use token::security::init_derived_key;
 use tokio::sync::mpsc::unbounded_channel;
 use tracing::{error, warn};
@@ -198,6 +199,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         revoked_tokens,
     });
 
+    init_routes(&state.routes.routes.clone());
     init_derived_key(&config.secret);
 
     // logs
@@ -307,7 +309,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .try_into()
         .expect("bad burst_proxy value");
 
-
     // configuration auth ratelimit
     let requests_per_second_auth_config = config
         .ratelimit_auth
@@ -352,42 +353,48 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let state_cloned = state.clone();
 
-        match  mode_actix.as_ref()  {
+        match mode_actix.as_ref() {
             "NO_RATELIMIT_AUTH" => {
-                let seconds_per_request = Duration::from_secs_f64(1.0 / requests_per_second_proxy_config as f64);
+                let seconds_per_request =
+                    Duration::from_secs_f64(1.0 / requests_per_second_proxy_config as f64);
                 let governor_proxy_conf = GovernorConfigBuilder::default()
-                .burst_size(burst_proxy_config)
-                .key_extractor(UserToken)
-                .period(seconds_per_request)
-                .finish()
-                .unwrap();
+                    .burst_size(burst_proxy_config)
+                    .key_extractor(UserToken)
+                    .period(seconds_per_request)
+                    .finish()
+                    .unwrap();
 
                 let server = bind_server(
                     move || {
                         App::new()
-                        .app_data(state_cloned.clone())
-                        .wrap(RateLimitLogger)
-                        .wrap(CorsMiddleware {
-                            config: state_cloned.clone(),
-                        })
-                        .service(
-                            web::resource("/auth")
-                            .route(web::post().to(auth))
-                            .route(web::method(Method::OPTIONS).to(auth_options)),
-                        )
-                        .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
-                        .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
-                        .service(web::resource("/adm/revoke").route(web::post().to(revoke_route)))
-                        .service(
-                            web::resource("/logout")
-                            .route(web::get().to(logout_session))
-                            .route(web::method(Method::OPTIONS).to(logout_options)),
-                        )
-                        .service(
-                            web::resource("/adm/auth/totp/get")
-                            .route(web::post().to(get_otpauth_uri)),
-                        )
-                        .default_service(web::to(global_proxy).wrap(Governor::new(&governor_proxy_conf)))
+                            .app_data(state_cloned.clone())
+                            .wrap(RateLimitLogger)
+                            .wrap(CorsMiddleware {
+                                config: state_cloned.clone(),
+                            })
+                            .service(
+                                web::resource("/auth")
+                                    .route(web::post().to(auth))
+                                    .route(web::method(Method::OPTIONS).to(auth_options)),
+                            )
+                            .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
+                            .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
+                            .service(
+                                web::resource("/adm/revoke").route(web::post().to(revoke_route)),
+                            )
+                            .service(
+                                web::resource("/logout")
+                                    .route(web::get().to(logout_session))
+                                    .route(web::method(Method::OPTIONS).to(logout_options)),
+                            )
+                            .service(
+                                web::resource("/adm/auth/totp/get")
+                                    .route(web::post().to(get_otpauth_uri))
+                                    .route(web::method(Method::OPTIONS).to(get_otpauth_uri_option)),
+                            )
+                            .default_service(
+                                web::to(global_proxy).wrap(Governor::new(&governor_proxy_conf)),
+                            )
                     },
                     listener,
                     &config,
@@ -397,40 +404,48 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             "NO_RATELIMIT_PROXY" => {
-                let seconds_per_request = Duration::from_secs_f64(1.0 / requests_per_second_auth_config as f64);
+                let seconds_per_request =
+                    Duration::from_secs_f64(1.0 / requests_per_second_auth_config as f64);
                 let governor_auth_conf = GovernorConfigBuilder::default()
-                .burst_size(burst_auth_config)
-                .use_headers()
-                .period(seconds_per_request)
-                .finish()
-                .unwrap();
+                    .burst_size(burst_auth_config)
+                    .use_headers()
+                    .period(seconds_per_request)
+                    .finish()
+                    .unwrap();
 
                 let server = bind_server(
                     move || {
                         App::new()
-                        .app_data(state_cloned.clone())
-                        .wrap(RateLimitLogger)
-                        .wrap(CorsMiddleware {
-                            config: state_cloned.clone(),
-                        })
-                        .service(
-                            web::resource("/auth")
-                            .route(web::post().to(auth).wrap(Governor::new(&governor_auth_conf)))
-                            .route(web::method(Method::OPTIONS).to(auth_options)),
-                        )
-                        .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
-                        .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
-                        .service(web::resource("/adm/revoke").route(web::post().to(revoke_route)))
-                        .service(
-                            web::resource("/logout")
-                            .route(web::get().to(logout_session))
-                            .route(web::method(Method::OPTIONS).to(logout_options)),
-                        )
-                        .service(
-                            web::resource("/adm/auth/totp/get")
-                            .route(web::post().to(get_otpauth_uri)),
-                        )
-                        .default_service(web::to(global_proxy))
+                            .app_data(state_cloned.clone())
+                            .wrap(RateLimitLogger)
+                            .wrap(CorsMiddleware {
+                                config: state_cloned.clone(),
+                            })
+                            .service(
+                                web::resource("/auth")
+                                    .route(
+                                        web::post()
+                                            .to(auth)
+                                            .wrap(Governor::new(&governor_auth_conf)),
+                                    )
+                                    .route(web::method(Method::OPTIONS).to(auth_options)),
+                            )
+                            .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
+                            .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
+                            .service(
+                                web::resource("/adm/revoke").route(web::post().to(revoke_route)),
+                            )
+                            .service(
+                                web::resource("/logout")
+                                    .route(web::get().to(logout_session))
+                                    .route(web::method(Method::OPTIONS).to(logout_options)),
+                            )
+                            .service(
+                                web::resource("/adm/auth/totp/get")
+                                    .route(web::post().to(get_otpauth_uri))
+                                    .route(web::method(Method::OPTIONS).to(get_otpauth_uri_option)),
+                            )
+                            .default_service(web::to(global_proxy))
                     },
                     listener,
                     &config,
@@ -440,50 +455,59 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             "RATELIMIT_GLOBAL_ON" => {
-                let seconds_per_request_auth = Duration::from_secs_f64(1.0 / requests_per_second_auth_config as f64);
+                let seconds_per_request_auth =
+                    Duration::from_secs_f64(1.0 / requests_per_second_auth_config as f64);
                 let governor_auth_conf = GovernorConfigBuilder::default()
-                .burst_size(burst_auth_config)
-                .use_headers()
-                .period(seconds_per_request_auth)
-                .finish()
-                .unwrap();
+                    .burst_size(burst_auth_config)
+                    .use_headers()
+                    .period(seconds_per_request_auth)
+                    .finish()
+                    .unwrap();
 
-                let seconds_per_request_proxy = Duration::from_secs_f64(1.0 / requests_per_second_proxy_config as f64);
+                let seconds_per_request_proxy =
+                    Duration::from_secs_f64(1.0 / requests_per_second_proxy_config as f64);
                 let governor_proxy_conf = GovernorConfigBuilder::default()
-                .burst_size(burst_proxy_config)
-                .key_extractor(UserToken)
-                .period(seconds_per_request_proxy)
-                .finish()
-                .unwrap();
+                    .burst_size(burst_proxy_config)
+                    .key_extractor(UserToken)
+                    .period(seconds_per_request_proxy)
+                    .finish()
+                    .unwrap();
 
                 let server = bind_server(
                     move || {
                         App::new()
-                        .app_data(state_cloned.clone())
-                        .wrap(RateLimitLogger)
-                        .wrap(CorsMiddleware {
-                            config: state_cloned.clone(),
-                        })
-                        .service(
-                            web::resource("/auth")
-                            .route(web::post().to(auth).wrap(Governor::new(&governor_auth_conf)))
-                            .route(web::method(Method::OPTIONS).to(auth_options)),
-                        )
-                        .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
-                        .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
-                        .service(web::resource("/adm/revoke").route(web::post().to(revoke_route)))
-                        .service(
-                            web::resource("/logout")
-                            .route(web::get().to(logout_session))
-                            .route(web::method(Method::OPTIONS).to(logout_options)),
-                        )
-                        .service(
-                            web::resource("/adm/auth/totp/get")
-                            .route(web::post().to(get_otpauth_uri)),
-                        )
-                        .default_service(
-                            web::to(global_proxy).wrap(Governor::new(&governor_proxy_conf)),
-                        )
+                            .app_data(state_cloned.clone())
+                            .wrap(RateLimitLogger)
+                            .wrap(CorsMiddleware {
+                                config: state_cloned.clone(),
+                            })
+                            .service(
+                                web::resource("/auth")
+                                    .route(
+                                        web::post()
+                                            .to(auth)
+                                            .wrap(Governor::new(&governor_auth_conf)),
+                                    )
+                                    .route(web::method(Method::OPTIONS).to(auth_options)),
+                            )
+                            .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
+                            .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
+                            .service(
+                                web::resource("/adm/revoke").route(web::post().to(revoke_route)),
+                            )
+                            .service(
+                                web::resource("/logout")
+                                    .route(web::get().to(logout_session))
+                                    .route(web::method(Method::OPTIONS).to(logout_options)),
+                            )
+                            .service(
+                                web::resource("/adm/auth/totp/get")
+                                    .route(web::post().to(get_otpauth_uri))
+                                    .route(web::method(Method::OPTIONS).to(get_otpauth_uri_option)),
+                            )
+                            .default_service(
+                                web::to(global_proxy).wrap(Governor::new(&governor_proxy_conf)),
+                            )
                     },
                     listener,
                     &config,
@@ -493,50 +517,59 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
 
             "RATELIMIT_GLOBAL_OFF" => {
-                let seconds_per_request_auth = Duration::from_secs_f64(1.0 / requests_per_second_auth_config as f64);
+                let seconds_per_request_auth =
+                    Duration::from_secs_f64(1.0 / requests_per_second_auth_config as f64);
                 let governor_auth_conf = GovernorConfigBuilder::default()
-                .burst_size(burst_auth_config)
-                .use_headers()
-                .period(seconds_per_request_auth)
-                .finish()
-                .unwrap();
+                    .burst_size(burst_auth_config)
+                    .use_headers()
+                    .period(seconds_per_request_auth)
+                    .finish()
+                    .unwrap();
 
-                let seconds_per_request_proxy = Duration::from_secs_f64(1.0 / requests_per_second_proxy_config as f64);
+                let seconds_per_request_proxy =
+                    Duration::from_secs_f64(1.0 / requests_per_second_proxy_config as f64);
                 let governor_proxy_conf = GovernorConfigBuilder::default()
-                .burst_size(burst_proxy_config)
-                .key_extractor(UserToken)
-                .period(seconds_per_request_proxy)
-                .finish()
-                .unwrap();
+                    .burst_size(burst_proxy_config)
+                    .key_extractor(UserToken)
+                    .period(seconds_per_request_proxy)
+                    .finish()
+                    .unwrap();
 
                 let server = bind_server(
                     move || {
                         App::new()
-                        .app_data(state_cloned.clone())
-                        .wrap(RateLimitLogger)
-                        .wrap(CorsMiddleware {
-                            config: state_cloned.clone(),
-                        })
-                        .service(
-                            web::resource("/auth")
-                            .route(web::post().to(auth).wrap(Governor::new(&governor_auth_conf)))
-                            .route(web::method(Method::OPTIONS).to(auth_options)),
-                        )
-                        .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
-                        .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
-                        .service(web::resource("/adm/revoke").route(web::post().to(revoke_route)))
-                        .service(
-                            web::resource("/logout")
-                            .route(web::get().to(logout_session))
-                            .route(web::method(Method::OPTIONS).to(logout_options)),
-                        )
-                        .service(
-                            web::resource("/adm/auth/totp/get")
-                            .route(web::post().to(get_otpauth_uri)),
-                        )
-                        .default_service(
-                            web::to(global_proxy).wrap(Governor::new(&governor_proxy_conf)),
-                        )
+                            .app_data(state_cloned.clone())
+                            .wrap(RateLimitLogger)
+                            .wrap(CorsMiddleware {
+                                config: state_cloned.clone(),
+                            })
+                            .service(
+                                web::resource("/auth")
+                                    .route(
+                                        web::post()
+                                            .to(auth)
+                                            .wrap(Governor::new(&governor_auth_conf)),
+                                    )
+                                    .route(web::method(Method::OPTIONS).to(auth_options)),
+                            )
+                            .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
+                            .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
+                            .service(
+                                web::resource("/adm/revoke").route(web::post().to(revoke_route)),
+                            )
+                            .service(
+                                web::resource("/logout")
+                                    .route(web::get().to(logout_session))
+                                    .route(web::method(Method::OPTIONS).to(logout_options)),
+                            )
+                            .service(
+                                web::resource("/adm/auth/totp/get")
+                                    .route(web::post().to(get_otpauth_uri))
+                                    .route(web::method(Method::OPTIONS).to(get_otpauth_uri_option)),
+                            )
+                            .default_service(
+                                web::to(global_proxy).wrap(Governor::new(&governor_proxy_conf)),
+                            )
                     },
                     listener,
                     &config,
@@ -549,27 +582,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let server = bind_server(
                     move || {
                         App::new()
-                        .app_data(state_cloned.clone())
-                        .wrap(CorsMiddleware {
-                            config: state_cloned.clone(),
-                        })
-                        .service(
-                            web::resource("/auth")
-                            .route(web::post().to(auth))
-                            .route(web::method(Method::OPTIONS).to(auth_options)),
-                        )
-                        .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
-                        .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
-                        .service(web::resource("/adm/revoke").route(web::post().to(revoke_route)))
-                        .service(
-                            web::resource("/logout")
-                            .route(web::get().to(logout_session))
-                            .route(web::method(Method::OPTIONS).to(logout_options)),
-                        )
-                        .service(
-                            web::resource("/adm/auth/totp/get").route(web::post().to(get_otpauth_uri)),
-                        )
-                        .default_service(web::to(global_proxy))
+                            .app_data(state_cloned.clone())
+                            .wrap(CorsMiddleware {
+                                config: state_cloned.clone(),
+                            })
+                            .service(
+                                web::resource("/auth")
+                                    .route(web::post().to(auth))
+                                    .route(web::method(Method::OPTIONS).to(auth_options)),
+                            )
+                            .service(web::resource("/adm/stats").route(web::get().to(metric_stats)))
+                            .service(web::resource("/adm/logs").route(web::get().to(get_logs)))
+                            .service(
+                                web::resource("/adm/revoke").route(web::post().to(revoke_route)),
+                            )
+                            .service(
+                                web::resource("/logout")
+                                    .route(web::get().to(logout_session))
+                                    .route(web::method(Method::OPTIONS).to(logout_options)),
+                            )
+                            .service(
+                                web::resource("/adm/auth/totp/get")
+                                    .route(web::post().to(get_otpauth_uri))
+                                    .route(web::method(Method::OPTIONS).to(get_otpauth_uri_option)),
+                            )
+                            .default_service(web::to(global_proxy))
                     },
                     listener,
                     &config,

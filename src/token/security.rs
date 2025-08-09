@@ -78,16 +78,16 @@ pub fn check_date_token(
     })?;
 
     let expire_time = time_str
-    .parse::<DateTime<Utc>>()
-    .or_else(|_| {
-        time_str
-        .parse::<i64>()
-        .map(|ts| Utc.timestamp_opt(ts, 0).single().unwrap())
-    })
-    .map_err(|_| {
-        warn!("[{}] failed to parse expiration time: {}", ip, time_str);
-        ()
-    })?;
+        .parse::<DateTime<Utc>>()
+        .or_else(|_| {
+            time_str
+                .parse::<i64>()
+                .map(|ts| Utc.timestamp_opt(ts, 0).single().unwrap())
+        })
+        .map_err(|_| {
+            warn!("[{}] failed to parse expiration time: {}", ip, time_str);
+            ()
+        })?;
 
     // Convert to local time
     let expire_local = expire_time.with_timezone(&tz);

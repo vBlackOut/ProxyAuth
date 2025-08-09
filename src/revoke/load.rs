@@ -70,4 +70,3 @@ pub async fn revoke_token(
 
     Err(anyhow::anyhow!("No Redis or LMDB backend configured"))
 }
-
