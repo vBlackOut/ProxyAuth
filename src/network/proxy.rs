@@ -17,70 +17,60 @@ use std::str::FromStr;
 use tokio::time::{Duration, timeout};
 use tracing::{info, warn};
 use once_cell::sync::OnceCell;
+use std::cmp::Ordering;
 
 static ORDERED_ROUTE_IDX: OnceCell<Vec<usize>> = OnceCell::new();
 
-fn normalize_prefix(mut s: &str) -> String {
-    if let Some(i) = s.find(|c| c == '?' || c == '#') {
-        s = &s[..i];
-    }
-    let mut out = if s.starts_with('/') { s.to_string() } else { format!("/{}", s) };
 
-    let mut compact = String::with_capacity(out.len());
-    let mut prev_slash = false;
-    for ch in out.chars() {
-        if ch == '/' {
-            if !prev_slash {
-                compact.push(ch);
-            }
-            prev_slash = true;
-        } else {
-            compact.push(ch);
-            prev_slash = false;
-        }
-    }
-    out = compact;
-
-    if out != "/" && !out.ends_with('/') {
-        out.push('/');
-    }
-    out
+fn norm_len(prefix: &str) -> usize {
+    if prefix == "/" { 0 } else { prefix.trim_end_matches('/').len() }
 }
 
 pub fn init_routes(routes: &[RouteRule]) {
-    let mut entries: Vec<(usize, String)> = routes
-    .iter()
-    .enumerate()
-    .map(|(i, r)| (i, normalize_prefix(&r.prefix)))
-    .collect();
+    let mut idx: Vec<usize> = (0..routes.len()).collect();
 
-    entries.sort_by(|a, b| {
-        let la = a.1.len();
-        let lb = b.1.len();
-        match lb.cmp(&la) {
-            std::cmp::Ordering::Equal => a.1.cmp(&b.1),
-                    other => other,
+    idx.sort_by(|&i, &j| {
+        let pi = routes[i].prefix.as_str();
+        let pj = routes[j].prefix.as_str();
+
+        let ri = pi == "/";
+        let rj = pj == "/";
+
+        match (ri, rj) {
+            (true, false) => Ordering::Greater,
+                (false, true) => Ordering::Less,
+                _ => {
+                    let li = norm_len(pi);
+                    let lj = norm_len(pj);
+                    if li != lj {
+                        lj.cmp(&li)
+                    } else {
+                        pi.cmp(pj)
+                    }
+                }
         }
     });
 
-    let mut seen = std::collections::HashSet::new();
-    entries.retain(|(_, pref)| seen.insert(pref.clone()));
-
-    ORDERED_ROUTES.set(entries).ok();
+    ORDERED_ROUTE_IDX.set(idx).ok();
 }
 
+fn matches_prefix(path: &str, prefix: &str) -> bool {
+    if prefix == "/" { return true; }
+    let p = prefix.trim_end_matches('/');
+    path == p || path.starts_with(&(p.to_string() + "/"))
+}
 
 pub fn match_route<'a>(path: &str, routes: &'a [RouteRule]) -> Option<&'a RouteRule> {
-    let ordered = ORDERED_ROUTES.get().expect("route order not initialized");
-    let req = normalize_prefix(path);
-
-    for (idx, pref_norm) in ordered {
-        if req.starts_with(pref_norm) {
-            return routes.get(*idx);
+    let order = ORDERED_ROUTE_IDX.get().expect("route order not initialized");
+    for &i in order {
+        let r = &routes[i];
+        if matches_prefix(path, &r.prefix) {
+            return Some(r);
         }
     }
     None
 }
+
 
 
 pub fn inject_header(mut builder: Builder, username: &str, config: &AppConfig) -> Builder {
