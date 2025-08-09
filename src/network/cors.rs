@@ -1,10 +1,10 @@
-use std::task::{Context, Poll};
 use actix_service::{Service, Transform};
-use actix_web::http::header;
 use actix_web::dev::{ServiceRequest, ServiceResponse};
-use actix_web::http::header::{HeaderValue, ACCESS_CONTROL_ALLOW_ORIGIN, SERVER};
-use actix_web::{web, Error};
-use futures_util::future::{ok, Ready, LocalBoxFuture};
+use actix_web::http::header;
+use actix_web::http::header::{ACCESS_CONTROL_ALLOW_ORIGIN, HeaderValue, SERVER};
+use actix_web::{Error, web};
+use futures_util::future::{LocalBoxFuture, Ready, ok};
+use std::task::{Context, Poll};
 
 use crate::AppState;
 
@@ -14,9 +14,9 @@ pub struct CorsMiddleware {
 
 impl<S, B> Transform<S, ServiceRequest> for CorsMiddleware
 where
-S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
-S::Future: 'static,
-B: 'static,
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
+    S::Future: 'static,
+    B: 'static,
 {
     type Response = ServiceResponse<B>;
     type Error = Error;
@@ -39,9 +39,9 @@ pub struct CorsMiddlewareService<S> {
 
 impl<S, B> Service<ServiceRequest> for CorsMiddlewareService<S>
 where
-S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
-S::Future: 'static,
-B: 'static,
+    S: Service<ServiceRequest, Response = ServiceResponse<B>, Error = Error> + 'static,
+    S::Future: 'static,
+    B: 'static,
 {
     type Response = ServiceResponse<B>;
     type Error = Error;
@@ -54,10 +54,10 @@ B: 'static,
     fn call(&self, req: ServiceRequest) -> Self::Future {
         let config = self.config.clone();
         let origin = req
-        .headers()
-        .get("origin")
-        .and_then(|h| h.to_str().ok())
-        .map(|s| s.to_string());
+            .headers()
+            .get("origin")
+            .and_then(|h| h.to_str().ok())
+            .map(|s| s.to_string());
 
         let fut = self.service.call(req);
 
@@ -79,8 +79,10 @@ B: 'static,
 
             res.headers_mut()
                 .insert(SERVER, HeaderValue::from_static("ProxyAuth"));
-            res.headers_mut()
-                .insert(header::ACCESS_CONTROL_ALLOW_CREDENTIALS, HeaderValue::from_static("true"));
+            res.headers_mut().insert(
+                header::ACCESS_CONTROL_ALLOW_CREDENTIALS,
+                HeaderValue::from_static("true"),
+            );
             Ok(res)
         })
     }

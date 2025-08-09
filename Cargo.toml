@@ -1,6 +1,6 @@
 [package]
 name = "proxyauth"
-version = "0.8.5"
+version = "0.8.6"
 edition = "2024"
 authors = ["Vladimir S"]
 repository = "https://github.com/ProxyAuth/ProxyAuth"
@@ -96,4 +96,6 @@ redis = { version = "0.32", features = ["tokio-comp"] }
 lmdb-rkv = "0.14"
 time = "0.3"
 mime = "0.3"
-
+flate2 = "1"
+subtle = "2"
+brotli = "3.3"

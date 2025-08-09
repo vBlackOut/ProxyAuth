@@ -6,9 +6,9 @@ use redis::{Client, Commands};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::time;
-use tokio::signal::unix::{signal, SignalKind};
+use tokio::signal::unix::{SignalKind, signal};
 use tokio::sync::watch;
+use tokio::time;
 use tracing::{debug, error, info};
 
 pub static REDIS: OnceCell<Client> = OnceCell::new();
@@ -28,9 +28,9 @@ pub async fn start_revoked_token_ttl(
     if let Some(path) = opt_path {
         if LMDB_ENV.get().is_none() {
             let env = Environment::new()
-            .set_max_dbs(1)
-            .open(Path::new(&path))
-            .expect("Failed to open LMDB");
+                .set_max_dbs(1)
+                .open(Path::new(&path))
+                .expect("Failed to open LMDB");
             LMDB_ENV.set(env).expect("LMDB already initialized");
         }
     }
@@ -41,7 +41,10 @@ pub async fn start_revoked_token_ttl(
             let (token_id, exp) = (entry.key().clone(), *entry.value());
             revoked_tokens.insert(token_id, exp);
         }
-        debug!("[RevokedSync] Loaded {} tokens from LMDB at startup", loaded_tokens.len());
+        debug!(
+            "[RevokedSync] Loaded {} tokens from LMDB at startup",
+            loaded_tokens.len()
+        );
     } else {
         error!("[RevokedSync] Failed to load tokens from LMDB at startup");
     }
@@ -58,7 +61,10 @@ pub async fn start_revoked_token_ttl(
                         break;
                     }
                     Err(e) => {
-                        error!("[RevokedSync] Failed to initialize Redis: {}. Retrying... ({} attempts left)", e, attempts);
+                        error!(
+                            "[RevokedSync] Failed to initialize Redis: {}. Retrying... ({} attempts left)",
+                            e, attempts
+                        );
                         attempts -= 1;
                         tokio::time::sleep(Duration::from_secs(5)).await;
                     }
@@ -75,7 +81,8 @@ pub async fn start_revoked_token_ttl(
 
         // Handle SIGTERM and SIGINT for graceful shutdown
         tokio::spawn(async move {
-            let mut sigterm = signal(SignalKind::terminate()).expect("Failed to listen for SIGTERM");
+            let mut sigterm =
+                signal(SignalKind::terminate()).expect("Failed to listen for SIGTERM");
             let mut sigint = signal(SignalKind::interrupt()).expect("Failed to listen for SIGINT");
 
             tokio::select! {
@@ -88,7 +95,9 @@ pub async fn start_revoked_token_ttl(
             }
 
             // Signal shutdown
-            shutdown_tx.send(true).expect("Failed to send shutdown signal");
+            shutdown_tx
+                .send(true)
+                .expect("Failed to send shutdown signal");
         });
 
         tokio::spawn(async move {
