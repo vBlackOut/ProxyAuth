@@ -20,18 +20,63 @@ use once_cell::sync::OnceCell;
 
 static ORDERED_ROUTE_IDX: OnceCell<Vec<usize>> = OnceCell::new();
 
-pub fn init_routes(routes: &[RouteRule]) {
-    let mut idx: Vec<usize> = (0..routes.len()).collect();
-    idx.sort_by_key(|&i| (routes[i].prefix == "/") as u8);
-    ORDERED_ROUTE_IDX.set(idx).ok();
+fn normalize_prefix(mut s: &str) -> String {
+    if let Some(i) = s.find(|c| c == '?' || c == '#') {
+        s = &s[..i];
+    }
+    let mut out = if s.starts_with('/') { s.to_string() } else { format!("/{}", s) };
+
+    let mut compact = String::with_capacity(out.len());
+    let mut prev_slash = false;
+    for ch in out.chars() {
+        if ch == '/' {
+            if !prev_slash {
+                compact.push(ch);
+            }
+            prev_slash = true;
+        } else {
+            compact.push(ch);
+            prev_slash = false;
+        }
+    }
+    out = compact;
+
+    if out != "/" && !out.ends_with('/') {
+        out.push('/');
+    }
+    out
 }
 
+pub fn init_routes(routes: &[RouteRule]) {
+    let mut entries: Vec<(usize, String)> = routes
+    .iter()
+    .enumerate()
+    .map(|(i, r)| (i, normalize_prefix(&r.prefix)))
+    .collect();
+
+    entries.sort_by(|a, b| {
+        let la = a.1.len();
+        let lb = b.1.len();
+        match lb.cmp(&la) {
+            std::cmp::Ordering::Equal => a.1.cmp(&b.1),
+                    other => other,
+        }
+    });
+
+    let mut seen = std::collections::HashSet::new();
+    entries.retain(|(_, pref)| seen.insert(pref.clone()));
+
+    ORDERED_ROUTES.set(entries).ok();
+}
+
+
 pub fn match_route<'a>(path: &str, routes: &'a [RouteRule]) -> Option<&'a RouteRule> {
-    let idx = ORDERED_ROUTE_IDX.get().expect("route order not initialized");
-    for &i in idx {
-        let r = &routes[i];
-        if path.starts_with(&r.prefix) {
-            return Some(r);
+    let ordered = ORDERED_ROUTES.get().expect("route order not initialized");
+    let req = normalize_prefix(path);
+
+    for (idx, pref_norm) in ordered {
+        if req.starts_with(pref_norm) {
+            return routes.get(*idx);
         }
     }
     None
