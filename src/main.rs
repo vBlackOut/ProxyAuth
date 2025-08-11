@@ -34,6 +34,7 @@ use crate::network::cors::CorsMiddleware;
 use crate::revoke::db::{load_revoked_tokens, start_revoked_token_ttl};
 use crate::tls::check_port;
 use crate::network::proxy::init_routes;
+use crate::network::config::init_loadbalancer;
 use actix_governor::{Governor, GovernorConfigBuilder};
 use actix_web::{App, http::Method, web};
 use chrono::Local;
@@ -140,6 +141,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     .expect("No possible download config/routes.yml");
 
     let config: Arc<AppConfig> = load_config("/etc/proxyauth/config/config.json");
+
+    init_loadbalancer(&config);
 
     let routes: RouteConfig = serde_yaml::from_str(
         &fs::read_to_string("/etc/proxyauth/config/routes.yml").expect("cannot read routes"),

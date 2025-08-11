@@ -424,7 +424,7 @@ pub async fn proxy_with_proxy(
                     error::ErrorServiceUnavailable("503 Service Unavailable")
                 })?
         } else {
-            match timeout(Duration::from_millis(500), client.request(hyper_req)).await {
+            match timeout(Duration::from_millis(2000), client.request(hyper_req)).await {
                 Ok(Ok(res)) => res,
                 Ok(Err(e)) => {
                     warn!(client_ip = %ip, target = %full_url, "Upstream error: {}", e);
@@ -799,7 +799,7 @@ pub async fn proxy_without_proxy(
             response
         } else {
             // Mode direct
-            match timeout(Duration::from_millis(500), client.request(hyper_req)).await {
+            match timeout(Duration::from_millis(2000), client.request(hyper_req)).await {
                 Ok(Ok(res)) => res,
                 Ok(Err(e)) => {
                     warn!(
