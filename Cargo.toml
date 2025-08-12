@@ -22,6 +22,7 @@ include = [
 
 [build]
 jobs = 4 # number threads launch for build
+rustflags = ["-C", "target-cpu=native"]
 
 [build-dependencies]
 rand = "0.8"
@@ -38,6 +39,7 @@ serde_json = "1"
 
 [dependencies]
 actix-web = { version = "4.10.2", features = ["rustls-0_21"] }
+mimalloc = { version = "0.1", default-features = false }
 actix-service = "2"
 cookie = "0.18"
 reqwest = { version = "0.11", features = ["native-tls", "json", "blocking"] }
@@ -101,3 +103,13 @@ subtle = "2"
 brotli = "3.3"
 lru = "0.12"
 hkdf = "0.12"
+regex = "1"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
+debug = false
+incremental = false

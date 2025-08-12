@@ -18,6 +18,24 @@ use std::fmt;
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
+use regex::Regex;
+
+#[derive(Debug, Clone)]
+pub struct CompiledAllow {
+    pub default_allow: bool,
+    pub allow: Vec<RegexCond>,
+}
+
+
+#[derive(Debug, Clone)]
+pub enum RegexCond {
+    Method  { re: Regex },
+    Path    { re: Regex },
+    Header  { name_re: Regex, re: Regex },
+    Query   { name_re: Regex, re: Regex },
+    BodyRaw { re: Regex },
+    BodyJson{ key: String, re: Regex },
+}
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct RouteRule {
@@ -47,6 +65,21 @@ pub struct RouteRule {
 
     #[serde(default = "default_cache")]
     pub cache: bool,
+
+    #[serde(default = "default_secure_path")]
+    pub secure_path: bool,
+
+    #[serde(default = "default_preserve_prefix")]
+    pub preserve_prefix: bool,
+
+    #[serde(default)]
+    pub allow_methods: Option<Vec<String>>,
+
+    #[serde(default)]
+    pub filters: Option<AllowRegexCfg>,
+
+    #[serde(skip)]
+    pub filters_compiled: Option<CompiledAllow>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -80,6 +113,17 @@ pub struct User {
     pub allow: Option<Vec<String>>,
     pub roles: Option<Vec<String>>,
 }
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct AllowRegexCfg {
+    #[serde(default = "default_allow_true")]
+    pub default_allow: bool,
+
+    #[serde(default)]
+    pub allow: Vec<RegexCondCfg>,
+}
+
+fn default_allow_true() -> bool { true }
 
 impl Serialize for User {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -242,6 +286,14 @@ fn default_port() -> u16 {
 
 fn default_cache() -> bool {
     true
+}
+
+fn default_secure_path() -> bool {
+    false
+}
+
+fn default_preserve_prefix() -> bool {
+    false
 }
 
 fn default_username() -> Vec<String> {
@@ -476,5 +528,39 @@ where
     match value {
         Ok(v) => Ok(v),
         Err(_) => Ok(default_log()),
+    }
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(tag = "field", rename_all = "snake_case")]
+pub enum RegexCondCfg {
+    Method  { pattern: String },
+    Path    { pattern: String },
+    Header  { name: String,  pattern: String },
+    Query   { name: String,  pattern: String },
+    BodyRaw { pattern: String },
+    BodyJson{ key: String,   pattern: String },
+}
+
+
+impl AllowRegexCfg {
+    pub fn compile(&self) -> Result<CompiledAllow, regex::Error> {
+        fn conv(c: &RegexCondCfg) -> Result<RegexCond, regex::Error> {
+            match c {
+                RegexCondCfg::Method  { pattern } => Ok(RegexCond::Method  { re: Regex::new(pattern)? }),
+                RegexCondCfg::Path    { pattern } => Ok(RegexCond::Path    { re: Regex::new(pattern)? }),
+                RegexCondCfg::Header  { name, pattern } =>
+                Ok(RegexCond::Header { name_re: Regex::new(name)?, re: Regex::new(pattern)? }),
+                RegexCondCfg::Query   { name, pattern } =>
+                Ok(RegexCond::Query  { name_re: Regex::new(name)?, re: Regex::new(pattern)? }),
+                RegexCondCfg::BodyRaw { pattern } =>
+                Ok(RegexCond::BodyRaw{ re: Regex::new(pattern)? }),
+                RegexCondCfg::BodyJson{ key, pattern } =>
+                Ok(RegexCond::BodyJson{ key: key.clone(), re: Regex::new(pattern)? }),
+            }
+        }
+        let mut allow = Vec::with_capacity(self.allow.len());
+        for c in &self.allow { allow.push(conv(c)?); }
+        Ok(CompiledAllow { default_allow: self.default_allow, allow })
     }
 }

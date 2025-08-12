@@ -66,6 +66,9 @@ use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::fmt::time::FormatTime;
 use tracing_subscriber::{EnvFilter, Registry, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
+#[global_allocator]
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
+
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 struct LocalTime;
@@ -144,7 +147,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     init_loadbalancer(&config);
 
-    let routes: RouteConfig = serde_yaml::from_str(
+    let mut routes: RouteConfig = serde_yaml::from_str(
         &fs::read_to_string("/etc/proxyauth/config/routes.yml").expect("cannot read routes"),
     )
     .expect("Failed to parse routes.yml");
@@ -192,6 +195,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &config,
     );
 
+    init_routes(&mut routes.routes);
+
     let state = web::Data::new(AppState {
         config: Arc::clone(&config),
         routes: Arc::new(routes),
@@ -202,7 +207,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         revoked_tokens,
     });
 
-    init_routes(&state.routes.routes.clone());
     init_derived_key(&config.secret);
 
     // logs
