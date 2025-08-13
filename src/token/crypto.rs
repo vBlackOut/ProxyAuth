@@ -1,99 +1,125 @@
-use crate::token::security::{get_build_rand, get_build_seed2};
-use ahash::AHashMap;
-use base64::{Engine as _, engine::general_purpose};
-use blake3;
-use chacha20poly1305::aead::generic_array::GenericArray;
-use chacha20poly1305::aead::generic_array::typenum::Unsigned;
-use chacha20poly1305::{
-    AeadCore, ChaCha20Poly1305,
-    aead::{Aead, KeyInit, OsRng},
-};
-use data_encoding::BASE64;
-use once_cell::sync::Lazy;
-use sha2::{Digest, Sha256};
-use std::fmt::Write;
-use std::sync::Mutex;
+use crate::token::security::get_build_seed2;
 
-static DERIVED_KEYS: Lazy<Mutex<AHashMap<String, [u8; 32]>>> =
-    Lazy::new(|| Mutex::new(AHashMap::new()));
+use base64::{engine::general_purpose, Engine as _};
+use blake3;
+use chacha20poly1305::aead::{self, Aead, KeyInit, AeadCore};
+use chacha20poly1305::{XChaCha20Poly1305, XNonce};
+use hkdf::Hkdf;
+use lru::LruCache;
+use once_cell::sync::Lazy;
+use sha2::Sha256;
+use std::fmt::Write;
+use std::num::NonZeroUsize;
+use std::sync::Mutex;
+use rand::rngs::OsRng;
+use rand::RngCore;
+
+
+const KEY_LEN: usize = 32;
+const TAG_V1: u8 = 1;
+const TAG_V1_PW: u8 = 0xE1;
+const HKDF_SALT_CONST: &[u8] = b"proxyauth.hkdf.v1";
+const HKDF_INFO_DERIVE: &[u8] = b"derive_key_from_secret.v1";
+const HKDF_INFO_PW: &[u8] = b"encrypt_base64.password.v1";
+
+static DERIVED_KEYS: Lazy<Mutex<LruCache<[u8; 32], [u8; 32]>>> = Lazy::new(|| {
+    let cap = NonZeroUsize::new(1024).expect("nonzero");
+    Mutex::new(LruCache::new(cap))
+});
 
 pub fn derive_key_from_secret(secret: &str) -> [u8; 32] {
-    {
-        let cache = DERIVED_KEYS.lock().unwrap();
-        if let Some(cached) = cache.get(secret) {
-            return *cached;
-        }
+    let id_hash = blake3::hash(secret.as_bytes());
+    let mut id = [0u8; 32];
+    id.copy_from_slice(id_hash.as_bytes());
+
+    if let Some(k) = DERIVED_KEYS.lock().unwrap().get(&id).cloned() {
+        return k;
     }
 
-    let key_u64 = get_build_rand();
-    let mut key = [0u8; 32];
-    key[..8].copy_from_slice(&key_u64.to_be_bytes());
+    let hk = Hkdf::<Sha256>::new(Some(HKDF_SALT_CONST), secret.as_bytes());
+    let mut okm = [0u8; KEY_LEN];
+    hk.expand(HKDF_INFO_DERIVE, &mut okm).expect("HKDF expand");
 
-    let mut hasher = blake3::Hasher::new_keyed(&key);
-    hasher.update(secret.as_bytes());
-    let hash_output = hasher.finalize();
-    let derived = *hash_output.as_bytes();
+    DERIVED_KEYS.lock().unwrap().put(id, okm);
 
-    DERIVED_KEYS
-        .lock()
-        .unwrap()
-        .insert(secret.to_string(), derived);
-
-    derived
+    okm
 }
 
 pub fn encrypt(cleartext: &str, key: &[u8]) -> String {
-    let cipher = ChaCha20Poly1305::new(GenericArray::from_slice(key));
-    let nonce = ChaCha20Poly1305::generate_nonce(&mut OsRng); // 96 bits = 12 bytes
+    assert_eq!(key.len(), KEY_LEN, "key must be 32 bytes");
+    let cipher = XChaCha20Poly1305::new(key.into());
+    let nonce = XChaCha20Poly1305::generate_nonce(&mut OsRng);
+    let aad: &[u8] = b"";
 
-    let ciphertext = cipher
-        .encrypt(&nonce, cleartext.as_bytes())
-        .expect("encryption failure!");
+    let ct = cipher
+    .encrypt(&nonce, aead::Payload { msg: cleartext.as_bytes(), aad })
+    .expect("encryption failure!");
 
-    let mut output = Vec::with_capacity(nonce.len() + ciphertext.len());
-    output.extend_from_slice(&nonce);
-    output.extend_from_slice(&ciphertext);
-
-    general_purpose::STANDARD.encode(output)
+    let mut out = Vec::with_capacity(1 + nonce.len() + ct.len());
+    out.push(TAG_V1);
+    out.extend_from_slice(&nonce);
+    out.extend_from_slice(&ct);
+    general_purpose::STANDARD.encode(out)
 }
 
 pub fn decrypt(obsf: &str, key: &[u8]) -> Result<String, ()> {
-    let obsf_bytes = match general_purpose::STANDARD.decode(obsf) {
+    if key.len() != KEY_LEN {
+        return Err(());
+    }
+    let data = match general_purpose::STANDARD.decode(obsf) {
         Ok(b) => b,
         Err(_) => return Err(()),
     };
-
-    let nonce_size = <ChaCha20Poly1305 as AeadCore>::NonceSize::to_usize();
-    if obsf_bytes.len() < nonce_size {
+    if data.len() < 1 + 24 || data[0] != TAG_V1 {
         return Err(());
     }
+    let nonce = XNonce::from_slice(&data[1..25]);
+    let ct = &data[25..];
 
-    let (nonce_bytes, ciphertext) = obsf_bytes.split_at(nonce_size);
-
-    let cipher = ChaCha20Poly1305::new(GenericArray::from_slice(key));
-    let nonce = GenericArray::from_slice(nonce_bytes);
-
-    let plaintext = match cipher.decrypt(nonce, ciphertext) {
+    let cipher = XChaCha20Poly1305::new(key.into());
+    let aad: &[u8] = b"";
+    let pt = match cipher.decrypt(nonce, aead::Payload { msg: ct, aad }) {
         Ok(p) => p,
         Err(_) => return Err(()),
     };
-
-    match String::from_utf8(plaintext) {
-        Ok(s) => Ok(s),
-        Err(_) => Err(()),
-    }
+    String::from_utf8(pt).map_err(|_| ())
 }
 
 fn split_hash(s: String, n: usize) -> Vec<String> {
-    s.chars()
-        .collect::<Vec<_>>()
-        .chunks(n)
-        .map(|chunk| chunk.iter().collect())
-        .collect()
+    if n == 0 {
+        return vec![s];
+    }
+    let bytes = s.as_bytes();
+    let mut out = Vec::with_capacity((bytes.len() + n - 1) / n);
+    for chunk in bytes.chunks(n) {
+        out.push(std::str::from_utf8(chunk).unwrap().to_string());
+    }
+    out
+}
+
+struct Blake3Keystream {
+    rdr: blake3::OutputReader,
+}
+
+impl Blake3Keystream {
+    fn new(factor: u64) -> Self {
+        let mut h = blake3::Hasher::new();
+        h.update(b"proxyauth.process_string.keystream.v1");
+        h.update(&factor.to_le_bytes());
+        let rdr = h.finalize_xof();
+        Self { rdr }
+    }
+    #[inline]
+    fn next_u8(&mut self) -> u8 {
+        let mut b = [0u8; 1];
+        self.rdr.fill(&mut b);
+        b[0]
+    }
 }
 
 pub fn process_string(s: &str, factor: u64) -> String {
-    let shift = (factor % 256) as u8;
+    let mut ks = Blake3Keystream::new(factor);
+
     let mut result = Vec::with_capacity(s.len() * 2);
     let mut number_acc = 0u64;
     let mut in_digit = false;
@@ -112,7 +138,14 @@ pub fn process_string(s: &str, factor: u64) -> String {
                     number_acc = 0;
                     in_digit = false;
                 }
-                result.push(c ^ shift);
+                let k = ks.next_u8();
+                let rot = ((c ^ k) % 26) as u8;
+                let mapped = match c {
+                    b'a'..=b'z' => b'a' + ((c - b'a' + rot) % 26),
+                    b'A'..=b'Z' => b'A' + ((c - b'A' + rot) % 26),
+                    _ => c,
+                };
+                result.push(mapped);
             }
             _ => {
                 if in_digit {
@@ -131,14 +164,12 @@ pub fn process_string(s: &str, factor: u64) -> String {
         result.extend_from_slice(computed.as_bytes());
     }
 
-    // SAFETY: All pushes are from valid ASCII bytes or itoa (valid UTF-8)
-    unsafe { String::from_utf8_unchecked(result) }
+    String::from_utf8(result).expect("ASCII-only output")
 }
 
 pub fn calcul_cipher(hashdata: String) -> String {
     let factor = get_build_seed2();
     let transformed = transform_hash_parts(&hashdata, factor);
-
     blake3::hash(transformed.as_bytes()).to_hex().to_string()
 }
 
@@ -149,7 +180,7 @@ pub fn calcul_factorhash(hashdata: String) -> String {
 
 fn transform_hash_parts(input: &str, factor: u64) -> String {
     let parts = split_hash(input.to_string(), 10);
-    let mut out = String::with_capacity(parts.len() * 16); // estimation
+    let mut out = String::with_capacity(input.len() + input.len() / 10);
     let mut first = true;
 
     for part in parts {
@@ -161,39 +192,59 @@ fn transform_hash_parts(input: &str, factor: u64) -> String {
             write!(out, "-{}", encoded).unwrap();
         }
     }
-
     out
 }
 
 #[allow(dead_code)]
 pub fn encrypt_base64(message: &str, password: &str) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(password.as_bytes());
-    let key = hasher.finalize();
+    let mut salt = [0u8; 16];
+    OsRng.fill_bytes(&mut salt);
 
-    let encrypted: Vec<u8> = message
-        .as_bytes()
-        .iter()
-        .enumerate()
-        .map(|(i, &b)| b ^ key[i % key.len()])
-        .collect();
+    let hk = Hkdf::<Sha256>::new(Some(&salt), password.as_bytes());
+    let mut key = [0u8; KEY_LEN];
+    hk.expand(HKDF_INFO_PW, &mut key).expect("HKDF expand");
 
-    BASE64.encode(&encrypted)
+    let cipher = XChaCha20Poly1305::new((&key).into());
+    let nonce = XChaCha20Poly1305::generate_nonce(&mut OsRng);
+    let aad: &[u8] = b"pw-aead";
+
+    let ct = cipher
+    .encrypt(&nonce, aead::Payload { msg: message.as_bytes(), aad })
+    .expect("encrypt");
+
+    let mut out = Vec::with_capacity(1 + salt.len() + nonce.len() + ct.len());
+    out.push(TAG_V1_PW);
+    out.extend_from_slice(&salt);
+    out.extend_from_slice(&nonce);
+    out.extend_from_slice(&ct);
+
+    general_purpose::STANDARD.encode(out)
 }
 
 #[allow(dead_code)]
 pub fn decrypt_base64(encoded: &str, password: &str) -> String {
-    let encrypted = BASE64.decode(encoded.as_bytes()).expect("Invalid base64");
+    let data = general_purpose::STANDARD
+    .decode(encoded.as_bytes())
+    .expect("Invalid base64");
 
-    let mut hasher = Sha256::new();
-    hasher.update(password.as_bytes());
-    let key = hasher.finalize();
+    if data.len() < 1 + 16 + 24 || data[0] != TAG_V1_PW {
+        panic!("Invalid ciphertext format");
+    }
+    let salt = &data[1..17];
+    let nonce = XNonce::from_slice(&data[17..41]);
+    let ct = &data[41..];
 
-    let decrypted: Vec<u8> = encrypted
-        .iter()
-        .enumerate()
-        .map(|(i, &b)| b ^ key[i % key.len()])
-        .collect();
+    // dérive clé
+    let hk = Hkdf::<Sha256>::new(Some(salt), password.as_bytes());
+    let mut key = [0u8; KEY_LEN];
+    hk.expand(HKDF_INFO_PW, &mut key).expect("HKDF expand");
 
-    String::from_utf8(decrypted).expect("Invalid UTF-8")
+    let cipher = XChaCha20Poly1305::new((&key).into());
+    let aad: &[u8] = b"pw-aead";
+
+    let pt = cipher
+    .decrypt(nonce, aead::Payload { msg: ct, aad })
+    .expect("decryption/authentication failed");
+
+    String::from_utf8(pt).expect("Invalid UTF-8")
 }
