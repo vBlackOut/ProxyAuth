@@ -241,6 +241,11 @@ pub async fn proxy_with_proxy(
         .unwrap_or(IpAddr::from([127, 0, 0, 1]))
         .to_string();
     let method = req.method();
+    let user_agent = req
+    .headers()
+    .get("User-Agent")
+    .and_then(|h| h.to_str().ok())
+    .unwrap_or("-");
 
     let add_cors_headers = |resp: &mut HttpResponseBuilder, req: &HttpRequest| {
         if let Some(origin) = req
@@ -280,6 +285,14 @@ pub async fn proxy_with_proxy(
            let mut resp = HttpResponse::build(status);
            resp.insert_header(("server", "ProxyAuth"));
            add_cors_headers(&mut resp, &req);
+           warn!(
+               "[{}] - {} {} {} {}",
+               ip,
+               path,
+               method,
+               "403 acl no match".to_string(),
+                 user_agent
+           );
            return Ok(resp.body("403 Forbidden"));
        }
 
@@ -289,6 +302,14 @@ pub async fn proxy_with_proxy(
            resp.insert_header(("Allow", allow));
            resp.insert_header(("server", "ProxyAuth"));
            add_cors_headers(&mut resp, &req);
+           warn!(
+               "[{}] - {} {} {} {}",
+               ip,
+               path,
+               method,
+               "405 method not allowed".to_string(),
+               user_agent
+           );
            return Ok(resp.body("405 Method Not Allowed"));
        }
 
@@ -310,6 +331,14 @@ pub async fn proxy_with_proxy(
                 resp.insert_header(("Pragma", "no-cache"));
                 resp.insert_header(("Expires", "0"));
                 add_cors_headers(&mut resp, &req);
+                warn!(
+                    "[{}] - {} {} {} {}",
+                    ip,
+                    path,
+                    method,
+                    "401 invalid csrf".to_string(),
+                      user_agent
+                );
                 return Ok(resp.body(html));
             }
         }
@@ -610,6 +639,11 @@ pub async fn proxy_without_proxy(
         .unwrap_or(IpAddr::from([127, 0, 0, 1]))
         .to_string();
     let method = req.method();
+    let user_agent = req
+    .headers()
+    .get("User-Agent")
+    .and_then(|h| h.to_str().ok())
+    .unwrap_or("-");
 
     let add_cors_headers = |resp: &mut HttpResponseBuilder, req: &HttpRequest| {
         if let Some(origin) = req
@@ -649,6 +683,14 @@ pub async fn proxy_without_proxy(
             let mut resp = HttpResponse::build(status);
             resp.insert_header(("server", "ProxyAuth"));
             add_cors_headers(&mut resp, &req);
+            warn!(
+                "[{}] - {} {} {} {}",
+                ip,
+                path,
+                method,
+                "403 acl no match".to_string(),
+                user_agent
+            );
             return Ok(resp.body("403 Forbidden"));
         }
 
@@ -658,6 +700,14 @@ pub async fn proxy_without_proxy(
             resp.insert_header(("Allow", allow));
             resp.insert_header(("server", "ProxyAuth"));
             add_cors_headers(&mut resp, &req);
+            warn!(
+                "[{}] - {} {} {} {}",
+                ip,
+                path,
+                method,
+                "405 method not allowed".to_string(),
+                user_agent
+            );
             return Ok(resp.body("405 Method Not Allowed"));
         }
 
@@ -677,6 +727,14 @@ pub async fn proxy_without_proxy(
                 resp.insert_header(("Pragma", "no-cache"));
                 resp.insert_header(("Expires", "0"));
                 add_cors_headers(&mut resp, &req);
+                warn!(
+                    "[{}] - {} {} {} {}",
+                    ip,
+                    path,
+                    method,
+                    "401 invalid csrf".to_string(),
+                    user_agent
+                );
                 return Ok(resp.body(html));
             }
         }
