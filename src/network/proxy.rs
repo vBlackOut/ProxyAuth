@@ -1,14 +1,16 @@
-use crate::config::config::BackendConfig;
+ use crate::config::config::BackendConfig;
 use crate::config::config::BackendInput;
 use crate::config::config::RouteRule;
 use crate::network::loadbalancing::forward_failover;
+use crate::network::canonical_url::canonicalize_path_for_match;
 use crate::network::shared_client::{
     ClientOptions, get_or_build_client_proxy, get_or_build_thread_client,
 };
+use crate::token::security::apply_filters_regex_allow_only;
 use crate::token::csrf::{inject_csrf_token, validate_csrf_token, fix_mime_actix};
 use crate::token::security::validate_token;
 use crate::{AppConfig, AppState};
-use actix_web::{Error, HttpRequest, HttpResponse, HttpResponseBuilder, error, http::header, web};
+use actix_web::{Error, HttpRequest, HttpResponse, HttpResponseBuilder, error, http::header, http::StatusCode, web};
 use hyper::header::USER_AGENT;
 use hyper::http::request::Builder;
 use hyper::{Body, Method, Request, Uri};
@@ -20,23 +22,109 @@ use once_cell::sync::OnceCell;
 
 static ORDERED_ROUTE_IDX: OnceCell<Vec<usize>> = OnceCell::new();
 
-pub fn init_routes(routes: &[RouteRule]) {
+fn norm_len(prefix: &str) -> usize {
+    if prefix == "/" { 0 } else { prefix.trim_end_matches('/').len() }
+}
+
+
+fn is_method_allowed(allowed: Option<&[String]>, method: &Method) -> bool {
+    match allowed {
+        None => true,
+        Some(list) => {
+            let m = method.as_str();
+            list.iter().any(|s| {
+                let t = s.trim();
+                t == "*" || t.eq_ignore_ascii_case(m)
+            })
+        }
+    }
+}
+
+fn build_allow_header(allowed: Option<&[String]>) -> String {
+    const ALL: &str = "GET, HEAD, POST, PUT, DELETE, PATCH, OPTIONS";
+    match allowed {
+        None => ALL.to_string(),
+        Some(list) => {
+            if list.iter().any(|s| s.trim() == "*") {
+                return ALL.to_string();
+            }
+
+            let mut v: Vec<String> = list
+            .iter()
+            .map(|s| s.trim().to_ascii_uppercase())
+            .filter(|s| !s.is_empty())
+            .collect();
+            v.sort();
+            v.dedup();
+
+            if !v.iter().any(|s| s == "OPTIONS") {
+                v.push("OPTIONS".into());
+                v.sort();
+                v.dedup();
+            }
+            v.join(", ")
+        }
+    }
+}
+
+fn canonicalize_prefix(prefix: &str) -> String {
+    let p = if prefix.is_empty() { "/" } else { prefix };
+    let p = p.trim_end_matches('/');
+    if p.is_empty() { "/".to_string() } else { canonicalize_path_for_match(p) }
+}
+
+
+pub fn compile_filters_on_routes(routes: &mut [RouteRule]) {
+    for r in routes.iter_mut() {
+        r.filters_compiled = match &r.filters {
+            Some(cfg) => cfg.compile().ok(),
+            None => None,
+        };
+    }
+}
+
+pub fn init_routes_order(routes: &[RouteRule]) {
     let mut idx: Vec<usize> = (0..routes.len()).collect();
-    idx.sort_by_key(|&i| (routes[i].prefix == "/") as u8);
+    idx.sort_by(|&i, &j| {
+        let pi = routes[i].prefix.as_str();
+        let pj = routes[j].prefix.as_str();
+        let ri = pi == "/";
+        let rj = pj == "/";
+        match (ri, rj) {
+            (true,  false) => std::cmp::Ordering::Greater,
+                (false, true ) => std::cmp::Ordering::Less,
+                _ => {
+                    let li = norm_len(pi);
+                    let lj = norm_len(pj);
+                    if li != lj { lj.cmp(&li) } else { pi.cmp(pj) }
+                }
+        }
+    });
     ORDERED_ROUTE_IDX.set(idx).ok();
 }
 
-pub fn match_route<'a>(path: &str, routes: &'a [RouteRule]) -> Option<&'a RouteRule> {
-    let idx = ORDERED_ROUTE_IDX.get().expect("route order not initialized");
-    for &i in idx {
+pub fn init_routes(routes: &mut [RouteRule]) {
+    compile_filters_on_routes(routes);
+    init_routes_order(routes);
+}
+
+fn matches_prefix(path: &str, prefix: &str) -> bool {
+    let path_norm = canonicalize_path_for_match(path);
+    let pref_norm = canonicalize_prefix(prefix);
+    if pref_norm == "/" { return true; }
+    path_norm == pref_norm || path_norm.starts_with(&(pref_norm.clone() + "/"))
+}
+
+pub fn match_route<'a>(raw_path: &str, routes: &'a [RouteRule]) -> Option<&'a RouteRule> {
+    let order = ORDERED_ROUTE_IDX.get().expect("route order not initialized");
+    for &i in order {
         let r = &routes[i];
-        if path.starts_with(&r.prefix) {
+        if matches_prefix(raw_path, &r.prefix) {
             return Some(r);
         }
     }
     None
 }
-
 
 pub fn inject_header(mut builder: Builder, username: &str, config: &AppConfig) -> Builder {
     if username.is_empty() {
@@ -188,6 +276,22 @@ pub async fn proxy_with_proxy(
 
    if let Some(rule) = match_route(path, &data.routes.routes) {
 
+       if let Some(status) = apply_filters_regex_allow_only(rule, &req, &body) {
+           let mut resp = HttpResponse::build(status);
+           resp.insert_header(("server", "ProxyAuth"));
+           add_cors_headers(&mut resp, &req);
+           return Ok(resp.body("403 Forbidden"));
+       }
+
+       if !is_method_allowed(rule.allow_methods.as_deref(), req.method()) {
+           let allow = build_allow_header(rule.allow_methods.as_deref());
+           let mut resp = HttpResponse::build(StatusCode::METHOD_NOT_ALLOWED);
+           resp.insert_header(("Allow", allow));
+           resp.insert_header(("server", "ProxyAuth"));
+           add_cors_headers(&mut resp, &req);
+           return Ok(resp.body("405 Method Not Allowed"));
+       }
+
         // verify csrf token
         if data.config.session_cookie && data.config.csrf_token && rule.need_csrf {
             if !validate_csrf_token(method, &req, &body, &data.config.secret) {
@@ -206,38 +310,48 @@ pub async fn proxy_with_proxy(
                 resp.insert_header(("Pragma", "no-cache"));
                 resp.insert_header(("Expires", "0"));
                 add_cors_headers(&mut resp, &req);
-
                 return Ok(resp.body(html));
             }
         }
 
-        // fix allow redirect pârams inside the GET method.
-        let original_uri = req.uri();
-        let raw_forward = req
-            .path()
-            .strip_prefix(&rule.prefix)
-            .unwrap_or("")
-            .trim_start_matches('/');
-
-        let cleaned = raw_forward.trim_end_matches('/');
-
-        let forward_path = if cleaned.is_empty() {
-            "".to_string()
-        } else {
-            format!("/{}", cleaned)
-        };
-
         let mut user_agent = "";
 
-        let mut target_url = format!("{}{}", rule.target.trim_end_matches('/'), forward_path);
+        // fix allow redirect pârams inside the GET method.
+        let original_uri = req.uri();
+        let path_no_query = original_uri.path();
 
-        if let Some(query) = original_uri.query() {
-            target_url.push('?');
-            target_url.push_str(query);
+        let prefix_norm = rule.prefix.trim_end_matches('/');
+
+        let raw_forward = path_no_query
+        .strip_prefix(prefix_norm)
+        .unwrap_or(path_no_query);
+
+        let cleaned_remainder = raw_forward
+        .trim_start_matches('/')
+        .trim_end_matches('/');
+
+        let forward_path = if !rule.secure_path {
+            if rule.preserve_prefix {
+                let p = path_no_query.trim_start_matches('/');
+                if p.is_empty() { String::new() } else { format!("/{}", p) }
+            } else {
+                if cleaned_remainder.is_empty() { String::new() } else { format!("/{}", cleaned_remainder) }
+            }
+        } else {
+            String::new()
+        };
+
+        let mut target_url = rule.target.trim_end_matches('/').to_string();
+
+        target_url.push_str(&forward_path);
+
+        if let Some(q) = original_uri.query() {
+            if target_url.contains('?') { target_url.push('&'); } else { target_url.push('?'); }
+            target_url.push_str(q);
         }
 
-        let full_url = if target_url.starts_with("http") {
-            target_url.clone()
+        let full_url = if target_url.starts_with("http://") || target_url.starts_with("https://") {
+            target_url
         } else {
             format!("http://{}", target_url)
         };
@@ -389,7 +503,7 @@ pub async fn proxy_with_proxy(
                     error::ErrorServiceUnavailable("503 Service Unavailable")
                 })?
         } else {
-            match timeout(Duration::from_millis(500), client.request(hyper_req)).await {
+            match timeout(Duration::from_millis(2000), client.request(hyper_req)).await {
                 Ok(Ok(res)) => res,
                 Ok(Err(e)) => {
                     warn!(client_ip = %ip, target = %full_url, "Upstream error: {}", e);
@@ -531,11 +645,25 @@ pub async fn proxy_without_proxy(
 
     if let Some(rule) = match_route(path, &data.routes.routes) {
 
+        if let Some(status) = apply_filters_regex_allow_only(rule, &req, &body) {
+            let mut resp = HttpResponse::build(status);
+            resp.insert_header(("server", "ProxyAuth"));
+            add_cors_headers(&mut resp, &req);
+            return Ok(resp.body("403 Forbidden"));
+        }
+
+        if !is_method_allowed(rule.allow_methods.as_deref(), req.method()) {
+            let allow = build_allow_header(rule.allow_methods.as_deref());
+            let mut resp = HttpResponse::build(StatusCode::METHOD_NOT_ALLOWED);
+            resp.insert_header(("Allow", allow));
+            resp.insert_header(("server", "ProxyAuth"));
+            add_cors_headers(&mut resp, &req);
+            return Ok(resp.body("405 Method Not Allowed"));
+        }
+
         // verify csrf token
         if data.config.session_cookie && data.config.csrf_token && rule.need_csrf {
             if !validate_csrf_token(method, &req, &body, &data.config.secret) {
-                use actix_web::{HttpResponse, http::StatusCode};
-
                 let html = r#"<!doctype html>
                 <html lang="en">
                 <head><meta charset="utf-8"><title>401 Unauthorized</title></head>
@@ -549,38 +677,47 @@ pub async fn proxy_without_proxy(
                 resp.insert_header(("Pragma", "no-cache"));
                 resp.insert_header(("Expires", "0"));
                 add_cors_headers(&mut resp, &req);
-
                 return Ok(resp.body(html));
             }
         }
 
-        let original_uri = req.uri();
-
-        let raw_forward = req
-            .path()
-            .strip_prefix(&rule.prefix)
-            .unwrap_or("")
-            .trim_start_matches('/');
-
-        let cleaned = raw_forward.trim_end_matches('/');
-
-        let forward_path = if cleaned.is_empty() {
-            "".to_string()
-        } else {
-            format!("/{}", cleaned)
-        };
-
         let mut user_agent = "";
 
-        let mut target_url = format!("{}{}", rule.target.trim_end_matches('/'), forward_path);
+        let original_uri = req.uri();
+        let path_no_query = original_uri.path();
 
-        if let Some(query) = original_uri.query() {
-            target_url.push('?');
-            target_url.push_str(query);
+        let prefix_norm = rule.prefix.trim_end_matches('/');
+
+        let raw_forward = path_no_query
+        .strip_prefix(prefix_norm)
+        .unwrap_or(path_no_query);
+
+        let cleaned_remainder = raw_forward
+        .trim_start_matches('/')
+        .trim_end_matches('/');
+
+        let forward_path = if !rule.secure_path {
+            if rule.preserve_prefix {
+                let p = path_no_query.trim_start_matches('/');
+                if p.is_empty() { String::new() } else { format!("/{}", p) }
+            } else {
+                if cleaned_remainder.is_empty() { String::new() } else { format!("/{}", cleaned_remainder) }
+            }
+        } else {
+            String::new()
+        };
+
+        let mut target_url = rule.target.trim_end_matches('/').to_string();
+
+        target_url.push_str(&forward_path);
+
+        if let Some(q) = original_uri.query() {
+            if target_url.contains('?') { target_url.push('&'); } else { target_url.push('?'); }
+            target_url.push_str(q);
         }
 
-        let full_url = if target_url.starts_with("http") {
-            target_url.clone()
+        let full_url = if target_url.starts_with("http://") || target_url.starts_with("https://") {
+            target_url
         } else {
             format!("http://{}", target_url)
         };
@@ -764,7 +901,7 @@ pub async fn proxy_without_proxy(
             response
         } else {
             // Mode direct
-            match timeout(Duration::from_millis(500), client.request(hyper_req)).await {
+            match timeout(Duration::from_millis(2000), client.request(hyper_req)).await {
                 Ok(Ok(res)) => res,
                 Ok(Err(e)) => {
                     warn!(

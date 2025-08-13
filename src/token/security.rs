@@ -1,12 +1,20 @@
 use crate::AppConfig;
 use crate::AppState;
+use crate::config::config::RouteRule;
+use crate::config::config::RegexCond;
 use crate::build::build_info::get;
+use crate::network::canonical_url::canonicalize_path_for_match;
 use crate::revoke::load::is_token_revoked;
 use crate::token::crypto::{calcul_factorhash, decrypt, derive_key_from_secret};
+use actix_web::http::header::HeaderMap;
+use actix_web::HttpRequest;
 use actix_web::web;
+use actix_web::http::StatusCode;
+use serde_json::Value as JsonValue;
 use blake3;
 use chrono::{DateTime, Duration, TimeZone, Timelike, Utc};
 use chrono_tz::Tz;
+use regex::Regex;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -290,5 +298,168 @@ pub fn extract_token_user(token: &str, config: &AppConfig, ip: String) -> Result
     } else {
         warn!("[{}] User index out of bounds: {}", ip, index_user);
         Err("User not found".into())
+    }
+}
+
+fn all_values_match<'a, I>(vals: I, re: &Regex) -> bool
+where
+I: IntoIterator<Item = &'a str>,
+{
+    vals.into_iter().all(|v| re.is_match(v))
+}
+
+pub fn parse_query_map(q: &str) -> HashMap<String, Vec<String>> {
+    let mut map = HashMap::<String, Vec<String>>::new();
+    for pair in q.split('&').filter(|s| !s.is_empty()) {
+        let mut it = pair.splitn(2, '=');
+        let k = it.next().unwrap_or("").to_string();
+        let v = it.next().unwrap_or("").to_string();
+        map.entry(k).or_default().push(v);
+    }
+    map
+}
+
+pub fn apply_filters_regex_allow_only(
+    rule: &RouteRule,
+    req: &HttpRequest,
+    body: &[u8],
+) -> Option<StatusCode> {
+
+    let compiled = match &rule.filters_compiled {
+        Some(c) => c,
+        None => return None,
+    };
+
+    let method = req.method();
+    let path_canon = canonicalize_path_for_match(req.uri().path());
+    let query = parse_query_map(req.uri().query().unwrap_or("")); // HashMap<String, Vec<String>>
+
+    let mut need_utf8 = false;
+    let mut need_json = false;
+    for c in &compiled.allow {
+        match c {
+            RegexCond::BodyRaw  { .. } => need_utf8 = true,
+            RegexCond::BodyJson { .. } => need_json = true,
+            _ => {}
+        }
+    }
+
+    let ct = req.headers()
+    .get(actix_web::http::header::CONTENT_TYPE)
+    .and_then(|v| v.to_str().ok())
+    .unwrap_or("")
+    .to_ascii_lowercase();
+
+    // Décodages conditionnels du body
+    let body_utf8 = if need_utf8 {
+        std::str::from_utf8(body).ok()
+    } else {
+        None
+    };
+
+    let body_json = if need_json && ct.contains("application/json") {
+        serde_json::from_slice::<JsonValue>(body).ok()
+    } else {
+        None
+    };
+
+    if compiled.allow.is_empty() {
+        return if compiled.default_allow { None } else { Some(StatusCode::FORBIDDEN) };
+    }
+
+    let ok = compiled.allow.iter().all(|cond| {
+        cond_matches_strict(
+            cond,
+            method,
+            &path_canon,
+            req.headers().clone(),
+            &query,
+            body_utf8,
+            body_json.as_ref(),
+            &ct,
+        )
+    });
+
+    if ok {
+        None
+    } else {
+        Some(StatusCode::FORBIDDEN)
+    }
+}
+
+pub fn cond_matches_strict(
+    cond: &RegexCond,
+    method: &actix_web::http::Method,
+    path: &str,
+    headers: HeaderMap,
+    query: &std::collections::HashMap<String, Vec<String>>,
+    body_utf8: Option<&str>,
+    body_json: Option<&JsonValue>,
+    content_type_lower: &str,
+) -> bool {
+    match cond {
+        RegexCond::Method { re } => re.is_match(method.as_str()),
+        RegexCond::Path { re } => re.is_match(path),
+
+        RegexCond::Header { name_re, re } => {
+            let mut matched_any_name = false;
+            let mut values_for_matched_names: Vec<String> = Vec::new();
+
+            for (k, v) in headers.iter() {
+                let name = k.as_str();
+                if name_re.is_match(name) {
+                    matched_any_name = true;
+                    if let Ok(val) = v.to_str() {
+                        values_for_matched_names.push(val.to_string());
+                    } else {
+                        return false;
+                    }
+                }
+            }
+
+            if !matched_any_name {
+                return false;
+            }
+
+            all_values_match(values_for_matched_names.iter().map(|s| s.as_str()), re)
+        }
+
+        RegexCond::Query { name_re, re } => {
+            let mut matched_any_name = false;
+
+            for (k, vals) in query {
+                if name_re.is_match(k) {
+                    matched_any_name = true;
+
+                    if !all_values_match(vals.iter().map(|s| s.as_str()), re) {
+                        return false;
+                    }
+                }
+            }
+
+            matched_any_name
+        }
+
+        RegexCond::BodyRaw { re } => {
+            match body_utf8 {
+                Some(s) => re.is_match(s),
+                None => false,
+            }
+        }
+
+        RegexCond::BodyJson { key, re } => {
+            if !content_type_lower.contains("application/json") {
+                return false;
+            }
+            let Some(j) = body_json else { return false; };
+
+            match j.get(key) {
+                Some(JsonValue::String(s)) => re.is_match(s),
+                Some(JsonValue::Number(n)) => re.is_match(&n.to_string()),
+                Some(JsonValue::Bool(b))   => re.is_match(if *b { "true" } else { "false" }),
+                Some(other)                => re.is_match(&other.to_string()),
+                None => false,
+            }
+        }
     }
 }
