@@ -564,3 +564,175 @@ impl AllowRegexCfg {
         Ok(CompiledAllow { default_allow: self.default_allow, allow })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn allowregex_compile_ok() {
+        let cfg = AllowRegexCfg {
+            default_allow: true,
+                allow: vec![
+                    RegexCondCfg::Method  { pattern: r"(?i)GET|POST".into() },
+                    RegexCondCfg::Path    { pattern: r"^/api(/.*)?$".into() },
+                    RegexCondCfg::Header  { name: r"(?i)^x-trace-id$".into(), pattern: r"^[a-f0-9-]{16,}$".into() },
+                    RegexCondCfg::Query   { name: r"(?i)^page$".into(),      pattern: r"^\d+$".into() },
+                    RegexCondCfg::BodyRaw { pattern: r"^.{0,1024}$".into() },
+                    RegexCondCfg::BodyJson{ key: "name".into(), pattern: r"^[a-z0-9_-]{3,32}$".into() },
+                ],
+        };
+
+        let compiled = cfg.compile().expect("should compile");
+        assert!(compiled.default_allow);
+        assert_eq!(compiled.allow.len(), 6);
+    }
+
+    #[test]
+    fn allowregex_compile_err_on_bad_regex() {
+        let bad = AllowRegexCfg {
+            default_allow: false,
+                allow: vec![
+                    RegexCondCfg::Method { pattern: r"^(GET|POST$".into() }
+                ],
+        };
+        assert!(bad.compile().is_err());
+    }
+
+    #[test]
+    fn app_config_deserialize_applies_defaults() {
+        let j = json!({
+            "token_expiry_seconds": 3600,
+            "secret": "s3cr3t",
+            "users": [],
+            "log": {}
+        });
+        let cfg: AppConfig = serde_json::from_value(j).expect("deserialize");
+
+        assert_eq!(cfg.host, "0.0.0.0");
+        assert_eq!(cfg.port, 8080);
+        assert_eq!(cfg.worker, 4);
+        assert_eq!(cfg.max_idle_per_host, 50);
+        assert_eq!(cfg.timezone, "Europe/Paris");
+        assert_eq!(cfg.keep_alive, 5000);
+        assert_eq!(cfg.client_timeout, 5000);
+        assert_eq!(cfg.num_instances, 2);
+        assert_eq!(cfg.pending_connections_limit, 65535);
+        assert_eq!(cfg.socket_listen, 1024);
+        assert_eq!(cfg.stats, false);
+        assert_eq!(cfg.login_via_otp, false);
+        assert_eq!(cfg.session_cookie, false);
+        assert_eq!(cfg.max_age_session_cookie, 3600);
+        assert_eq!(cfg.tls, true);
+        assert_eq!(cfg.csrf_token, true);
+        assert!(cfg.ratelimit_auth.contains_key("requests_per_second"));
+        assert!(cfg.ratelimit_proxy.contains_key("requests_per_second"));
+        assert!(cfg.token_admin.is_empty());
+    }
+
+    #[test]
+    fn allow_regex_cfg_compiles_and_matches_shapes() {
+        let cfg = AllowRegexCfg {
+            default_allow: true,
+                allow: vec![
+                    RegexCondCfg::Method  { pattern: r"(?i)GET|POST".into() },
+                    RegexCondCfg::Path    { pattern: r"^/api(/.*)?$".into() },
+                    RegexCondCfg::Header  { name: r"(?i)^x-request-id$".into(), pattern: r"^[0-9a-f\-]+$".into() },
+                    RegexCondCfg::Query   { name: r"^(user|id)$".into(),       pattern: r"^[A-Za-z0-9_]+$".into() },
+                    RegexCondCfg::BodyRaw { pattern: r"(?s).+".into() },
+                    RegexCondCfg::BodyJson{ key: "status".into(), pattern: r"^(ok|fail)$".into() },
+                ],
+        };
+
+        let compiled = cfg.compile().expect("compile ok");
+
+        assert_eq!(compiled.default_allow, true);
+        assert_eq!(compiled.allow.len(), 6);
+
+        use RegexCond::*;
+        assert!(matches!(compiled.allow[0], Method  { .. }));
+        assert!(matches!(compiled.allow[1], Path    { .. }));
+        assert!(matches!(compiled.allow[2], Header  { .. }));
+        assert!(matches!(compiled.allow[3], Query   { .. }));
+        assert!(matches!(compiled.allow[4], BodyRaw { .. }));
+        assert!(matches!(compiled.allow[5], BodyJson{ .. }));
+
+        if let Method { re } = &compiled.allow[0] {
+            assert!(re.is_match("GET"));
+            assert!(re.is_match("post"));
+            assert!(!re.is_match("DELETE"));
+        }
+        if let Path { re } = &compiled.allow[1] {
+            assert!(re.is_match("/api"));
+            assert!(re.is_match("/api/v1/test"));
+            assert!(!re.is_match("/static/app.js"));
+        }
+        if let Header { name_re, re } = &compiled.allow[2] {
+            assert!(name_re.is_match("x-request-id"));
+            assert!(name_re.is_match("X-REQUEST-ID"));
+            assert!(re.is_match("2f1a-abc"));
+            assert!(!re.is_match("!!"));
+        }
+        if let Query { name_re, re } = &compiled.allow[3] {
+            assert!(name_re.is_match("user"));
+            assert!(name_re.is_match("id"));
+            assert!(!name_re.is_match("other"));
+            assert!(re.is_match("Alice_01"));
+            assert!(!re.is_match("bad value!"));
+        }
+        if let BodyRaw { re } = &compiled.allow[4] {
+            assert!(re.is_match("n'importe\nquoi"));
+        }
+        if let BodyJson { key, re } = &compiled.allow[5] {
+            assert_eq!(key, "status");
+            assert!(re.is_match("ok"));
+            assert!(!re.is_match("maybe"));
+        }
+    }
+
+    #[test]
+    fn allow_regex_cfg_compile_error_on_bad_pattern() {
+        let cfg = AllowRegexCfg {
+            default_allow: true,
+                allow: vec![
+                    RegexCondCfg::Path { pattern: "(".into() },
+                ],
+        };
+        let err = cfg.compile().unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("regex parse error") || msg.contains("unclosed"), "unexpected: {}", msg);
+    }
+
+    #[test]
+    fn backend_config_default_weight_is_1() {
+        let be: BackendConfig = serde_json::from_str(r#"{ "url": "http://svc" }"#).unwrap();
+        assert_eq!(be.url, "http://svc");
+        assert_eq!(be.weight, 1);
+    }
+
+    #[test]
+    fn route_rule_defaults_are_applied_by_serde() {
+        let rr: RouteRule = serde_json::from_str(r#"{
+        "prefix": "/api",
+        "target": "http://backend"
+    }"#).unwrap();
+
+    assert_eq!(rr.prefix, "/api");
+    assert_eq!(rr.target, "http://backend");
+
+    assert_eq!(rr.username.len(), 0);
+    assert_eq!(rr.secure, false);
+    assert_eq!(rr.proxy, false);
+    assert_eq!(rr.proxy_config, "");
+    assert!(rr.cert.is_empty());
+    assert!(rr.backends.is_empty());
+    assert_eq!(rr.need_csrf, true);
+    assert_eq!(rr.cache, true);
+    assert_eq!(rr.secure_path, false);
+    assert_eq!(rr.preserve_prefix, false);
+    assert!(rr.allow_methods.is_none());
+    assert!(rr.filters.is_none());
+    assert!(rr.filters_compiled.is_none());
+    }
+}

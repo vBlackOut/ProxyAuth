@@ -1,5 +1,7 @@
 /target
 envdocker.yml
+tarpaulin-report.html
 docker-compose.yml
 /config
 /.cargo
+

@@ -1,0 +1,30 @@
+name: Coverage Code ProxyAuth
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Install dependancy
+        run: sudo apt install -y nettle-dev
+
+      - name: install tarpaulin for coverage
+        run: cargo install cargo-tarpaulin
+
+      - name: Coverage
+        run: cargo tarpaulin --all-features --out Html --timeout 300 --engine llvm -- --test-threads=1
+        continue-on-error: true

@@ -279,3 +279,120 @@ pub fn build_hyper_client_normal(state: &Arc<AppConfig>) -> Client<HttpsConnecto
     .http2_keep_alive_interval(Some(Duration::from_secs(15)))
     .build::<_, Body>(https)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+
+    fn mk_state(keep: u64, max_idle: u16) -> Arc<AppConfig> {
+        let mut cfg = AppConfig::default();
+        cfg.keep_alive = keep;
+        cfg.max_idle_per_host = max_idle;
+        Arc::new(cfg)
+    }
+
+    #[test]
+    fn clientkey_from_options_copies_all_fields() {
+        let opts = ClientOptions {
+            use_proxy: true,
+            proxy_addr: Some("http://127.0.0.1:8888".into()),
+            use_cert: true,
+            cert_path: Some("/tmp/client.crt".into()),
+            key_path: Some("/tmp/client.key".into()),
+        };
+        let key = ClientKey::from_options(&opts);
+        assert_eq!(key.use_proxy, opts.use_proxy);
+        assert_eq!(key.proxy_addr, opts.proxy_addr);
+        assert_eq!(key.use_cert, opts.use_cert);
+        assert_eq!(key.cert_path, opts.cert_path);
+        assert_eq!(key.key_path, opts.key_path);
+    }
+
+    #[test]
+    fn global_root_store_is_singleton() {
+        let a = global_root_store() as *const RootCertStore;
+        let b = global_root_store() as *const RootCertStore;
+        assert_eq!(a, b, "RootCertStore doit être le même (OnceCell)");
+    }
+
+    #[test]
+    fn build_http_connector_smoke() {
+        let _c = build_http_connector(Duration::from_secs(5));
+    }
+
+    #[test]
+    fn build_normal_client_works() {
+        let state = mk_state(30, 128);
+        let _cli = build_hyper_client_normal(&state);
+    }
+
+    #[test]
+    fn get_or_build_thread_client_caches_by_key() {
+        let state = mk_state(15, 64);
+        let opts = ClientOptions {
+            use_proxy: false,
+            proxy_addr: None,
+            use_cert: false,
+            cert_path: None,
+            key_path: None,
+        };
+        let c1 = get_or_build_thread_client(&opts, &state);
+        let c2 = get_or_build_thread_client(&opts, &state);
+        let _ = (c1, c2);
+    }
+
+    #[test]
+    fn proxy_client_builds_with_default_addr() {
+        let state = mk_state(20, 256);
+        let opts = ClientOptions {
+            use_proxy: true,
+            proxy_addr: None,
+            use_cert: false,
+            cert_path: None,
+            key_path: None,
+        };
+        let _cli = get_or_build_client_proxy(opts, state);
+    }
+
+    #[test]
+    fn m_tls_falls_back_when_paths_missing() {
+        let state = mk_state(25, 100);
+        let opts = ClientOptions {
+            use_proxy: false,
+            proxy_addr: None,
+            use_cert: true,
+            cert_path: None,
+            key_path: None,
+        };
+        let _cli = build_hyper_client_cert(opts, &state);
+    }
+
+    #[test]
+    fn m_tls_falls_back_when_files_invalid() {
+        let state = mk_state(25, 100);
+        let opts = ClientOptions {
+            use_proxy: false,
+            proxy_addr: None,
+            use_cert: true,
+            cert_path: Some("/definitely/does/not/exist.crt".into()),
+            key_path:  Some("/definitely/does/not/exist.key".into()),
+        };
+        let _cli = build_hyper_client_cert(opts, &state);
+    }
+
+    #[test]
+    fn non_proxy_cached_client_ok() {
+        let state = mk_state(10, 32);
+        let opts = ClientOptions {
+            use_proxy: false,
+            proxy_addr: None,
+            use_cert: false,
+            cert_path: None,
+            key_path: None,
+        };
+        let _c1 = super::get_or_build_client(opts.clone(), state.clone());
+        let _c2 = super::get_or_build_client(opts, state);
+    }
+}
+

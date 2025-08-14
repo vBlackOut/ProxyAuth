@@ -185,3 +185,203 @@ where
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use actix_web::{App, HttpResponse, test, web};
+    use actix_web::http::StatusCode;
+
+    use std::sync::Arc;
+    use dashmap::DashMap;
+    use hyper::{Body, Client};
+    use hyper::client::HttpConnector;
+    use hyper_proxy::{Proxy, ProxyConnector, Intercept};
+    use hyper_rustls::HttpsConnectorBuilder;
+
+    use crate::config::config::{AppConfig, AppState, RouteConfig};
+    use crate::stats::tokencount::CounterToken;
+
+    fn https_client() -> Client<hyper_rustls::HttpsConnector<HttpConnector>, Body> {
+        let https = HttpsConnectorBuilder::new()
+        .with_native_roots()
+        .https_or_http()
+        .enable_http1()
+        .build();
+        Client::builder().build::<_, Body>(https)
+    }
+
+    fn proxy_client() -> Client<ProxyConnector<hyper_rustls::HttpsConnector<HttpConnector>>, Body> {
+        let https = HttpsConnectorBuilder::new()
+        .with_native_roots()
+        .https_or_http()
+        .enable_http1()
+        .build();
+        let proxy = Proxy::new(Intercept::All, "http://127.0.0.1:1".parse().unwrap());
+        let pc = ProxyConnector::from_proxy(https, proxy).unwrap();
+        Client::builder().build(pc)
+    }
+
+    fn base_config() -> AppConfig {
+        AppConfig {
+            token_expiry_seconds: 3600,
+            secret: "unit-secret".into(),
+            users: vec![],
+            token_admin: String::new(),
+            host: "127.0.0.1".into(),
+            port: 0,
+            worker: 1,
+            ratelimit_proxy: Default::default(),
+            ratelimit_auth: Default::default(),
+            log: Default::default(),
+            stats: false,
+            max_idle_per_host: 8,
+            timezone: "UTC".into(),
+            login_via_otp: false,
+            max_connections: 1024,
+            pending_connections_limit: 1024,
+            socket_listen: 128,
+            client_timeout: 1000,
+            keep_alive: 1,
+            num_instances: 1,
+            redis: None,
+            cors_origins: None,
+            session_cookie: false,
+            max_age_session_cookie: 3600,
+            login_redirect_url: None,
+            logout_redirect_url: None,
+            tls: false,
+            csrf_token: false,
+        }
+    }
+
+    fn make_state(cfg: AppConfig) -> web::Data<AppState> {
+        let state = AppState {
+            config: Arc::new(cfg),
+            routes: Arc::new(RouteConfig { routes: vec![] }),
+            counter: Arc::new(CounterToken::new()),
+            client_normal: https_client(),
+            client_with_cert: https_client(),
+            client_with_proxy: proxy_client(),
+            revoked_tokens: Arc::new(DashMap::new()),
+        };
+        web::Data::new(state)
+    }
+
+    // ---------------- UserToken.extract() ----------------
+
+    #[actix_web::test]
+    async fn user_token_extract_uses_x_forwarded_for() {
+        let data = make_state(base_config());
+
+        let app = test::init_service(
+            App::new()
+            .app_data(data.clone())
+            .wrap_fn(|req, _srv| {
+                // Interception: on renvoie directement la clé extraite
+                let key = UserToken.extract(&req).expect("extraction de clé");
+                let (head, _payload) = req.into_parts();
+                let resp = HttpResponse::Ok().body(key);
+                Box::pin(async move { Ok(ServiceResponse::new(head, resp)) })
+            })
+            .route("/api", web::get().to(|| async { HttpResponse::Ok() }))
+        ).await;
+
+        let req = test::TestRequest::get()
+        .uri("/api")
+        .insert_header(("x-forwarded-for", "203.0.113.7, 1.1.1.1"))
+        .to_request();
+
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = test::read_body(resp).await;
+        let key = String::from_utf8_lossy(&body);
+        assert_eq!(key, "/api:203.0.113.7");
+    }
+
+    #[actix_web::test]
+    async fn user_token_extract_uses_x_real_ip_when_no_forwarded_for() {
+        let data = make_state(base_config());
+
+        let app = test::init_service(
+            App::new()
+            .app_data(data.clone())
+            .wrap_fn(|req, _srv| {
+                let key = UserToken.extract(&req).expect("extraction de clé");
+                let (head, _payload) = req.into_parts();
+                let resp = HttpResponse::Ok().body(key);
+                Box::pin(async move { Ok(ServiceResponse::new(head, resp)) })
+            })
+            .route("/x", web::get().to(|| async { HttpResponse::Ok() }))
+        ).await;
+
+        let req = test::TestRequest::get()
+        .uri("/x")
+        .insert_header(("x-real-ip", "198.51.100.42"))
+        .to_request();
+
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = test::read_body(resp).await;
+        let key = String::from_utf8_lossy(&body);
+        assert_eq!(key, "/x:198.51.100.42");
+    }
+
+    #[actix_web::test]
+    async fn user_token_extract_falls_back_to_peer_addr() {
+        let data = make_state(base_config());
+
+        let app = test::init_service(
+            App::new()
+            .app_data(data.clone())
+            .wrap_fn(|req, _srv| {
+                let key = UserToken.extract(&req).expect("extraction de clé");
+                let (head, _payload) = req.into_parts();
+                let resp = HttpResponse::Ok().body(key);
+                Box::pin(async move { Ok(ServiceResponse::new(head, resp)) })
+            })
+            .route("/peer", web::get().to(|| async { HttpResponse::Ok() }))
+        ).await;
+
+        let req = test::TestRequest::get()
+        .uri("/peer")
+        .peer_addr("192.0.2.9:5555".parse().unwrap())
+        .to_request();
+
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = test::read_body(resp).await;
+        let key = String::from_utf8_lossy(&body);
+        assert_eq!(key, "/peer:192.0.2.9");
+    }
+
+    // ---------------- RateLimitLogger ----------------
+
+    #[actix_web::test]
+    async fn rate_limit_logger_passes_through_429() {
+        let app = test::init_service(
+            App::new()
+            .wrap(RateLimitLogger)
+            .route("/hit", web::get().to(|| async {
+                HttpResponse::TooManyRequests().finish()
+            }))
+        ).await;
+
+        let req = test::TestRequest::get().uri("/hit").to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS);
+    }
+
+    #[actix_web::test]
+    async fn rate_limit_logger_passes_through_200() {
+        let app = test::init_service(
+            App::new()
+            .wrap(RateLimitLogger)
+            .route("/ok", web::get().to(|| async { HttpResponse::Ok().finish() }))
+        ).await;
+
+        let req = test::TestRequest::get().uri("/ok").to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+    }
+}

@@ -24,6 +24,12 @@ include = [
 jobs = 4 # number threads launch for build
 rustflags = ["-C", "target-cpu=native"]
 
+[env]
+RUST_TEST_THREADS = "1"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(tarpaulin)'] }
+
 [build-dependencies]
 rand = "0.8"
 rand_chacha = "0.3"
@@ -32,6 +38,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 [dev-dependencies]
+serial_test = "3"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 actix-rt = "2"
 actix-web = "4"
 actix-http = "3.9.0"
@@ -104,6 +112,7 @@ brotli = "3.3"
 lru = "0.12"
 hkdf = "0.12"
 regex = "1"
+serial_test = "3"
 
 [profile.release]
 opt-level = 3

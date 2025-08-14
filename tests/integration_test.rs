@@ -95,6 +95,7 @@ async fn create_app_for_test() -> App<
         .default_service(web::to(proxy_handler))
 }
 
+#[cfg(not(tarpaulin))]
 #[actix_web::test]
 async fn test_auth_route() {
     let app = test::init_service(create_app_for_test().await).await;

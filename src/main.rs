@@ -292,7 +292,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     init_logging(&config);
 
     // check keystore if exist
-    match decrypt_keystore() {
+    match decrypt_keystore(None) {
         Ok(Some(message)) => {
             let _ = update_build_info(&message);
             println!("Load keystore successfull from /etc/proxyauth/import/data.gpg");
@@ -627,3 +627,68 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     join_all(server_futures).await;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::net::TcpStream;
+    use std::thread;
+    use std::time::Duration;
+
+    #[test]
+    fn print_launcher_variants_do_not_panic() {
+        let modes = [
+            "NO_RATELIMIT_AUTH",
+            "NO_RATELIMIT_PROXY",
+            "RATELIMIT_GLOBAL_ON",
+            "RATELIMIT_GLOBAL_OFF",
+            "UNKNOWN_MODE",
+        ];
+        for m in modes {
+            print_launcher(m, "0.0.0-test", 4, "127.0.0.1:1234");
+        }
+    }
+
+    #[tokio::test]
+    async fn create_listener_ipv4_accepts_connection() {
+        let listener = create_listener("127.0.0.1:0", 64 * 1024, 64 * 1024, 128)
+        .await
+        .expect("failed to create IPv4 listener");
+
+        let addr = listener.local_addr().expect("no local addr");
+        assert_ne!(addr.port(), 0, "port should be assigned");
+
+        let t = thread::spawn(move || {
+            let (_sock, _peer) = listener.accept().expect("accept failed");
+        });
+
+        thread::sleep(Duration::from_millis(50));
+
+        let _stream = TcpStream::connect(addr).expect("connect failed");
+
+        t.join().expect("accept thread panicked");
+    }
+
+    #[tokio::test]
+    async fn create_listener_ipv6_accepts_connection_if_available() {
+        match create_listener("[::1]:0", 64 * 1024, 64 * 1024, 128).await {
+            Ok(listener) => {
+                let addr = listener.local_addr().expect("no local addr (v6)");
+                assert_ne!(addr.port(), 0, "port should be assigned (v6)");
+
+                let t = thread::spawn(move || {
+                    let _ = listener.accept();
+                });
+
+                // petit délai pour l'accept
+                thread::sleep(Duration::from_millis(50));
+
+                let _ = TcpStream::connect(addr);
+                let _ = t.join();
+            }
+            Err(_e) => {
+            }
+        }
+    }
+}
+

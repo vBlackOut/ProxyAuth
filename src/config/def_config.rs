@@ -226,3 +226,107 @@ pub async fn create_config(url: &str, path: &str) -> Result<(), Box<dyn std::err
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::create_config;
+    use std::{fs, net::SocketAddr, path::PathBuf};
+    use tokio::task::JoinHandle;
+
+    use hyper::{Body, Request, Response, Server, StatusCode};
+    use hyper::service::{make_service_fn, service_fn};
+
+    // --- Helpers -------------------------------------------------------------
+
+    async fn start_test_server(status: StatusCode, body: &'static [u8]) -> (SocketAddr, JoinHandle<()>) {
+        let make_svc = make_service_fn(move |_| {
+            let body = body.to_vec();
+            let status = status;
+            async move {
+                Ok::<_, hyper::Error>(service_fn(move |_req: Request<Body>| {
+                    let body = body.clone();
+                    async move {
+                        let mut resp = Response::new(Body::from(body));
+                        *resp.status_mut() = status;
+                        Ok::<_, hyper::Error>(resp)
+                    }
+                }))
+            }
+        });
+
+        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).expect("bind");
+        listener.set_nonblocking(true).unwrap();
+        let local_addr = listener.local_addr().unwrap();
+
+        let server = Server::from_tcp(listener).unwrap().serve(make_svc);
+        let handle = tokio::spawn(async move {
+            let _ = server.await;
+        });
+
+        (local_addr, handle)
+    }
+
+    fn tmp_path(name: &str) -> PathBuf {
+        let suffix = format!(
+            "{}_{}",
+            std::process::id(),
+                             std::time::SystemTime::now()
+                             .duration_since(std::time::UNIX_EPOCH)
+                             .unwrap()
+                             .as_nanos()
+        );
+        std::env::temp_dir().join(format!("proxyauth_test_{}_{}", name, suffix))
+    }
+
+    // --- Tests ---------------------------------------------------------------
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn create_config_downloads_when_missing() {
+        let expected = b"CONFIG_CONTENT";
+        let (addr, _h) = start_test_server(StatusCode::OK, expected).await;
+        let url = format!("http://{}/config.json", addr);
+
+        let path = tmp_path("dl_ok").join("cfg/config.json");
+        let _ = fs::remove_file(&path);
+
+        // Appel
+        create_config(&url, path.to_str().unwrap())
+        .await
+        .expect("download OK");
+
+        // Vérif : fichier créé avec le bon contenu
+        let got = fs::read(&path).expect("file exists");
+        assert_eq!(got, expected);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn create_config_is_noop_when_file_exists() {
+        let server_body = b"SHOULD_NOT_OVERWRITE";
+        let (addr, _h) = start_test_server(StatusCode::OK, server_body).await;
+        let url = format!("http://{}/conf.json", addr);
+
+        let path = tmp_path("noop").join("already/exists/config.json");
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let original = b"LOCAL_PRESENT";
+        fs::write(&path, original).unwrap();
+
+        create_config(&url, path.to_str().unwrap())
+        .await
+        .expect("noop OK");
+
+        let got = fs::read(&path).unwrap();
+        assert_eq!(&got, original, "existing file must not be overwritten");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn create_config_returns_error_on_non_200() {
+        let (addr, _h) = start_test_server(StatusCode::NOT_FOUND, b"nope").await;
+        let url = format!("http://{}/missing.json", addr);
+
+        let path = tmp_path("err").join("cfg/config.json");
+        let _ = fs::remove_file(&path);
+
+        let err = create_config(&url, path.to_str().unwrap()).await.err();
+        assert!(err.is_some(), "non-200 must yield an error");
+    }
+}
