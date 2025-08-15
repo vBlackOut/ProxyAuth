@@ -13,7 +13,7 @@
 ![Security Score](https://img.shields.io/badge/SECURITY%20SCORE-92%2F100-blue?style=for-the-badge&logo=rust)
 [![Crates.io downloads](https://img.shields.io/crates/d/proxyauth?style=for-the-badge)](https://crates.io/crates/proxyauth)
 ![Benchmark](https://img.shields.io/badge/benchmark-+180_000req/s-blue?style=for-the-badge&logo=rust "Benchmark proxyauth on server")
-
+[![Discord](https://dcbadge.limes.pink/api/server/https://discord.gg/sKPRWzYdCy)](https://discord.gg/sKPRWzYdCy)
 
 💣 ProxyAuth is now a universal reverse proxy system, capable of handling authentication and access control for any backend application or dashboard.
 

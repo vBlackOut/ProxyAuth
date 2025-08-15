@@ -22,6 +22,9 @@ jobs:
       - name: Install dependancy
         run: sudo apt install -y nettle-dev
 
+      - name: install nextest
+        run: cargo install cargo-nextest
+
       - name: Build the binary
         run: cargo build --release
 
@@ -39,7 +42,7 @@ jobs:
             sudo chown -R proxyauth:proxyauth /etc/proxyauth/certs
 
       - name: Test ProxyAuth (unittest)
-        run: cargo test -- --test-threads=1
+        run: cargo nextest run --verbose --no-fail-fast
 
       - name: Cleanup test database files & Fix permissions
         run: |
